@@ -121,7 +121,7 @@ if test $all == 1 || test $periphery == 1; then
     periphery_version=3.6.0
     lazy-download-zip-and-link-bin \
         periphery \
-        https://github.com/peripheryapp/periphery/releases/download/$periphery_version/periphery-$periphery_version.zip \
-        '983cb6bad09b7030f0ec151e05f650dbf450eb624bd361a0ad89c59fdbf18182  .deps/periphery/dist/zip.zip' \
-        periphery
+        https://github.com/peripheryapp/periphery/releases/download/$periphery_version/periphery-$periphery_version.artifactbundle.zip \
+        '3cc367216d365246953bce938395dffec5d061ad76fab71b2fdaf5f4c4c61ff0  .deps/periphery/dist/zip.zip' \
+        periphery-$periphery_version.artifactbundle/periphery-$periphery_version-macos/bin/periphery
 fi
