@@ -1,0 +1,27 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "CHANGES=$(git status --porcelain 2>/dev/null); if [ -n \"$CHANGES\" ]; then echo '{\"decision\": \"block\", \"reason\": \"STOP: You have uncommitted changes. You MUST create a branch, commit, build with ./deploy.sh, and create a PR before stopping.\"}'; fi",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "CMD=$(jq -r '.tool_input.command' 2>/dev/null); if echo \"$CMD\" | grep -qE '^gh pr create' && ! echo \"$CMD\" | grep -q '\\-\\-repo jss367/Airlock'; then echo '{\"decision\": \"block\", \"reason\": \"BLOCKED: All PRs MUST use --repo jss367/Airlock. NEVER create PRs against the upstream nikitabobko/AeroSpace repo.\"}'; fi",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
