@@ -1,0 +1,28 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "CMD=$(jq -r '.tool_input.command' 2>/dev/null); if echo \"$CMD\" | grep -qE '^gh pr create' && ! echo \"$CMD\" | grep -q '\\-\\-repo jss367/Airlock'; then echo '{\"decision\": \"block\", \"reason\": \"BLOCKED: All PRs MUST use --repo jss367/Airlock. NEVER create PRs against the upstream nikitabobko/AeroSpace repo.\"}'; fi",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "OUTPUT=$(jq -r '.tool_output.stdout // .tool_output.content // empty' 2>/dev/null); PR_URL=$(echo \"$OUTPUT\" | grep -oE 'https://github.com/[^/]+/[^/]+/pull/[0-9]+' | head -1); if [ -n \"$PR_URL\" ]; then SCRIPT_DIR=$(git rev-parse --show-toplevel 2>/dev/null)/scripts/check-pr.sh; (sleep 900 && \"$SCRIPT_DIR\" \"$PR_URL\") & disown; fi",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
