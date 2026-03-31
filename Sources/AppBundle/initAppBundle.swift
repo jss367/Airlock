@@ -29,6 +29,7 @@ import Foundation
         checkMacOsSettings()
         startUnixSocketServer()
         GlobalObserver.initObserver()
+        registerQuickSwitcherHotkey()
         Workspace.garbageCollectUnusedWorkspaces() // init workspaces
         _ = Workspace.all.first?.focusWorkspace()
         try await runRefreshSessionBlocking(.startup, layoutWorkspaces: false)
