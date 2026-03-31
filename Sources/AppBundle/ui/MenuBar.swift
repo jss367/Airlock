@@ -16,8 +16,6 @@ public func menuBar(viewModel: TrayMenuModel) -> some Scene { // todo should it 
             Text("Workspaces:")
             ForEach(viewModel.workspaces, id: \.name) { workspace in
                 Menu {
-                    WorkspacePreviewView(workspaceName: workspace.name)
-                    Divider()
                     Button("Focus") {
                         Task {
                             try await runLightSession(.menuBarButton, token) { _ = Workspace.get(byName: workspace.name).focusWorkspace() }
@@ -48,9 +46,6 @@ public func menuBar(viewModel: TrayMenuModel) -> some Scene { // todo should it 
                 }
             }
         }.keyboardShortcut("E", modifiers: .command)
-        Button("Quick Switcher") {
-            toggleQuickSwitcher()
-        }.keyboardShortcut("P", modifiers: .command)
         Button("Show Keybindings") {
             showKeybindingsHelp()
         }.keyboardShortcut("K", modifiers: .command)
