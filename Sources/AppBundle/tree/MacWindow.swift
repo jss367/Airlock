@@ -52,12 +52,26 @@ final class MacWindow: Window {
     //     return "Window(\(description))"
     // }
 
-    func isWindowHeuristic(_ windowLevel: MacOsWindowLevel?) async throws -> Bool { // todo cache
-        try await macApp.isWindowHeuristic(windowId, windowLevel)
+    private var _cachedIsWindow: Bool?
+    private var _cachedIsDialog: Bool?
+
+    func isWindowHeuristic(_ windowLevel: MacOsWindowLevel?) async throws -> Bool {
+        if let cached = _cachedIsWindow { return cached }
+        let result = try await macApp.isWindowHeuristic(windowId, windowLevel)
+        _cachedIsWindow = result
+        return result
     }
 
-    func isDialogHeuristic(_ windowLevel: MacOsWindowLevel?) async throws -> Bool { // todo cache
-        try await macApp.isDialogHeuristic(windowId, windowLevel)
+    func isDialogHeuristic(_ windowLevel: MacOsWindowLevel?) async throws -> Bool {
+        if let cached = _cachedIsDialog { return cached }
+        let result = try await macApp.isDialogHeuristic(windowId, windowLevel)
+        _cachedIsDialog = result
+        return result
+    }
+
+    func invalidateHeuristicCache() {
+        _cachedIsWindow = nil
+        _cachedIsDialog = nil
     }
 
     func dumpAxInfo() async throws -> [String: Json] {
