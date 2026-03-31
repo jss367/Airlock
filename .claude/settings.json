@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "CHANGES=$(git status --porcelain 2>/dev/null); if [ -n \"$CHANGES\" ]; then echo '{\"decision\": \"block\", \"reason\": \"STOP: You have uncommitted changes. You MUST create a branch, commit, build with ./deploy.sh, and create a PR before stopping.\"}'; fi",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
