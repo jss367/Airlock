@@ -1,5 +1,9 @@
 # Claude Code Instructions
 
+## Design Principles
+
+- **Workspace isolation is inviolable.** The user should never leave their current workspace unless they explicitly ask to (e.g. via a workspace-switch keybinding). Cmd+Tab cycles between apps within the same workspace. Cmd+` cycles between windows of the same app within the same workspace. Focus stealing from other workspaces is blocked by default.
+
 ## Workflow
 
 - Always create a PR for any code changes. Do not commit directly to `main`.
