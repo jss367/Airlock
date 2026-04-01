@@ -5,10 +5,19 @@ struct KeyCapView: View {
     let key: PhysicalKey
     let bindingInfo: KeyBindingInfo
     let baseKeySize: CGFloat
+    var onTap: (() -> Void)? = nil
 
     private var isNonBindable: Bool { key.id.hasPrefix("_") }
     private var keyWidth: CGFloat { key.widthMultiplier * baseKeySize }
     private let keyHeight: CGFloat = 48
+
+    private var isTappable: Bool {
+        guard !isNonBindable else { return false }
+        switch bindingInfo {
+        case .otherCommand: return false
+        case .appLauncher, .unbound: return true
+        }
+    }
 
     var body: some View {
         ZStack {
@@ -26,6 +35,10 @@ struct KeyCapView: View {
             }
         }
         .frame(width: keyWidth, height: keyHeight)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if isTappable { onTap?() }
+        }
     }
 
     // MARK: - Content
