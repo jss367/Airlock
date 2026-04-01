@@ -44,7 +44,7 @@ struct Config: ConvenienceCopyable {
     var startAtLogin: Bool = false
     var autoReloadConfig: Bool = false
     var automaticallyUnhideMacosHiddenApps: Bool = false
-    var preventFocusStealing: PreventFocusStealingMode = .off
+    var preventFocusStealing: PreventFocusStealingMode = .crossWorkspace
     var accordionPadding: Int = 30
     var enableNormalizationOppositeOrientationForNestedContainers: Bool = true
     var persistentWorkspaces: OrderedSet<String> = []
