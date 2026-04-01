@@ -78,6 +78,7 @@ struct QuickSwitcherContent: View {
     @State private var query: String = ""
     @State private var items: [SwitcherItem] = []
     @State private var selectedIndex: Int = 0
+    @State private var keyMonitor: Any?
 
     var filteredItems: [SwitcherItem] {
         if query.isEmpty { return items }
@@ -129,8 +130,14 @@ struct QuickSwitcherContent: View {
         .shadow(color: .black.opacity(0.3), radius: 20, y: 5)
         .onAppear {
             loadItems()
-            NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
                 return handleKeyEvent(event) ? nil : event
+            }
+        }
+        .onDisappear {
+            if let monitor = keyMonitor {
+                NSEvent.removeMonitor(monitor)
+                keyMonitor = nil
             }
         }
         .onChange(of: query) { _ in
