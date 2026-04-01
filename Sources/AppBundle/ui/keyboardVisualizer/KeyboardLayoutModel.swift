@@ -1,7 +1,7 @@
 import Foundation
 import HotKey
 
-struct PhysicalKey: Identifiable {
+struct PhysicalKey: Identifiable, Hashable {
     let id: String // key notation string (e.g. "q", "semicolon", "backtick")
     let displayLabel: String // what to show on the keycap (e.g. "Q", ";", "`")
     let widthMultiplier: CGFloat // 1.0 = standard key width

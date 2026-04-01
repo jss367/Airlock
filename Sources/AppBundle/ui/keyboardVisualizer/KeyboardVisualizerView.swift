@@ -44,6 +44,7 @@ private struct KeyboardVisualizerContent: View {
     @State private var modifierOptions: [ModifierOption] = []
     @State private var selectedRawModifier: UInt = hyperModifiers.rawValue
     @State private var bindings: [String: KeyBindingInfo] = [:]
+    @State private var selectedKey: PhysicalKey? = nil
 
     private let baseKeySize: CGFloat = 48
 
@@ -74,7 +75,9 @@ private struct KeyboardVisualizerContent: View {
                     HStack(spacing: 3) {
                         ForEach(row.keys) { key in
                             let info = key.id.hasPrefix("_") ? KeyBindingInfo.unbound : (bindings[key.id] ?? .unbound)
-                            KeyCapView(key: key, bindingInfo: info, baseKeySize: baseKeySize)
+                            KeyCapView(key: key, bindingInfo: info, baseKeySize: baseKeySize) {
+                                selectedKey = key
+                            }
                         }
                     }
                 }
@@ -87,6 +90,15 @@ private struct KeyboardVisualizerContent: View {
         .frame(minWidth: 960, minHeight: 350)
         .onAppear { refreshModifierOptions(); refreshBindings() }
         .onChange(of: selectedRawModifier) { _ in refreshBindings() }
+        .sheet(item: $selectedKey) { key in
+            AppPickerView(
+                keyNotation: key.id,
+                modifierPrefix: selectedModifier
+            ) {
+                selectedKey = nil
+                refreshBindings()
+            }
+        }
     }
 
     @MainActor
