@@ -1,7 +1,7 @@
 ====
 Airlock is an i3-like tiling window manager for macOS
 
-*Project homepage*: https://github.com/nikitabobko/Airlock
+*Project homepage*: https://github.com/jss367/Airlock
 
 image:assets/icon.png[300,300,float="right"]
 
