@@ -21,32 +21,28 @@ func addBinding(key: String, appName: String, modifierPrefix: NSEvent.ModifierFl
     var content = lines
 
     let modStr = modifierPrefix.toString()
-    let bindingLine = "    \(modStr)-\(key) = 'exec-and-forget open -a \"\(appName)\"'"
+    let escapedAppName = appName.replacingOccurrences(of: "'", with: "'\\''")
+    let bindingLine = "    \(modStr)-\(key) = 'exec-and-forget open -a \"\(escapedAppName)\"'"
 
     // Find [mode.main.binding] section
-    if let sectionIndex = content.firstIndex(where: { $0.trimmingCharacters(in: .whitespaces) == "[mode.main.binding]" }) {
+    if let sectionIndex = content.firstIndex(where: { $0.trimmingCharacters(in: CharacterSet.whitespaces) == "[mode.main.binding]" }) {
         // Find the insertion point: before the next section header or end of file
         var insertIndex = content.count
         for i in (sectionIndex + 1)..<content.count {
-            let trimmed = content[i].trimmingCharacters(in: .whitespaces)
+            let trimmed = content[i].trimmingCharacters(in: CharacterSet.whitespaces)
             if trimmed.hasPrefix("[") && trimmed.hasSuffix("]") {
                 insertIndex = i
                 break
             }
         }
 
-        // Remove existing binding for this key+modifier if present
-        let prefix = "\(modStr)-\(key)"
-        content = content.enumerated().filter { index, line in
-            guard index > sectionIndex && index < insertIndex else { return true }
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            return !trimmed.hasPrefix("\(prefix) =") && !trimmed.hasPrefix("\(prefix)=")
-        }.map(\.1)
+        // Remove existing binding for this key+modifier (matching by parsed modifiers, not string)
+        content = removeMatchingBindingLines(content, sectionStart: sectionIndex, sectionEnd: insertIndex, key: key, modifiers: modifierPrefix)
 
         // Recalculate insert index after removal
         var newInsertIndex = content.count
         for i in (sectionIndex + 1)..<content.count {
-            let trimmed = content[i].trimmingCharacters(in: .whitespaces)
+            let trimmed = content[i].trimmingCharacters(in: CharacterSet.whitespaces)
             if trimmed.hasPrefix("[") && trimmed.hasSuffix("]") {
                 newInsertIndex = i
                 break
@@ -71,40 +67,55 @@ func removeBinding(key: String, modifierPrefix: NSEvent.ModifierFlags) throws {
     let configFile = findCustomConfigUrl()
 
     guard case .file(let url) = configFile else {
-        // Nothing to remove if there's no config file
         return
     }
 
     let text = try String(contentsOf: url, encoding: .utf8)
     var lines = text.components(separatedBy: "\n")
 
-    let modStr = modifierPrefix.toString()
-    let prefix = "\(modStr)-\(key)"
-
     // Find [mode.main.binding] section
-    guard let sectionIndex = lines.firstIndex(where: { $0.trimmingCharacters(in: .whitespaces) == "[mode.main.binding]" }) else {
-        return // Section doesn't exist, nothing to remove
+    guard let sectionIndex = lines.firstIndex(where: { $0.trimmingCharacters(in: CharacterSet.whitespaces) == "[mode.main.binding]" }) else {
+        return
     }
 
     // Find the end of this section
     var sectionEnd = lines.count
     for i in (sectionIndex + 1)..<lines.count {
-        let trimmed = lines[i].trimmingCharacters(in: .whitespaces)
+        let trimmed = lines[i].trimmingCharacters(in: CharacterSet.whitespaces)
         if trimmed.hasPrefix("[") && trimmed.hasSuffix("]") {
             sectionEnd = i
             break
         }
     }
 
-    // Remove matching line
-    lines = lines.enumerated().filter { index, line in
-        guard index > sectionIndex && index < sectionEnd else { return true }
-        let trimmed = line.trimmingCharacters(in: .whitespaces)
-        return !trimmed.hasPrefix("\(prefix) =") && !trimmed.hasPrefix("\(prefix)=")
-    }.map(\.1)
+    lines = removeMatchingBindingLines(lines, sectionStart: sectionIndex, sectionEnd: sectionEnd, key: key, modifiers: modifierPrefix)
 
     let output = lines.joined(separator: "\n")
     try output.write(to: url, atomically: true, encoding: .utf8)
+}
+
+// MARK: - Binding Matching
+
+/// Remove lines within a binding section that bind the same key+modifiers,
+/// regardless of modifier order in the text (e.g. "shift-cmd-k" matches "cmd-shift-k").
+private func removeMatchingBindingLines(_ lines: [String], sectionStart: Int, sectionEnd: Int, key: String, modifiers: NSEvent.ModifierFlags) -> [String] {
+    return lines.enumerated().filter { index, line in
+        guard index > sectionStart && index < sectionEnd else { return true }
+        let trimmed = line.trimmingCharacters(in: CharacterSet.whitespaces)
+        guard !trimmed.isEmpty && !trimmed.hasPrefix("#") else { return true }
+        // Extract the binding key (everything before " =" or "=")
+        guard let eqIndex = trimmed.firstIndex(of: "=") else { return true }
+        let bindingKey = trimmed[trimmed.startIndex..<eqIndex].trimmingCharacters(in: CharacterSet.whitespaces)
+        // Parse the binding key into parts: the last part is the key, everything before is modifiers
+        let parts = bindingKey.split(separator: "-")
+        guard let lastPart = parts.last, String(lastPart) == key else { return true }
+        // Parse modifiers from the line
+        let lineMods = parts.dropLast().reduce(NSEvent.ModifierFlags()) { flags, part in
+            if let mod = modifiersMap[String(part)] { return flags.union(mod) }
+            return flags
+        }
+        return lineMods != modifiers
+    }.map(\.1)
 }
 
 // MARK: - Helpers
