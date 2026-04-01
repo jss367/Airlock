@@ -1,6 +1,9 @@
 // FILE IS GENERATED FROM docs/airlock-*.adoc files
 // TO REGENERATE THE FILE RUN generate.sh
 
+let app_launcher_help_generated = """
+    USAGE: app-launcher [-h|--help]
+    """
 let balance_sizes_help_generated = """
     USAGE: balance-sizes [-h|--help] [--workspace <workspace>]
     """
