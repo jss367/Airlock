@@ -32,6 +32,7 @@ final class AppLauncherPanel: NSPanelHud {
 
         self.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+        removeEventMonitor()
         installEventMonitor()
     }
 
@@ -48,8 +49,8 @@ final class AppLauncherPanel: NSPanelHud {
         dismiss()
 
         // Check if the app is already running and has windows
-        let runningApp = MacApp.allAppsMap.values.first { macApp in
-            macApp.rawAppBundleId == app.bundleIdentifier
+        let runningApp: MacApp? = app.bundleIdentifier.flatMap { bundleId in
+            MacApp.allAppsMap.values.first { $0.rawAppBundleId == bundleId }
         }
 
         if let runningApp {
