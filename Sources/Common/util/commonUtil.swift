@@ -24,7 +24,7 @@ public func dieT<T>(
     let message =
         """
         Please report to:
-            https://github.com/nikitabobko/Airlock/discussions/categories/potential-bugs
+            https://github.com/jss367/Airlock/issues
             Please describe what you did to trigger this error
 
         Message: \(_message)
