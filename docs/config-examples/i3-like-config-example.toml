@@ -16,7 +16,7 @@ enable-normalization-opposite-orientation-for-nested-containers = false
 on-focused-monitor-changed = ['move-mouse monitor-lazy-center']
 
 [mode.main.binding]
-    # See: https://github.com/jss367/Airlock/goodies#open-a-new-window-with-applescript
+    # See: https://github.com/jss367/Airlock/blob/main/docs/goodies.adoc#open-a-new-window-with-applescript
     option-enter = '''exec-and-forget osascript -e '
     tell application "Terminal"
         do script
@@ -49,7 +49,7 @@ on-focused-monitor-changed = ['move-mouse monitor-lazy-center']
     option-shift-space = 'layout floating tiling' # 'floating toggle' in i3
 
     # Not supported, because this command is redundant in Airlock mental model.
-    # See: https://github.com/jss367/Airlock/guide#floating-windows
+    # See: https://github.com/jss367/Airlock/blob/main/docs/guide.adoc#floating-windows
     #option-space = 'focus toggle_tiling_floating'
 
     # `focus parent`/`focus child` are not yet supported, and it's not clear whether they
