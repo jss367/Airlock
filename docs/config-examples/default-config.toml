@@ -204,6 +204,17 @@ on-mode-changed = []
     alt-shift-y = 'move-node-to-workspace Y'
     alt-shift-z = 'move-node-to-workspace Z'
 
+    # Reset to baseline: move singleton apps back to workspace 1
+    # Customize the app bundle IDs to match your setup.
+    # Run `airlock list-apps --format '%{app-bundle-id} %{app-name}'` to find bundle IDs.
+    alt-shift-0 = '''exec-and-forget bash -c '
+        for app_id in com.tinyspeck.slackmacgap com.spotify.client com.github.GitHubClient; do
+            for wid in $(airlock list-windows --monitor all --app-bundle-id "$app_id" --format "%{window-id}"); do
+                airlock move-node-to-workspace --window-id "$wid" 1
+            done
+        done
+    ' '''
+
     # See: https://nikitabobko.github.io/Airlock/commands#workspace-back-and-forth
     alt-tab = 'workspace-back-and-forth'
     # See: https://nikitabobko.github.io/Airlock/commands#move-workspace-to-monitor
