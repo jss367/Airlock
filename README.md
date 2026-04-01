@@ -17,6 +17,7 @@ Docs:
 - CLI first (manpages and shell completion included)
 - Doesn't require disabling SIP (System Integrity Protection)
 - [Proper multi-monitor support](https://nikitabobko.github.io/Airlock/guide#multiple-monitors) (i3-like paradigm)
+- Workspace-aware app launching via keybindings. Unlike standalone hotkey tools (e.g. Karabiner-Elements, skhd), Airlock knows which workspace is focused, so launched apps can be placed on the correct workspace automatically
 
 ## Installation
 

@@ -52,11 +52,11 @@ final class MacWindow: Window {
     //     return "Window(\(description))"
     // }
 
-    func isWindowHeuristic(_ windowLevel: MacOsWindowLevel?) async throws -> Bool { // todo cache
+    func isWindowHeuristic(_ windowLevel: MacOsWindowLevel?) async throws -> Bool { // todo cache (must key by windowLevel)
         try await macApp.isWindowHeuristic(windowId, windowLevel)
     }
 
-    func isDialogHeuristic(_ windowLevel: MacOsWindowLevel?) async throws -> Bool { // todo cache
+    func isDialogHeuristic(_ windowLevel: MacOsWindowLevel?) async throws -> Bool { // todo cache (must key by windowLevel)
         try await macApp.isDialogHeuristic(windowId, windowLevel)
     }
 

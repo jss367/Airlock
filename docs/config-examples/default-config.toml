@@ -116,6 +116,12 @@ on-mode-changed = []
     alt-slash = 'layout tiles horizontal vertical'
     alt-comma = 'layout accordion horizontal vertical'
 
+    # Workspace isolation: cmd-tab/cmd-backtick cycle within the current workspace only
+    cmd-tab = 'focus app-next'
+    shift-cmd-tab = 'focus app-prev'
+    cmd-backtick = 'focus same-app-next'
+    shift-cmd-backtick = 'focus same-app-prev'
+
     # See: https://nikitabobko.github.io/Airlock/commands#focus
     alt-h = 'focus left'
     alt-j = 'focus down'
