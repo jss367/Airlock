@@ -13,7 +13,7 @@ Airlock is an i3-like tiling window manager for macOS
 
 *airlock* command line program is used to manipulate Airlock and query its state.
 
-See https://nikitabobko.github.io/Airlock/commands for available <subcommand> options
+See https://github.com/jss367/Airlock for available <subcommand> options
 
 See each <subcommand> individual man page for <subcommand-options> and <subcommand-arguments>
 

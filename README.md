@@ -1,35 +1,29 @@
-# Airlock Beta [![Build](https://github.com/nikitabobko/Airlock/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/nikitabobko/Airlock/actions/workflows/build.yml)
+# Airlock Beta [![Build](https://github.com/jss367/Airlock/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/jss367/Airlock/actions/workflows/build.yml)
 
 Airlock is an i3-like tiling window manager for macOS
 
 Docs:
-- [Airlock Guide](https://nikitabobko.github.io/Airlock/guide)
-- [Airlock Commands](https://nikitabobko.github.io/Airlock/commands)
-- [Airlock Goodies](https://nikitabobko.github.io/Airlock/goodies)
+- [Airlock Guide](https://github.com/jss367/Airlock)
+- [Airlock Commands](https://github.com/jss367/Airlock)
+- [Airlock Goodies](https://github.com/jss367/Airlock)
 
 ## Key features
 
-- Tiling window manager based on a [tree paradigm](https://nikitabobko.github.io/Airlock/guide#tree)
+- Tiling window manager based on a [tree paradigm](https://github.com/jss367/Airlock)
 - [i3](https://i3wm.org/) inspired
 - Fast workspaces switching without animations and without the necessity to disable SIP
-- Airlock employs its [own emulation of virtual workspaces](https://nikitabobko.github.io/Airlock/guide#emulation-of-virtual-workspaces) instead of relying on native macOS Spaces due to [their considerable limitations](https://nikitabobko.github.io/Airlock/guide#emulation-of-virtual-workspaces)
-- Plain text configuration (dotfiles friendly). See: [default-config.toml](https://nikitabobko.github.io/Airlock/guide#default-config)
+- Airlock employs its [own emulation of virtual workspaces](https://github.com/jss367/Airlock) instead of relying on native macOS Spaces due to [their considerable limitations](https://github.com/jss367/Airlock)
+- Plain text configuration (dotfiles friendly). See: [default-config.toml](https://github.com/jss367/Airlock)
 - CLI first (manpages and shell completion included)
 - Doesn't require disabling SIP (System Integrity Protection)
-- [Proper multi-monitor support](https://nikitabobko.github.io/Airlock/guide#multiple-monitors) (i3-like paradigm)
+- [Proper multi-monitor support](https://github.com/jss367/Airlock) (i3-like paradigm)
 - Workspace-aware app launching via keybindings. Unlike standalone hotkey tools (e.g. Karabiner-Elements, skhd), Airlock knows which workspace is focused, so launched apps can be placed on the correct workspace automatically
 
 ## Installation
 
-Install via [Homebrew](https://brew.sh/) to get autoupdates (Preferred)
+Download the latest release from the [releases page](https://github.com/jss367/Airlock/releases).
 
-```
-brew install --cask nikitabobko/tap/airlock
-```
-
-In multi-monitor setup please make sure that monitors [are properly arranged](https://nikitabobko.github.io/Airlock/guide#proper-monitor-arrangement).
-
-Other installation options: https://nikitabobko.github.io/Airlock/guide#installation
+In multi-monitor setup please make sure that monitors [are properly arranged](https://github.com/jss367/Airlock).
 
 > [!NOTE]
 > By using Airlock, you acknowledge that it's not [notarized](https://developer.apple.com/documentation/security/notarizing_macos_software_before_distribution).
@@ -41,10 +35,6 @@ Other installation options: https://nikitabobko.github.io/Airlock/guide#installa
 > I don't have anything against notarization as a concept.
 > I specifically don't like the way Apple does notarization.
 > I don't have time to deal with Apple.
->
-> [Homebrew installation script](https://github.com/nikitabobko/homebrew-tap/blob/main/Casks/airlock.rb) is configured to
-> automatically delete `com.apple.quarantine` attribute, that's why the app should work out of the box, without any warnings that
-> "Apple cannot check Airlock for malicious software"
 
 ## Project status
 
@@ -76,7 +66,7 @@ A notes on how to setup the project, build it, how to run the tests, etc. can be
 **Non Values**
 - Play nicely with existing macOS features.
   If limitations are imposed then Airlock won't play nicely with existing macOS features
-  (For example, Airlock doesn't acknowledge the existence of macOS Spaces, and it uses [emulation of its own workspaces](https://nikitabobko.github.io/Airlock/guide#emulation-of-virtual-workspaces))
+  (For example, Airlock doesn't acknowledge the existence of macOS Spaces, and it uses [emulation of its own workspaces](https://github.com/jss367/Airlock))
 - Ricing.
   Airlock provides only a very minimal support for ricing - gaps and a few callbacks for integrations with bars.
   The current maintainer doesn't care about ricing.
