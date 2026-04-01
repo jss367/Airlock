@@ -10,29 +10,10 @@ You can skip parts that are obvious.
 [#installation]
 == Installation
 
-[#homebrew-installation]
-=== Homebrew installation (Preferred)
-
-https://brew.sh/[Homebrew] is a package manager for macOS
-
-[source,bash]
-----
-brew install --cask nikitabobko/tap/airlock
-----
-
-*(Optional)* You might need to configure your shell to enable completion provided by homebrew packages: https://docs.brew.sh/Shell-Completion
-Airlock provides bash, fish and zsh completions.
-
-You can also install specific previous https://github.com/nikitabobko/homebrew-tap/tree/main/Casks[pinned homebrew Casks versions]:
-[source,bash]
-----
-brew install --cask nikitabobko/tap/airlock@0.12.0
-----
-
 [#manual-installation]
 === Manual installation
 
-. Download the latest available zip from https://github.com/nikitabobko/Airlock/releases[releases page]
+. Download the latest available zip from https://github.com/jss367/Airlock/releases[releases page]
 . Unpack zip
 . Put unpacked `Airlock-v$VERSION/Airlock.app` to `/Applications`
 . Put unpacked `Airlock-v$VERSION/bin/airlock` anywhere to `$PATH`
@@ -425,10 +406,10 @@ defaults write com.apple.dock expose-group-apps -bool true && killall Dock
 There is an observation that macOS works better and more stable if you disable `Displays have separate Spaces`. (It's enabled by default)
 People report all sorts of weird issues related to focus and performance when this setting is enabled:
 
-* Wrong window may receive focus in multi-monitor setup: https://github.com/nikitabobko/Airlock/issues/101[#101] (Bug in Apple API)
-* Wrong borderless Alacritty window may receive focus in *single monitor* setup: https://github.com/nikitabobko/Airlock/issues/247[#247] (Bug in Apple API)
-* Performance issues: https://github.com/nikitabobko/Airlock/issues/333[#333]
-* macOS randomly switches focus back: https://github.com/nikitabobko/Airlock/issues/289[#289]
+* Wrong window may receive focus in multi-monitor setup: https://github.com/jss367/Airlock/issues/101[#101] (Bug in Apple API)
+* Wrong borderless Alacritty window may receive focus in *single monitor* setup: https://github.com/jss367/Airlock/issues/247[#247] (Bug in Apple API)
+* Performance issues: https://github.com/jss367/Airlock/issues/333[#333]
+* macOS randomly switches focus back: https://github.com/jss367/Airlock/issues/289[#289]
 
 When `Displays have separate Spaces` is enabled,
 moving windows between monitors causes windows to move between different Spaces which is not correctly handled by the public APIs Airlock uses,

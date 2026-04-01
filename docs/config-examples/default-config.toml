@@ -6,7 +6,6 @@
 config-version = 2
 
 # You can use it to add commands that run after Airlock startup.
-# Available commands : https://github.com/jss367/Airlock/commands
 after-startup-command = []
 
 # Start Airlock at login
@@ -16,11 +15,10 @@ start-at-login = false
 # After setting this to true, reload once manually to start the auto-reloading
 auto-reload-config = false
 
-# Normalizations. See: https://github.com/jss367/Airlock/guide#normalization
+# Normalizations
 enable-normalization-flatten-containers = true
 enable-normalization-opposite-orientation-for-nested-containers = true
 
-# See: https://github.com/jss367/Airlock/guide#layouts
 # The 'accordion-padding' specifies the size of accordion padding
 # You can set 0 to disable the padding feature
 accordion-padding = 30
@@ -35,14 +33,11 @@ default-root-container-orientation = 'auto'
 
 # Mouse follows focus when focused monitor changes
 # Drop it from your config, if you don't like this behavior
-# See https://github.com/jss367/Airlock/guide#on-focus-changed-callbacks
-# See https://github.com/jss367/Airlock/commands#move-mouse
 # Fallback value (if you omit the key): on-focused-monitor-changed = []
 on-focused-monitor-changed = ['move-mouse monitor-lazy-center']
 
 # You can effectively turn off macOS "Hide application" (cmd-h) feature by toggling this flag
 # Useful if you don't use this macOS feature, but accidentally hit cmd-h or cmd-option-h key
-# Also see: https://github.com/jss367/Airlock/goodies#disable-hide-app
 automatically-unhide-macos-hidden-apps = false
 
 # List of workspaces that should stay alive even when they contain no windows,
@@ -54,12 +49,9 @@ persistent-workspaces = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "A", "B",
                          "R", "S", "T", "U", "V", "W", "X", "Y", "Z"]
 
 # A callback that runs every time binding mode changes
-# See: https://github.com/jss367/Airlock/guide#binding-modes
-# See: https://github.com/jss367/Airlock/commands#mode
 on-mode-changed = []
 
 # Possible values: (qwerty|dvorak|colemak)
-# See https://github.com/jss367/Airlock/guide#key-mapping
 [key-mapping]
     preset = 'qwerty'
 
@@ -69,8 +61,6 @@ on-mode-changed = []
 # - Per monitor:  gaps.outer.top = [{ monitor.main = 16 }, { monitor."some-pattern" = 32 }, 24]
 #                 In this example, 24 is a default value when there is no match.
 #                 Monitor pattern is the same as for 'workspace-to-monitor-force-assignment'.
-#                 See:
-#                 https://github.com/jss367/Airlock/guide#assign-workspaces-to-monitors
 [gaps]
     inner.horizontal = 0
     inner.vertical =   0
@@ -80,7 +70,6 @@ on-mode-changed = []
     outer.right =      0
 
 # 'main' binding mode declaration
-# See: https://github.com/jss367/Airlock/guide#binding-modes
 # 'main' binding mode must be always presented
 # Fallback value (if you omit the key): mode.main.binding = {}
 [mode.main.binding]
@@ -100,9 +89,6 @@ on-mode-changed = []
 
     # All possible modifiers: cmd, option, ctrl, shift
 
-    # All possible commands: https://github.com/jss367/Airlock/commands
-
-    # See: https://github.com/jss367/Airlock/commands#exec-and-forget
     # You can uncomment the following lines to open up terminal with option + enter shortcut
     # (like in i3)
     # option-enter = '''exec-and-forget osascript -e '
@@ -112,7 +98,6 @@ on-mode-changed = []
     # end tell'
     # '''
 
-    # See: https://github.com/jss367/Airlock/commands#layout
     option-slash = 'layout tiles horizontal vertical'
     option-comma = 'layout accordion horizontal vertical'
 
@@ -122,23 +107,19 @@ on-mode-changed = []
     cmd-backtick = 'focus same-app-next'
     shift-cmd-backtick = 'focus same-app-prev'
 
-    # See: https://github.com/jss367/Airlock/commands#focus
     option-h = 'focus left'
     option-j = 'focus down'
     option-k = 'focus up'
     option-l = 'focus right'
 
-    # See: https://github.com/jss367/Airlock/commands#move
     option-shift-h = 'move left'
     option-shift-j = 'move down'
     option-shift-k = 'move up'
     option-shift-l = 'move right'
 
-    # See: https://github.com/jss367/Airlock/commands#resize
     option-minus = 'resize smart -50'
     option-equal = 'resize smart +50'
 
-    # See: https://github.com/jss367/Airlock/commands#workspace
     option-1 = 'workspace 1'
     option-2 = 'workspace 2'
     option-3 = 'workspace 3'
@@ -171,7 +152,6 @@ on-mode-changed = []
     option-y = 'workspace Y'
     option-z = 'workspace Z'
 
-    # See: https://github.com/jss367/Airlock/commands#move-node-to-workspace
     option-shift-1 = 'move-node-to-workspace 1'
     option-shift-2 = 'move-node-to-workspace 2'
     option-shift-3 = 'move-node-to-workspace 3'
@@ -216,23 +196,18 @@ on-mode-changed = []
         done
     ' '''
 
-    # See: https://github.com/jss367/Airlock/commands#workspace-back-and-forth
     option-tab = 'workspace-back-and-forth'
-    # See: https://github.com/jss367/Airlock/commands#move-workspace-to-monitor
     option-shift-tab = 'move-workspace-to-monitor --wrap-around next'
 
-    # See: https://github.com/jss367/Airlock/commands#mode
     option-shift-semicolon = 'mode service'
 
 # 'service' binding mode declaration.
-# See: https://github.com/jss367/Airlock/guide#binding-modes
 [mode.service.binding]
     esc = ['reload-config', 'mode main']
     r = ['flatten-workspace-tree', 'mode main'] # reset layout
     f = ['layout floating tiling', 'mode main'] # Toggle between floating and tiling layout
     backspace = ['close-all-windows-but-current', 'mode main']
 
-    # sticky is not yet supported https://github.com/jss367/Airlock/issues/2
     #s = ['layout sticky tiling', 'mode main']
 
     option-shift-h = ['join-with left', 'mode main']
