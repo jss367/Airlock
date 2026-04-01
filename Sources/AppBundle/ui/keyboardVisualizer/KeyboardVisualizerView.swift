@@ -14,7 +14,7 @@ func showKeyboardVisualizer() {
 private class KeyboardVisualizerWindowController: NSWindowController {
     @MainActor static let shared: KeyboardVisualizerWindowController = {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 900, height: 450),
+            contentRect: NSRect(x: 0, y: 0, width: 960, height: 450),
             styleMask: [.titled, .closable, .resizable],
             backing: .buffered,
             defer: false
@@ -84,7 +84,7 @@ private struct KeyboardVisualizerContent: View {
             Spacer(minLength: 0)
         }
         .padding(.top, 12)
-        .frame(minWidth: 700, minHeight: 350)
+        .frame(minWidth: 960, minHeight: 350)
         .onAppear { refreshModifierOptions(); refreshBindings() }
         .onChange(of: selectedRawModifier) { _ in refreshBindings() }
     }
