@@ -22,3 +22,7 @@
 # XCode User settings
 xcuserdata/
 xcshareddata/
+
+# Claude Code local files
+.claude/settings.local.json
+.claude/worktrees/
