@@ -184,6 +184,18 @@ on-mode-changed = []
     option-shift-y = 'move-node-to-workspace Y'
     option-shift-z = 'move-node-to-workspace Z'
 
+    # Reset to baseline: move singleton apps back to workspace 1
+    # Customize the app bundle IDs to match your setup.
+    # Run `~/.local/bin/airlock list-apps --format '%{app-bundle-id} %{app-name}'` to find bundle IDs.
+    option-shift-0 = '''exec-and-forget bash -c '
+        AIRLOCK="$HOME/.local/bin/airlock"
+        for app_id in com.tinyspeck.slackmacgap com.spotify.client com.github.GitHubClient; do
+            for wid in $("$AIRLOCK" list-windows --monitor all --app-bundle-id "$app_id" --format "%{window-id}"); do
+                "$AIRLOCK" move-node-to-workspace --window-id "$wid" 1
+            done
+        done
+    ' '''
+
     option-tab = 'workspace-back-and-forth'
     option-shift-tab = 'move-workspace-to-monitor --wrap-around next'
 
@@ -196,7 +208,6 @@ on-mode-changed = []
     f = ['layout floating tiling', 'mode main'] # Toggle between floating and tiling layout
     backspace = ['close-all-windows-but-current', 'mode main']
 
-    # sticky is not yet supported
     #s = ['layout sticky tiling', 'mode main']
 
     option-shift-h = ['join-with left', 'mode main']
