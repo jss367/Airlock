@@ -17,7 +17,7 @@ on-focused-monitor-changed = ['move-mouse monitor-lazy-center']
 
 [mode.main.binding]
     # See: https://nikitabobko.github.io/Airlock/goodies#open-a-new-window-with-applescript
-    alt-enter = '''exec-and-forget osascript -e '
+    option-enter = '''exec-and-forget osascript -e '
     tell application "Terminal"
         do script
         activate
@@ -25,62 +25,62 @@ on-focused-monitor-changed = ['move-mouse monitor-lazy-center']
     '''
 
     # i3 wraps focus by default
-    alt-j =         'focus --boundaries-action wrap-around-the-workspace left'
-    alt-k =         'focus --boundaries-action wrap-around-the-workspace down'
-    alt-l =         'focus --boundaries-action wrap-around-the-workspace up'
-    alt-semicolon = 'focus --boundaries-action wrap-around-the-workspace right'
+    option-j =         'focus --boundaries-action wrap-around-the-workspace left'
+    option-k =         'focus --boundaries-action wrap-around-the-workspace down'
+    option-l =         'focus --boundaries-action wrap-around-the-workspace up'
+    option-semicolon = 'focus --boundaries-action wrap-around-the-workspace right'
 
-    alt-shift-j = 'move left'
-    alt-shift-k = 'move down'
-    alt-shift-l = 'move up'
-    alt-shift-semicolon = 'move right'
+    option-shift-j = 'move left'
+    option-shift-k = 'move down'
+    option-shift-l = 'move up'
+    option-shift-semicolon = 'move right'
 
     # Consider using 'join-with' command as a 'split' replacement if you want to enable
     # normalizations
-    alt-h = 'split horizontal'
-    alt-v = 'split vertical'
+    option-h = 'split horizontal'
+    option-v = 'split vertical'
 
-    alt-f = 'fullscreen'
+    option-f = 'fullscreen'
 
-    alt-s = 'layout v_accordion' # 'layout stacking' in i3
-    alt-w = 'layout h_accordion' # 'layout tabbed' in i3
-    alt-e = 'layout tiles horizontal vertical' # 'layout toggle split' in i3
+    option-s = 'layout v_accordion' # 'layout stacking' in i3
+    option-w = 'layout h_accordion' # 'layout tabbed' in i3
+    option-e = 'layout tiles horizontal vertical' # 'layout toggle split' in i3
 
-    alt-shift-space = 'layout floating tiling' # 'floating toggle' in i3
+    option-shift-space = 'layout floating tiling' # 'floating toggle' in i3
 
     # Not supported, because this command is redundant in Airlock mental model.
     # See: https://nikitabobko.github.io/Airlock/guide#floating-windows
-    #alt-space = 'focus toggle_tiling_floating'
+    #option-space = 'focus toggle_tiling_floating'
 
     # `focus parent`/`focus child` are not yet supported, and it's not clear whether they
     # should be supported at all https://github.com/nikitabobko/Airlock/issues/5
-    # alt-a = 'focus parent'
+    # option-a = 'focus parent'
 
-    alt-1 = 'workspace 1'
-    alt-2 = 'workspace 2'
-    alt-3 = 'workspace 3'
-    alt-4 = 'workspace 4'
-    alt-5 = 'workspace 5'
-    alt-6 = 'workspace 6'
-    alt-7 = 'workspace 7'
-    alt-8 = 'workspace 8'
-    alt-9 = 'workspace 9'
-    alt-0 = 'workspace 10'
+    option-1 = 'workspace 1'
+    option-2 = 'workspace 2'
+    option-3 = 'workspace 3'
+    option-4 = 'workspace 4'
+    option-5 = 'workspace 5'
+    option-6 = 'workspace 6'
+    option-7 = 'workspace 7'
+    option-8 = 'workspace 8'
+    option-9 = 'workspace 9'
+    option-0 = 'workspace 10'
 
-    alt-shift-1 = 'move-node-to-workspace 1'
-    alt-shift-2 = 'move-node-to-workspace 2'
-    alt-shift-3 = 'move-node-to-workspace 3'
-    alt-shift-4 = 'move-node-to-workspace 4'
-    alt-shift-5 = 'move-node-to-workspace 5'
-    alt-shift-6 = 'move-node-to-workspace 6'
-    alt-shift-7 = 'move-node-to-workspace 7'
-    alt-shift-8 = 'move-node-to-workspace 8'
-    alt-shift-9 = 'move-node-to-workspace 9'
-    alt-shift-0 = 'move-node-to-workspace 10'
+    option-shift-1 = 'move-node-to-workspace 1'
+    option-shift-2 = 'move-node-to-workspace 2'
+    option-shift-3 = 'move-node-to-workspace 3'
+    option-shift-4 = 'move-node-to-workspace 4'
+    option-shift-5 = 'move-node-to-workspace 5'
+    option-shift-6 = 'move-node-to-workspace 6'
+    option-shift-7 = 'move-node-to-workspace 7'
+    option-shift-8 = 'move-node-to-workspace 8'
+    option-shift-9 = 'move-node-to-workspace 9'
+    option-shift-0 = 'move-node-to-workspace 10'
 
-    alt-shift-c = 'reload-config'
+    option-shift-c = 'reload-config'
 
-    alt-r = 'mode resize'
+    option-r = 'mode resize'
 
 [mode.resize.binding]
     h = 'resize width -50'

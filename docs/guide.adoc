@@ -129,7 +129,7 @@ Working with binding modes consists of two parts:
 [source,toml]
 ----
 [mode.main.binding]            # Declare 'main' binding mode
-    alt-r = 'mode resize'      # 1. Define a binding to switch to 'resize' mode
+    option-r = 'mode resize'      # 1. Define a binding to switch to 'resize' mode
 
 [mode.resize.binding]          # 2. Declare 'resize' binding mode
     minus = 'resize smart -50'
@@ -148,10 +148,10 @@ There are two ways on how you can use commands:
 [source,toml]
 ----
 [mode.main.binding]
-    # Bind alt-1 key to switch to workspace 1
-    alt-1 = 'workspace 1'
+    # Bind option-1 key to switch to workspace 1
+    option-1 = 'workspace 1'
     # Or bind a sequence of commands
-    alt-shift-1 = ['move-node-to-workspace 1', 'workspace 1']
+    option-shift-1 = ['move-node-to-workspace 1', 'workspace 1']
 ----
 . Run commands in CLI. Open up a Terminal.app and type:
 +
@@ -176,7 +176,7 @@ If you use different layout, different alphabet, or you just want to have a fanc
     unicorn = 'u'
 
 [mode.main.binding]
-    alt-unicorn = 'workspace wonderland' # (⁀ᗢ⁀)
+    option-unicorn = 'workspace wonderland' # (⁀ᗢ⁀)
 ----
 
 * For `dvorak` and `colemak` users, Airlock offers preconfigured presets.

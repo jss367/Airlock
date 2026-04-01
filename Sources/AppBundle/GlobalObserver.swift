@@ -43,6 +43,17 @@ enum GlobalObserver {
         }
     }
 
+    /// macOS space changes are always user-initiated (trackpad gestures, Ctrl+arrow, Mission Control),
+    /// so mark them to avoid blocking legitimate workspace switches with preventFocusStealing.
+    private static func onSpaceChange(_ notification: Notification) {
+        let notifName = notification.name.rawValue
+        Task { @MainActor in
+            if !TrayMenuModel.shared.isEnabled { return }
+            markUserInitiatedFocusChange()
+            scheduleRefreshSession(.globalObserver(notifName))
+        }
+    }
+
     @MainActor
     static func initObserver() {
         let nc = NSWorkspace.shared.notificationCenter
@@ -50,7 +61,7 @@ enum GlobalObserver {
         nc.addObserver(forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main, using: onNotif)
         nc.addObserver(forName: NSWorkspace.didHideApplicationNotification, object: nil, queue: .main, using: onHideApp)
         nc.addObserver(forName: NSWorkspace.didUnhideApplicationNotification, object: nil, queue: .main, using: onNotif)
-        nc.addObserver(forName: NSWorkspace.activeSpaceDidChangeNotification, object: nil, queue: .main, using: onNotif)
+        nc.addObserver(forName: NSWorkspace.activeSpaceDidChangeNotification, object: nil, queue: .main, using: onSpaceChange)
         nc.addObserver(forName: NSWorkspace.didTerminateApplicationNotification, object: nil, queue: .main, using: onNotif)
 
         NSEvent.addGlobalMonitorForEvents(matching: .leftMouseUp) { _ in

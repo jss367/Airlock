@@ -6,11 +6,12 @@
 
 ## Workflow
 
-- Always create a PR for any code changes. Do not commit directly to `main`.
+- **Never modify `main` directly.** No commits, no edits on the main branch.
+- Always work in a **git worktree** (`isolation: "worktree"` for agents). This keeps the main checkout clean.
 - Create a new branch from `main` for each piece of work. Use the naming convention `claude/<short-description>`.
 - After making code changes, build and deploy the app by running `./deploy.sh`.
 - If the build fails, fix the issue before creating the PR.
-- PR against `main`.
+- Always create a PR for any code changes. PR against `main`.
 
 ## Build & Deploy
 

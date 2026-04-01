@@ -335,8 +335,8 @@ private func parsePersistentWorkspaces(_ raw: TOMLValueConvertible, _ backtrace:
 /// Config format:
 /// ```toml
 /// [workspaces]
-/// focus-modifier = "alt"           # optional, default "alt"
-/// move-modifier = "alt-shift"      # optional, default "alt-shift"
+/// focus-modifier = "option"           # optional, default "option"
+/// move-modifier = "option-shift"      # optional, default "option-shift"
 ///
 /// [workspaces.names]
 /// 1 = "1"        # workspace name = key to bind
@@ -357,8 +357,8 @@ private func expandWorkspacesShorthand(
         return
     }
 
-    let focusModifier = table["focus-modifier"]?.string ?? "alt"
-    let moveModifier = table["move-modifier"]?.string ?? "alt-shift"
+    let focusModifier = table["focus-modifier"]?.string ?? "option"
+    let moveModifier = table["move-modifier"]?.string ?? "option-shift"
 
     guard let namesRaw = table["names"] else {
         errors += [.semantic(backtrace, "'names' subtable is required in [workspaces]")]

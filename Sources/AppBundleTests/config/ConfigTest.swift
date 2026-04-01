@@ -60,7 +60,7 @@ final class ConfigTest: XCTestCase {
         let (_, errors) = parseConfig(
             """
             [mode.main.binding]
-                alt-a = 'list-apps'
+                option-a = 'list-apps'
             """,
         )
         XCTAssertTrue(errors.descriptions.singleOrNil()?.contains("cannot be used in config") == true)
@@ -80,7 +80,7 @@ final class ConfigTest: XCTestCase {
         let (config, errors) = parseConfig(
             """
             [mode.main.binding]
-                alt-h = 'focus left'
+                option-h = 'focus left'
             """,
         )
         assertEquals(errors, [])
@@ -95,7 +95,7 @@ final class ConfigTest: XCTestCase {
         let (config, errors) = parseConfig(
             """
             [mode.foo.binding]
-                alt-h = 'focus left'
+                option-h = 'focus left'
             """,
         )
         assertEquals(
@@ -109,16 +109,16 @@ final class ConfigTest: XCTestCase {
         let (config, errors) = parseConfig(
             """
             [mode.main.binding]
-                alt-hh = 'focus left'
-                aalt-j = 'focus down'
-                alt-k = 'focus up'
+                option-hh = 'focus left'
+                aoption-j = 'focus down'
+                option-k = 'focus up'
             """,
         )
         assertEquals(
             errors.descriptions,
             [
-                "mode.main.binding.aalt-j: Can\'t parse modifiers in \'aalt-j\' binding",
-                "mode.main.binding.alt-hh: Can\'t parse the key in \'alt-hh\' binding",
+                "mode.main.binding.aoption-j: Can\'t parse modifiers in \'aoption-j\' binding",
+                "mode.main.binding.option-hh: Can\'t parse the key in \'option-hh\' binding",
             ],
         )
         let binding = HotkeyBinding(.option, .k, [FocusCommand.new(direction: .up)])
@@ -132,10 +132,10 @@ final class ConfigTest: XCTestCase {
         let (config, errors) = parseConfig(
             """
             [mode.main.binding]
-                alt-1 = 'workspace 1'
-                alt-2 = 'workspace 2'
-                alt-3 = ['workspace 3']
-                alt-4 = ['workspace 4', 'focus left']
+                option-1 = 'workspace 1'
+                option-2 = 'workspace 2'
+                option-3 = ['workspace 3']
+                option-4 = ['workspace 4', 'focus left']
             """,
         )
         assertEquals(errors.descriptions, [])
@@ -213,7 +213,7 @@ final class ConfigTest: XCTestCase {
             enable-normalization-flatten-containers = true
             [mode.main.binding]
             [mode.foo.binding]
-                alt-s = 'split horizontal'
+                option-s = 'split horizontal'
             """,
         )
         assertEquals(
@@ -409,7 +409,7 @@ final class ConfigTest: XCTestCase {
                 unicorn = 'u'
 
             [mode.main.binding]
-                alt-unicorn = 'workspace wonderland'
+                option-unicorn = 'workspace wonderland'
             """,
         )
         assertEquals(errors.descriptions, [])

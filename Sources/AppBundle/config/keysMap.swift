@@ -247,7 +247,7 @@ private let colemakMap: [String: Key] = keyNotationToKeyCode + [
 
 let modifiersMap: [String: NSEvent.ModifierFlags] = [
     "shift": .shift,
-    "alt": .option,
+    "option": .option,
     "ctrl": .control,
     "cmd": .command,
 ]
@@ -255,7 +255,7 @@ let modifiersMap: [String: NSEvent.ModifierFlags] = [
 extension NSEvent.ModifierFlags {
     func toString() -> String {
         var result: [String] = []
-        if contains(.option) { result.append("alt") }
+        if contains(.option) { result.append("option") }
         if contains(.control) { result.append("ctrl") }
         if contains(.command) { result.append("cmd") }
         if contains(.shift) { result.append("shift") }
@@ -373,8 +373,8 @@ extension Key {
             // wtf
             case .command: "cmd"
             case .rightCommand: "rCmd"
-            case .option: "alt"
-            case .rightOption: "rAlt"
+            case .option: "option"
+            case .rightOption: "rOption"
             case .control: "ctrl"
             case .rightControl: "rCtrl"
             case .shift: "shift"

@@ -83,8 +83,8 @@ final class ClientServerTest: XCTestCase {
             (.windowDetected(windowId: 456, workspace: "1", appBundleId: "com.example", appName: "Example"),
              #"{"_event":"window-detected","appBundleId":"com.example","appName":"Example","windowId":456,"workspace":"1"}"#),
 
-            (.bindingTriggered(mode: "main", binding: "alt-h"),
-             #"{"_event":"binding-triggered","binding":"alt-h","mode":"main"}"#),
+            (.bindingTriggered(mode: "main", binding: "option-h"),
+             #"{"_event":"binding-triggered","binding":"option-h","mode":"main"}"#),
         ]
         for (event, expectedJson) in testData {
             let data = try! encoder.encode(event)
@@ -100,7 +100,7 @@ final class ClientServerTest: XCTestCase {
             (#"{"_event":"focused-workspace-changed","workspace":"2","prevWorkspace":"1"}"#, .workspaceChanged),
             (#"{"_event":"mode-changed","mode":"resize"}"#, .modeChanged),
             (#"{"_event":"window-detected","windowId":456}"#, .windowDetected),
-            (#"{"_event":"binding-triggered","mode":"main","binding":"alt-h"}"#, .bindingTriggered),
+            (#"{"_event":"binding-triggered","mode":"main","binding":"option-h"}"#, .bindingTriggered),
         ]
         for (json, expectedEventType) in testData {
             let data = json.data(using: .utf8)!
