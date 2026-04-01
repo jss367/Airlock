@@ -19,6 +19,21 @@ var isUserInitiatedFocusChange: Bool {
     Date() < _userInitiatedFocusChangeDeadline
 }
 
+/// Tracks whether an app activation recently occurred, so we can distinguish
+/// app-initiated space changes from user-initiated ones (trackpad swipe, Ctrl+arrow).
+@MainActor
+private var _recentAppActivationDeadline: Date = .distantPast
+
+@MainActor
+func markRecentAppActivation() {
+    _recentAppActivationDeadline = Date().addingTimeInterval(0.5)
+}
+
+@MainActor
+var hadRecentAppActivation: Bool {
+    Date() < _recentAppActivationDeadline
+}
+
 /// Determines whether a focus change to `newWindow` should be blocked based on the
 /// `prevent-focus-stealing` config setting.
 ///
