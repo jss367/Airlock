@@ -5,7 +5,7 @@ struct MoveCommand: Command {
     let args: MoveCmdArgs
     /*conforms*/ let shouldResetClosedWindowsCache = true
 
-    func run(_ env: CmdEnv, _ io: CmdIo) -> Bool {
+    func run(_ env: CmdEnv, _ io: CmdIo) async throws -> Bool {
         let direction = args.direction.val
         guard let target = args.resolveTargetOrReportError(env, io) else { return false }
         guard let currentWindow = target.windowOrNil else {
@@ -28,8 +28,8 @@ struct MoveCommand: Command {
                 } else {
                     return moveOut(window: currentWindow, direction: direction, io, args, env)
                 }
-            case .workspace: // floating window
-                return io.err("moving floating windows isn't yet supported") // todo
+            case .workspace:
+                return try await moveFloatingWindowByDirection(currentWindow, direction)
             case .macosMinimizedWindowsContainer, .macosFullscreenWindowsContainer, .macosHiddenAppsWindowsContainer:
                 return io.err(moveOutMacosUnconventionalWindow)
             case .macosPopupWindowsContainer:
@@ -166,4 +166,23 @@ extension TilingTreeNodeCases {
                 }
         }
     }
+}
+
+private let floatingMoveStep: CGFloat = 50
+
+@MainActor
+private func moveFloatingWindowByDirection(_ window: Window, _ direction: CardinalDirection) async throws -> Bool {
+    guard let rect = try await window.getAxRect() else { return false }
+    let dx: CGFloat = switch direction {
+        case .left: -floatingMoveStep
+        case .right: floatingMoveStep
+        case .up, .down: 0
+    }
+    let dy: CGFloat = switch direction {
+        case .up: -floatingMoveStep
+        case .down: floatingMoveStep
+        case .left, .right: 0
+    }
+    window.setAxFrame(CGPoint(x: rect.topLeftX + dx, y: rect.topLeftY + dy), nil)
+    return true
 }

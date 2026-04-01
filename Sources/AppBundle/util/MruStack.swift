@@ -15,6 +15,23 @@ final class MruStack<T: Equatable>: Sequence {
         mruNode = Node(value, mruNode)
     }
 
+    /// Add value to the bottom of the stack if not already present (does not change ordering if present)
+    func pushIfAbsent(_ value: T) {
+        var current = mruNode
+        while let cur = current {
+            if cur.value == value { return }
+            current = cur.next
+        }
+        // Append at the bottom (least recent)
+        if mruNode == nil {
+            mruNode = Node(value)
+        } else {
+            var tail = mruNode!
+            while let next = tail.next { tail = next }
+            tail.next = Node(value)
+        }
+    }
+
     @discardableResult
     func remove(_ value: T) -> Bool {
         var prev: Node<T>? = nil

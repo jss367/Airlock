@@ -7,7 +7,6 @@ struct FocusCommand: Command {
 
     func run(_ env: CmdEnv, _ io: CmdIo) async throws -> Bool {
         guard let target = args.resolveTargetOrReportError(env, io) else { return false }
-        // todo bug: floating windows break mru
         let floatingWindows = args.floatingAsTiling ? try await makeFloatingWindowsSeenAsTiling(workspace: target.workspace) : []
         defer {
             if args.floatingAsTiling {
@@ -156,10 +155,6 @@ struct FocusCommand: Command {
 }
 
 @MainActor private func makeFloatingWindowsSeenAsTiling(workspace: Workspace) async throws -> [FloatingWindowData] {
-    let mruBefore = workspace.mostRecentWindowRecursive
-    defer {
-        mruBefore?.markAsMostRecentChild()
-    }
     var _floatingWindows: [FloatingWindowData] = []
     for window in workspace.floatingWindows {
         let center = try await window.getCenter() // todo bug: we shouldn't access ax api here. What if the window was moved but it wasn't committed to ax yet?
@@ -194,18 +189,14 @@ struct FocusCommand: Command {
     let floatingWindows: [FloatingWindowData] = _floatingWindows.sortedBy { $0.center.getProjection($0.parent.orientation) }.reversed()
 
     for floating in floatingWindows { // Make floating windows be seen as tiling
-        floating.window.bind(to: floating.parent, adaptiveWeight: 1, index: floating.index)
+        floating.window.bind(to: floating.parent, adaptiveWeight: 1, index: floating.index, updateMru: false)
     }
     return floatingWindows
 }
 
 @MainActor private func restoreFloatingWindows(floatingWindows: [FloatingWindowData], workspace: Workspace) {
-    let mruBefore = workspace.mostRecentWindowRecursive
-    defer {
-        mruBefore?.markAsMostRecentChild()
-    }
     for floating in floatingWindows {
-        floating.window.bind(to: workspace, adaptiveWeight: floating.adaptiveWeight, index: INDEX_BIND_LAST)
+        floating.window.bind(to: workspace, adaptiveWeight: floating.adaptiveWeight, index: INDEX_BIND_LAST, updateMru: false)
     }
 }
 

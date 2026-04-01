@@ -2,12 +2,12 @@
 import AppKit
 
 final class TestWindow: Window, CustomStringConvertible {
-    private var _rect: Rect?
+    var _rect: Rect?
 
     @MainActor
     private init(_ id: UInt32, _ parent: NonLeafTreeNodeObject, _ adaptiveWeight: CGFloat, _ rect: Rect?) {
         _rect = rect
-        super.init(id: id, TestApp.shared, lastFloatingSize: nil, parent: parent, adaptiveWeight: adaptiveWeight, index: INDEX_BIND_LAST)
+        super.init(id: id, TestApp.shared, lastFloatingSize: rect.map { CGSize(width: $0.width, height: $0.height) }, parent: parent, adaptiveWeight: adaptiveWeight, index: INDEX_BIND_LAST)
     }
 
     @discardableResult
@@ -39,4 +39,20 @@ final class TestWindow: Window, CustomStringConvertible {
     @MainActor override func getAxRect() async throws -> Rect? { // todo change to not Optional
         _rect
     }
+
+    override func getAxSize() async throws -> CGSize? {
+        _rect.map { CGSize(width: $0.width, height: $0.height) }
+    }
+
+    override func setAxFrame(_ topLeft: CGPoint?, _ size: CGSize?) {
+        if let topLeft, let size {
+            _rect = Rect(topLeftX: topLeft.x, topLeftY: topLeft.y, width: size.width, height: size.height)
+        } else if let topLeft {
+            _rect = Rect(topLeftX: topLeft.x, topLeftY: topLeft.y, width: _rect?.width ?? 0, height: _rect?.height ?? 0)
+        } else if let size {
+            _rect = Rect(topLeftX: _rect?.topLeftX ?? 0, topLeftY: _rect?.topLeftY ?? 0, width: size.width, height: size.height)
+        }
+    }
+
+    override var isHiddenInCorner: Bool { false }
 }
