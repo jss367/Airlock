@@ -82,7 +82,7 @@ private struct KeybindingsHelpContent: View {
     }
 
     private func formatKey(_ raw: String) -> String {
-        raw.replacingOccurrences(of: "alt", with: "\u{2325}")
+        raw.replacingOccurrences(of: "option", with: "\u{2325}")
             .replacingOccurrences(of: "shift", with: "\u{21E7}")
             .replacingOccurrences(of: "cmd", with: "\u{2318}")
             .replacingOccurrences(of: "ctrl", with: "\u{2303}")

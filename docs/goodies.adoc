@@ -207,7 +207,7 @@ If `automatically-unhide-macos-hidden-apps` isn't enough, you can disable `cmd-h
 ----
 [mode.main.binding]
     cmd-h = [] # Disable "hide application"
-    cmd-alt-h = [] # Disable "hide others"
+    cmd-option-h = [] # Disable "hide others"
 ----
 
 [#screenshoot-shortcut]
@@ -219,7 +219,7 @@ You can configure a custom shortcut to take a screenshot.
 .~/.airlock.toml
 [source,toml]
 ----
-alt-shift-s = 'exec-and-forget screencapture -i -c'
+option-shift-s = 'exec-and-forget screencapture -i -c'
 ----
 
 [#i3-like-config]

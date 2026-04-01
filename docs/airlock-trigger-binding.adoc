@@ -38,8 +38,8 @@ include::util/conditional-examples-header.adoc[]
 
 * Run alphabetically first binding from config (useless and synthetic example): +
 `airlock trigger-binding --mode main "$(airlock config --get mode.main.binding --keys | head -1)"`
-* Trigger `alt-tab` binding: +
-`airlock trigger-binding --mode main alt-tab`
+* Trigger `option-tab` binding: +
+`airlock trigger-binding --mode main option-tab`
 
 // end::body[]
 
