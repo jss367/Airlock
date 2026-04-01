@@ -1,13 +1,13 @@
 == Resources
 
-*Project homepage:* https://github.com/nikitabobko/Airlock +
-*Guide:* https://nikitabobko.github.io/Airlock/guide +
+*Project homepage:* https://github.com/jss367/Airlock +
+*Guide:* https://github.com/jss367/Airlock +
 
 == BUGS
 
-Bugs can be reported to https://github.com/nikitabobko/Airlock/discussions/categories/potential-bugs
+Bugs can be reported to https://github.com/jss367/Airlock/discussions/categories/potential-bugs
 
-Maintainers will move verified bugs to https://github.com/nikitabobko/Airlock/issues
+Maintainers will move verified bugs to https://github.com/jss367/Airlock/issues
 
 == License
 
