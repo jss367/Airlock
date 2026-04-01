@@ -11,6 +11,18 @@
           }
         ]
       }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "OUTPUT=$(jq -r '.tool_output.stdout // .tool_output.content // empty' 2>/dev/null); PR_URL=$(echo \"$OUTPUT\" | grep -oE 'https://github.com/[^/]+/[^/]+/pull/[0-9]+' | head -1); if [ -n \"$PR_URL\" ]; then SCRIPT_DIR=$(git rev-parse --show-toplevel 2>/dev/null)/scripts/check-pr.sh; (sleep 900 && \"$SCRIPT_DIR\" \"$PR_URL\") & disown; fi",
+            "timeout": 10
+          }
+        ]
+      }
     ]
   }
 }
