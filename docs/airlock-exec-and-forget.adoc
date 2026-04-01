@@ -24,7 +24,7 @@ For example, you can use this command to launch applications:
 
 [source,toml]
 ----
-alt-enter = 'exec-and-forget open -n /System/Applications/Utilities/Terminal.app'
+option-enter = 'exec-and-forget open -n /System/Applications/Utilities/Terminal.app'
 ----
 
 `<bash-script>` is passed "as is" to bash without any transformations and escaping. `<bash-script>` is treated as suffix of the TOML string, it's not even an argument in classic CLI sense
