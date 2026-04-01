@@ -10,6 +10,9 @@ xcodebuild -project Airlock.xcodeproj -scheme Airlock -configuration Release bui
   -derivedDataPath .xcode-build \
   -quiet
 
+echo "Running tests..."
+swift test --quiet
+
 echo "Building CLI..."
 swift build --product airlock -c release --quiet
 
