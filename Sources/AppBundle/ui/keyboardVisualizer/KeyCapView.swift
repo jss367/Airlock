@@ -7,6 +7,9 @@ struct KeyCapView: View {
     let baseKeySize: CGFloat
     var onTap: (() -> Void)? = nil
 
+    @State private var isHovered: Bool = false
+    @State private var showCommandPopover: Bool = false
+
     private var isNonBindable: Bool { key.id.hasPrefix("_") }
     private var keyWidth: CGFloat { key.widthMultiplier * baseKeySize }
     private let keyHeight: CGFloat = 48
@@ -17,6 +20,10 @@ struct KeyCapView: View {
         case .otherCommand: return false
         case .appLauncher, .unbound: return true
         }
+    }
+
+    private var isClickable: Bool {
+        !isNonBindable
     }
 
     var body: some View {
@@ -36,8 +43,30 @@ struct KeyCapView: View {
         }
         .frame(width: keyWidth, height: keyHeight)
         .contentShape(Rectangle())
+        .onHover { hovering in
+            if isClickable { isHovered = hovering }
+        }
         .onTapGesture {
-            if isTappable { onTap?() }
+            switch bindingInfo {
+            case .otherCommand:
+                showCommandPopover = true
+            case .appLauncher, .unbound:
+                if isTappable { onTap?() }
+            }
+        }
+        .popover(isPresented: $showCommandPopover, arrowEdge: .bottom) {
+            if case .otherCommand(let description) = bindingInfo {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Command")
+                        .font(.caption.bold())
+                        .foregroundStyle(.secondary)
+                    Text(description)
+                        .font(.system(size: 12, design: .monospaced))
+                        .textSelection(.enabled)
+                }
+                .padding(10)
+                .frame(maxWidth: 300)
+            }
         }
     }
 
@@ -121,13 +150,14 @@ struct KeyCapView: View {
         if isNonBindable {
             return Color.gray.opacity(0.12)
         }
+        let hoverBoost: CGFloat = isHovered ? 0.08 : 0.0
         switch bindingInfo {
         case .appLauncher:
-            return Color.accentColor.opacity(0.18)
+            return Color.accentColor.opacity(0.18 + hoverBoost)
         case .otherCommand:
-            return Color.orange.opacity(0.15)
+            return Color.orange.opacity(0.15 + hoverBoost)
         case .unbound:
-            return Color.gray.opacity(0.08)
+            return Color.gray.opacity(0.08 + hoverBoost)
         }
     }
 }
