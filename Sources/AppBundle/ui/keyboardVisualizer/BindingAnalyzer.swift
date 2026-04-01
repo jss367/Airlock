@@ -43,7 +43,7 @@ private func classifyBinding(_ binding: HotkeyBinding) -> KeyBindingInfo {
 }
 
 private let openAppRegex = try! NSRegularExpression(
-    pattern: #"^open\s+-a\s+"([^"]+)"|^open\s+-a\s+(\S+)"#,
+    pattern: #"^open\s+-a\s+"([^"]+)"|^open\s+-a\s+'([^']+)'|^open\s+-a\s+(\S+)"#,
     options: []
 )
 
@@ -51,11 +51,14 @@ private func extractAppName(from script: String) -> String? {
     let range = NSRange(script.startIndex..., in: script)
     guard let match = openAppRegex.firstMatch(in: script, range: range) else { return nil }
 
-    // Group 1: quoted name, Group 2: unquoted name
-    for groupIdx in 1...2 {
+    // Group 1: double-quoted name, Group 2: single-quoted name, Group 3: unquoted name
+    for groupIdx in 1...3 {
         let groupRange = match.range(at: groupIdx)
         if groupRange.location != NSNotFound, let swiftRange = Range(groupRange, in: script) {
-            return String(script[swiftRange])
+            var name = String(script[swiftRange])
+            // Strip .app suffix if present so findAppPath doesn't produce ".app.app"
+            if name.hasSuffix(".app") { name = String(name.dropLast(4)) }
+            return name
         }
     }
     return nil
