@@ -12,6 +12,7 @@ enum GlobalObserver {
         Task { @MainActor in
             if !TrayMenuModel.shared.isEnabled { return }
             if notifName == NSWorkspace.didActivateApplicationNotification.rawValue {
+                markRecentAppActivation()
                 scheduleRefreshSession(.globalObserver(notifName), optimisticallyPreLayoutWorkspaces: true)
             } else {
                 scheduleRefreshSession(.globalObserver(notifName))
@@ -43,13 +44,16 @@ enum GlobalObserver {
         }
     }
 
-    /// macOS space changes are always user-initiated (trackpad gestures, Ctrl+arrow, Mission Control),
-    /// so mark them to avoid blocking legitimate workspace switches with preventFocusStealing.
+    /// Only mark space changes as user-initiated if no app activation preceded them.
+    /// User-initiated: trackpad swipe, Ctrl+arrow, Mission Control (no preceding app activation).
+    /// App-initiated: an app called activate() from another space (preceded by didActivateApplicationNotification).
     private static func onSpaceChange(_ notification: Notification) {
         let notifName = notification.name.rawValue
         Task { @MainActor in
             if !TrayMenuModel.shared.isEnabled { return }
-            markUserInitiatedFocusChange()
+            if !hadRecentAppActivation {
+                markUserInitiatedFocusChange()
+            }
             scheduleRefreshSession(.globalObserver(notifName))
         }
     }
