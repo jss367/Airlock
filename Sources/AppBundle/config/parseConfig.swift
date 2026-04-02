@@ -176,7 +176,7 @@ func parseCommandOrCommands(_ raw: TOMLValueConvertible) -> Parsed<[any Command]
     }
 }
 
-@MainActor func parseConfig(_ rawToml: String) -> (config: Config, errors: [TomlParseError]) {
+@MainActor func parseConfig(_ rawToml: String, mergeWithDefaults: Bool = true) -> (config: Config, errors: [TomlParseError]) {
     let rawTable: TOMLTable
     do {
         rawTable = try TOMLTable(string: rawToml)
@@ -200,8 +200,19 @@ func parseCommandOrCommands(_ raw: TOMLValueConvertible) -> Parsed<[any Command]
     }
 
     // Parse modeConfigRootKey after keyMappingConfigRootKey
-    if let modes = rawTable[modeConfigRootKey].flatMap({ parseModes($0, .rootKey(modeConfigRootKey), &errors, config.keyMapping.resolve()) }) {
-        config.modes = modes
+    if let userModes = rawTable[modeConfigRootKey].flatMap({ parseModes($0, .rootKey(modeConfigRootKey), &errors, config.keyMapping.resolve()) }) {
+        if mergeWithDefaults {
+            config.modes = mergeModesWithDefaults(userModes: userModes, defaultModes: defaultConfig.modes)
+        } else {
+            config.modes = userModes
+        }
+    } else if mergeWithDefaults {
+        config.modes = defaultConfig.modes
+    }
+
+    // Validate that 'main' mode exists after merging
+    if !config.modes.keys.contains(mainModeId) {
+        errors += [.semantic(.rootKey(modeConfigRootKey), "Please specify '\(mainModeId)' mode")]
     }
 
     if config.configVersion <= 1 {
