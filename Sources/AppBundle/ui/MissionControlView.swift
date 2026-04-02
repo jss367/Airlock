@@ -151,6 +151,7 @@ struct MissionControlContent: View {
 
     @MainActor
     private func loadData() {
+        // Gather workspace/window metadata on MainActor (required for tree access)
         let persistentOrder = config.persistentWorkspaces
         let workspaces = Workspace.all.sorted { a, b in
             let ai = persistentOrder.firstIndex(of: a.name)
@@ -163,66 +164,99 @@ struct MissionControlContent: View {
             }
         }
 
-        let focusedWorkspace = focus.workspace
+        let focusedWorkspaceName = focus.workspace.name
 
-        // Get all CG window info once for thumbnail capture
-        let windowInfoList = CGWindowListCopyWindowInfo([.optionAll], kCGNullWindowID) as? [[CFString: Any]] ?? []
+        struct WindowMeta: Sendable {
+            let windowId: UInt32
+            let appName: String
+        }
+        struct WorkspaceMeta: Sendable {
+            let name: String
+            let isFocused: Bool
+            let windows: [WindowMeta]
+        }
 
-        var result: [WorkspaceInfo] = []
-        for ws in workspaces {
+        let metas: [WorkspaceMeta] = workspaces.map { ws in
             let leafWindows = ws.allLeafWindowsRecursive
-            let isFocused = ws.name == focusedWorkspace.name
+            return WorkspaceMeta(
+                name: ws.name,
+                isFocused: ws.name == focusedWorkspaceName,
+                windows: leafWindows.map { WindowMeta(windowId: $0.windowId, appName: $0.app.name ?? "Unknown") }
+            )
+        }
 
-            // Capture individual window thumbnails
-            var windowInfos: [WindowInfo] = []
-            for window in leafWindows {
-                let wid = CGWindowID(window.windowId)
-                var thumbnail: NSImage? = nil
-                if let cgImage = CGWindowListCreateImage(
-                    .null,
-                    .optionIncludingWindow,
-                    wid,
-                    [.boundsIgnoreFraming, .bestResolution]
-                ) {
-                    thumbnail = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
+        // Select the focused workspace immediately (before thumbnails load)
+        let placeholder = metas.map { WorkspaceInfo(id: $0.name, name: $0.name, isFocused: $0.isFocused, windows: $0.windows.map { WindowInfo(id: $0.windowId, appName: $0.appName, thumbnail: nil, windowId: $0.windowId) }, compositeThumbnail: nil) }
+        workspaceData = placeholder
+        if let focusedIndex = placeholder.firstIndex(where: { $0.isFocused }) {
+            selectedWorkspaceIndex = focusedIndex
+        }
+
+        // Capture thumbnails off the main thread
+        Task.detached(priority: .userInitiated) {
+            let windowInfoList = CGWindowListCopyWindowInfo([.optionAll], kCGNullWindowID) as? [[CFString: Any]] ?? []
+
+            var result: [WorkspaceInfo] = []
+            for wsMeta in metas {
+                var windowInfos: [WindowInfo] = []
+                for winMeta in wsMeta.windows {
+                    let wid = CGWindowID(winMeta.windowId)
+                    let thumbnail = Self.captureWindowThumbnail(wid: wid, maxWidth: 350)
+                    windowInfos.append(WindowInfo(
+                        id: winMeta.windowId,
+                        appName: winMeta.appName,
+                        thumbnail: thumbnail,
+                        windowId: winMeta.windowId
+                    ))
                 }
-                windowInfos.append(WindowInfo(
-                    id: window.windowId,
-                    appName: window.app.name ?? "Unknown",
-                    thumbnail: thumbnail,
-                    windowId: window.windowId
+
+                let windowIds = Set(wsMeta.windows.map { CGWindowID($0.windowId) })
+                let compositeThumbnail = Self.captureWorkspaceComposite(
+                    windowIds: windowIds,
+                    windowInfoList: windowInfoList
+                )
+
+                result.append(WorkspaceInfo(
+                    id: wsMeta.name,
+                    name: wsMeta.name,
+                    isFocused: wsMeta.isFocused,
+                    windows: windowInfos,
+                    compositeThumbnail: compositeThumbnail
                 ))
             }
 
-            // Capture composite thumbnail for workspace card
-            let compositeThumbnail = captureWorkspaceComposite(
-                windows: leafWindows,
-                windowInfoList: windowInfoList
-            )
-
-            result.append(WorkspaceInfo(
-                id: ws.name,
-                name: ws.name,
-                isFocused: isFocused,
-                windows: windowInfos,
-                compositeThumbnail: compositeThumbnail
-            ))
-        }
-
-        workspaceData = result
-
-        // Select the focused workspace
-        if let focusedIndex = result.firstIndex(where: { $0.isFocused }) {
-            selectedWorkspaceIndex = focusedIndex
+            await MainActor.run {
+                workspaceData = result
+            }
         }
     }
 
-    @MainActor
-    private func captureWorkspaceComposite(
-        windows: [Window],
+    nonisolated private static func captureWindowThumbnail(wid: CGWindowID, maxWidth: CGFloat) -> NSImage? {
+        guard let cgImage = CGWindowListCreateImage(
+            .null,
+            .optionIncludingWindow,
+            wid,
+            [.boundsIgnoreFraming, .bestResolution]
+        ) else { return nil }
+
+        let srcWidth = CGFloat(cgImage.width)
+        let srcHeight = CGFloat(cgImage.height)
+        guard srcWidth > 0, srcHeight > 0 else { return nil }
+
+        let scale = min(1.0, maxWidth / srcWidth)
+        let destSize = NSSize(width: srcWidth * scale, height: srcHeight * scale)
+        let scaled = NSImage(size: destSize)
+        scaled.lockFocus()
+        let src = NSImage(cgImage: cgImage, size: NSSize(width: srcWidth, height: srcHeight))
+        src.draw(in: NSRect(origin: .zero, size: destSize))
+        scaled.unlockFocus()
+        return scaled
+    }
+
+    nonisolated private static func captureWorkspaceComposite(
+        windowIds: Set<CGWindowID>,
         windowInfoList: [[CFString: Any]]
     ) -> NSImage? {
-        let windowIds = windows.map { CGWindowID($0.windowId) }
         if windowIds.isEmpty { return nil }
 
         var minX = CGFloat.infinity, minY = CGFloat.infinity
