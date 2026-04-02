@@ -24,7 +24,9 @@ final class AppLauncherPanel: NSPanelHud {
 
     /// Set to `true` to enable verbose NSLog output for diagnosing keyboard/focus issues.
     /// Off by default to avoid leaking keystrokes to the macOS unified log.
-    private static let debugLogging = false
+    private static var debugLogging: Bool {
+        UserDefaults.standard.bool(forKey: "AppLauncherDebug")
+    }
 
     private func logWindowState(_ label: String) {
         guard Self.debugLogging else { return }
