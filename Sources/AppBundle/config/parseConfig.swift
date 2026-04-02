@@ -393,13 +393,13 @@ private func expandWorkspacesShorthand(
 
         workspaceNames.append(workspaceName)
 
-        // Generate focus binding: e.g. "alt-a" = "workspace A"
+        // Generate focus binding: e.g. "option-a" = "workspace A"
         let focusBinding = "\(focusModifier)-\(key)"
         if bindingTable[focusBinding] == nil {
             bindingTable[focusBinding] = "workspace \(workspaceName)"
         }
 
-        // Generate move binding: e.g. "alt-shift-a" = "move-node-to-workspace A"
+        // Generate move binding: e.g. "option-shift-a" = "move-node-to-workspace A"
         let moveBinding = "\(moveModifier)-\(key)"
         if bindingTable[moveBinding] == nil {
             bindingTable[moveBinding] = "move-node-to-workspace \(workspaceName)"
