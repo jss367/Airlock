@@ -5,7 +5,7 @@ excluded:
 
 # https://realm.github.io/SwiftLint/rule-directory.html
 only_rules:
-  # - line_length # todo fix it
+  # - line_length
   - colon
   - computed_accessors_order
   - dynamic_inline # Avoid using ‘dynamic’ and ‘@inline(__always)’ together

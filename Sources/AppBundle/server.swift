@@ -34,7 +34,7 @@ func toggleReleaseServerIfDebug(_ state: EnableCmdArgs.State) async {
 
 private let serverVersionAndHash = "\(airlockAppVersion) \(gitHash)"
 
-private func newConnection(_ connection: NWConnection) async { // todo add exit codes
+private func newConnection(_ connection: NWConnection) async {
     func answerToClient(exitCode: Int32, stdout: String = "", stderr: String = "") async {
         let ans = ServerAnswer(exitCode: exitCode, stdout: stdout, stderr: stderr, serverVersionAndHash: serverVersionAndHash)
         await answerToClient(ans)

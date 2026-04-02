@@ -2,7 +2,6 @@
 import Common
 import XCTest
 
-// todo write tests
 //
 // test 1
 //     horizontal

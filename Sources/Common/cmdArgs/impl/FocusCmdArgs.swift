@@ -21,7 +21,7 @@ public struct FocusCmdArgs: CmdArgs {
         ],
     )
 
-    public var rawBoundaries: Boundaries? = nil // todo cover boundaries wrapping with tests
+    public var rawBoundaries: Boundaries? = nil
     public var rawBoundariesAction: WhenBoundariesCrossed? = nil
     fileprivate var wrapAroundAlias: Bool = false
     public var dfsIndex: UInt32? = nil

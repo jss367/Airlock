@@ -29,7 +29,7 @@ var defaultConfigUrl: URL {
     }
     return parsedConfig.config
 }()
-@MainActor var config: Config = defaultConfig // todo move to Ctx?
+@MainActor var config: Config = defaultConfig
 @MainActor var configUrl: URL = defaultConfigUrl
 
 struct Config: ConvenienceCopyable {
@@ -39,6 +39,7 @@ struct Config: ConvenienceCopyable {
     var _indentForNestedContainersWithTheSameOrientation: Void = ()
     var enableNormalizationFlattenContainers: Bool = true
     var _nonEmptyWorkspacesRootContainersLayoutOnStartup: Void = ()
+    var _execOnWorkspaceChange: Void = ()
     var defaultRootContainerLayout: Layout = .tiles
     var defaultRootContainerOrientation: DefaultContainerOrientation = .auto
     var startAtLogin: Bool = false
@@ -48,7 +49,7 @@ struct Config: ConvenienceCopyable {
     var accordionPadding: Int = 30
     var enableNormalizationOppositeOrientationForNestedContainers: Bool = true
     var persistentWorkspaces: OrderedSet<String> = []
-    var execOnWorkspaceChange: [String] = [] // todo deprecate
+
     var keyMapping = KeyMapping()
     var execConfig: ExecConfig = ExecConfig()
 

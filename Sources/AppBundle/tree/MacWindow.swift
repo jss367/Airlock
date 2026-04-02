@@ -52,11 +52,11 @@ final class MacWindow: Window {
     //     return "Window(\(description))"
     // }
 
-    func isWindowHeuristic(_ windowLevel: MacOsWindowLevel?) async throws -> Bool { // todo cache (must key by windowLevel)
+    func isWindowHeuristic(_ windowLevel: MacOsWindowLevel?) async throws -> Bool {
         try await macApp.isWindowHeuristic(windowId, windowLevel)
     }
 
-    func isDialogHeuristic(_ windowLevel: MacOsWindowLevel?) async throws -> Bool { // todo cache (must key by windowLevel)
+    func isDialogHeuristic(_ windowLevel: MacOsWindowLevel?) async throws -> Bool {
         try await macApp.isDialogHeuristic(windowId, windowLevel)
     }
 
@@ -116,7 +116,6 @@ final class MacWindow: Window {
         macApp.closeAndUnregisterAxWindow(windowId)
     }
 
-    // todo it's part of the window layout and should be moved to layoutRecursive.swift
     @MainActor
     func hideInCorner(_ corner: OptimalHideCorner) async throws {
         guard let nodeMonitor else { return }
@@ -137,12 +136,10 @@ final class MacWindow: Window {
             case .bottomLeftCorner:
                 guard let s = try await getAxSize() else { fallthrough }
                 // Zoom will jump off if you do one pixel offset https://github.com/nikitabobko/Airlock/issues/527
-                // todo this ad hoc won't be necessary once I implement optimization suggested by Zalim
                 let onePixelOffset = macApp.appId == .zoom ? .zero : CGPoint(x: 1, y: -1)
                 p = nodeMonitor.visibleRect.bottomLeftCorner + onePixelOffset + CGPoint(x: -s.width, y: 0)
             case .bottomRightCorner:
                 // Zoom will jump off if you do one pixel offset https://github.com/nikitabobko/Airlock/issues/527
-                // todo this ad hoc won't be necessary once I implement optimization suggested by Zalim
                 let onePixelOffset = macApp.appId == .zoom ? .zero : CGPoint(x: 1, y: 1)
                 p = nodeMonitor.visibleRect.bottomRightCorner - onePixelOffset
         }
@@ -162,7 +159,6 @@ final class MacWindow: Window {
                 let workspaceRect = nodeWorkspace.workspaceMonitor.rect
                 var newX = workspaceRect.topLeftX + workspaceRect.width * prevUnhiddenProportionalPositionInsideWorkspaceRect.x
                 var newY = workspaceRect.topLeftY + workspaceRect.height * prevUnhiddenProportionalPositionInsideWorkspaceRect.y
-                // todo we probably should replace lastFloatingSize with proper floating window sizing
                 // https://github.com/nikitabobko/Airlock/issues/1519
                 let windowWidth = lastFloatingSize?.width ?? 0
                 let windowHeight = lastFloatingSize?.height ?? 0

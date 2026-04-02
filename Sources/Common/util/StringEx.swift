@@ -1,6 +1,6 @@
 public typealias Parsed<T> = Result<T, String>
-extension String: @retroactive Error {} // Make it possible to use String in Result. todo migrate to self written Result monad
-extension Array: @retroactive Error where Element: Error {} // Make it possible to use [String] in Result. todo migrate to self written Result monad
+extension String: @retroactive Error {}
+extension Array: @retroactive Error where Element: Error {}
 
 extension String {
     public func trim() -> String {
@@ -17,7 +17,7 @@ extension String {
 }
 
 extension [String] {
-    public func joinErrors() -> String { // todo reuse in config parsing?
+    public func joinErrors() -> String {
         map { (error: String) -> String in
             error.split(separator: "\n").enumerated()
                 .map { (i, line) in
@@ -67,7 +67,7 @@ extension [[String]] {
     }
 }
 
-extension Array { // todo move to ArrayEx.swift
+extension Array {
     public func transposed<T>() -> [[T]] where Self.Element == [T] {
         if isEmpty {
             return []

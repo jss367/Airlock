@@ -44,7 +44,7 @@ struct ListWindowsCommand: Command {
         if args.outputOnlyCount {
             return io.out("\(windows.count)")
         } else {
-            var _list: [(window: Window, title: String)] = [] // todo cleanup
+            var _list: [(window: Window, title: String)] = []
             for window in windows {
                 _list.append((window, try await window.title))
             }

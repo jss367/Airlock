@@ -18,7 +18,7 @@ open class TreeNode: Equatable, AeroAny {
     // - move-mouse command
     var lastAppliedLayoutPhysicalRect: Rect? = nil // with real inner gaps
     final var unboundStacktrace: String? = nil
-    var isBound: Bool { parent != nil } // todo drop, once https://github.com/nikitabobko/Airlock/issues/1215 is fixed
+    var isBound: Bool { parent != nil }
 
     @MainActor
     init(parent: NonLeafTreeNodeObject, adaptiveWeight: CGFloat, index: Int) {

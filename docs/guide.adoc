@@ -171,7 +171,7 @@ If you use different layout, different alphabet, or you just want to have a fanc
 [#exec-env-vars]
 === exec-* Environment Variables
 
-You can configure environment variables of `exec-*` commands and callbacks (such as xref:commands.adoc#exec-and-forget[exec-and-forget], <<exec-on-workspace-change-callback>>)
+You can configure environment variables of `exec-*` commands and callbacks (such as xref:commands.adoc#exec-and-forget[exec-and-forget])
 
 * `exec.inherit-env-vars = true` configures whether inherit environment variables of `Airlock.app` or not. (The default is `true`)
 * You can override env variables with the following syntax:
@@ -562,28 +562,6 @@ You shouldn't rely on the order callbacks are called, since it's an implementati
 
 The callbacks are "recursion resistant", which means that any focus change within the callback won't retrigger the callback.
 Changing the focus within these callbacks is a bad idea anyway, and the way it's handled will probably change in future versions.
-
-[#exec-on-workspace-change-callback]
-=== 'exec-on-workspace-change' callback
-
-`exec-on-workspace-change` callback allows to run arbitrary process when focused workspace changes.
-It may be useful for integrating with bars.
-
-[source,toml]
-----
-# Notify Sketchybar about workspace change
-exec-on-workspace-change = ['/bin/bash', '-c',
-    'sketchybar --trigger airlock_workspace_change FOCUSED=$AIRLOCK_FOCUSED_WORKSPACE'
-]
-----
-
-Besides the <<exec-env-vars,`exec.env-vars`>>, the process has access to the following environment variables:
-
-* `AIRLOCK_FOCUSED_WORKSPACE` - the workspace user switched to
-* `AIRLOCK_PREV_WORKSPACE` - the workspace user switched from
-
-For a more elaborate example on how to integrate with Sketchybar see
-xref:./goodies.adoc#show-airlock-workspaces-in-sketchybar[]
 
 [#multiple-monitors]
 == Multiple monitors

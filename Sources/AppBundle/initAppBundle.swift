@@ -93,7 +93,7 @@ private func initServerArgs() {
                     exit(1, err: "Missing <path> in --config-path flag")
                 }
                 index += 1
-            case "--read-only": // todo rename to '--disabled' and unite with disabled feature
+            case "--read-only":
                 _serverArgs.isReadOnly = true
             case "-NSDocumentRevisionsDebugMode" where isDebug:
                 // Skip Xcode CLI args.

@@ -1,4 +1,4 @@
-// periphery:ignore:all - This is WIP file todo
+// periphery:ignore:all
 import Antlr4
 import Common
 import ShellParserGenerated

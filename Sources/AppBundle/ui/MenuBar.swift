@@ -4,7 +4,7 @@ import Foundation
 import SwiftUI
 
 @MainActor
-public func menuBar(viewModel: TrayMenuModel) -> some Scene { // todo should it be converted to "SwiftUI struct"?
+public func menuBar(viewModel: TrayMenuModel) -> some Scene {
     MenuBarExtra {
         let shortIdentification = "\(airlockAppName) v\(airlockAppVersion) \(gitShortHash)"
         let identification      = "\(airlockAppName) v\(airlockAppVersion) \(gitHash)"

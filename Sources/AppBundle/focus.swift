@@ -79,7 +79,6 @@ extension Window {
         if let focus = toLiveFocusOrNil() {
             return setFocus(to: focus)
         } else {
-            // todo We should also exit-native-hidden/unminimize[/exit-native-fullscreen?] window if we want to fix ID-B6E178F2
             //      and retry to focus the window. Otherwise, it's not possible to focus minimized/hidden windows
             return false
         }
@@ -91,7 +90,6 @@ extension Workspace {
     @MainActor func focusWorkspace() -> Bool { setFocus(to: toLiveFocus()) }
 
     func toLiveFocus() -> LiveFocus {
-        // todo unfortunately mostRecentWindowRecursive may recursively reach empty rootTilingContainer
         //      while floating or macos unconventional windows might be presented
         if let wd = mostRecentWindowRecursive ?? anyLeafWindowRecursive {
             LiveFocus(windowOrNil: wd, workspace: self)
@@ -176,7 +174,6 @@ extension Workspace {
     ))
     if config.onFocusedMonitorChanged.isEmpty { return }
     guard let token: RunSessionGuard = .isServerEnabled else { return }
-    // todo potential optimization: don't run runSession if we are already in runSession
     Task {
         try await runLightSession(.onFocusedMonitorChanged, token) {
             _ = try await config.onFocusedMonitorChanged.runCmdSeq(.defaultEnv.withFocus(focus), .emptyStdin)
@@ -190,7 +187,6 @@ extension Workspace {
     ))
     if config.onFocusChanged.isEmpty { return }
     guard let token: RunSessionGuard = .isServerEnabled else { return }
-    // todo potential optimization: don't run runSession if we are already in runSession
     Task {
         try await runLightSession(.onFocusChanged, token) {
             _ = try await config.onFocusChanged.runCmdSeq(.defaultEnv.withFocus(focus), .emptyStdin)
@@ -203,15 +199,4 @@ extension Workspace {
         workspace: newWorkspace,
         prevWorkspace: oldWorkspace,
     ))
-    if let exec = config.execOnWorkspaceChange.first {
-        let process = Process()
-        process.executableURL = URL(filePath: exec)
-        process.arguments = Array(config.execOnWorkspaceChange.dropFirst())
-        var environment = config.execConfig.envVariables
-        environment["AIRLOCK_FOCUSED_WORKSPACE"] = newWorkspace
-        environment["AIRLOCK_PREV_WORKSPACE"] = oldWorkspace
-        environment[AIRLOCK_WORKSPACE] = newWorkspace
-        process.environment = environment
-        _ = Result { try process.run() }
-    }
 }
