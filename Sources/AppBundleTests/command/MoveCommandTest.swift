@@ -278,6 +278,57 @@ final class MoveCommandTest: XCTestCase {
         )
         assertEquals(focus.windowOrNil?.windowId, 1)
     }
+
+    func testMoveFloatingWindow_right() async throws {
+        let workspace = Workspace.get(byName: name)
+        let window = TestWindow.new(id: 1, parent: workspace, rect: Rect(topLeftX: 100, topLeftY: 100, width: 200, height: 200))
+        assertEquals(window.focusWindow(), true)
+        assertEquals(window.isFloating, true)
+
+        let result = try await MoveCommand(args: MoveCmdArgs(rawArgs: [], .right)).run(.defaultEnv, .emptyStdin)
+        assertEquals(result.exitCode, 0)
+
+        let rect = try await window.getAxRect()
+        assertEquals(rect?.topLeftX, 150)
+        assertEquals(rect?.topLeftY, 100)
+    }
+
+    func testMoveFloatingWindow_down() async throws {
+        let workspace = Workspace.get(byName: name)
+        let window = TestWindow.new(id: 1, parent: workspace, rect: Rect(topLeftX: 100, topLeftY: 100, width: 200, height: 200))
+        assertEquals(window.focusWindow(), true)
+
+        let result = try await MoveCommand(args: MoveCmdArgs(rawArgs: [], .down)).run(.defaultEnv, .emptyStdin)
+        assertEquals(result.exitCode, 0)
+
+        let rect = try await window.getAxRect()
+        assertEquals(rect?.topLeftX, 100)
+        assertEquals(rect?.topLeftY, 150)
+    }
+
+    func testMoveFloatingWindow_left() async throws {
+        let workspace = Workspace.get(byName: name)
+        let window = TestWindow.new(id: 1, parent: workspace, rect: Rect(topLeftX: 100, topLeftY: 100, width: 200, height: 200))
+        assertEquals(window.focusWindow(), true)
+
+        try await MoveCommand(args: MoveCmdArgs(rawArgs: [], .left)).run(.defaultEnv, .emptyStdin)
+
+        let rect = try await window.getAxRect()
+        assertEquals(rect?.topLeftX, 50)
+        assertEquals(rect?.topLeftY, 100)
+    }
+
+    func testMoveFloatingWindow_up() async throws {
+        let workspace = Workspace.get(byName: name)
+        let window = TestWindow.new(id: 1, parent: workspace, rect: Rect(topLeftX: 100, topLeftY: 100, width: 200, height: 200))
+        assertEquals(window.focusWindow(), true)
+
+        try await MoveCommand(args: MoveCmdArgs(rawArgs: [], .up)).run(.defaultEnv, .emptyStdin)
+
+        let rect = try await window.getAxRect()
+        assertEquals(rect?.topLeftX, 100)
+        assertEquals(rect?.topLeftY, 50)
+    }
 }
 
 extension TreeNode {

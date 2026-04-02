@@ -65,7 +65,7 @@ open class TreeNode: Equatable, AeroAny {
 
     @MainActor
     @discardableResult
-    func bind(to newParent: NonLeafTreeNodeObject, adaptiveWeight: CGFloat, index: Int) -> BindingData? {
+    func bind(to newParent: NonLeafTreeNodeObject, adaptiveWeight: CGFloat, index: Int, updateMru: Bool = true) -> BindingData? {
         let result = unbindIfBound()
 
         if newParent === NilTreeNode.instance {
@@ -87,11 +87,15 @@ open class TreeNode: Equatable, AeroAny {
         newParent._children.insert(self, at: index != INDEX_BIND_LAST ? index : newParent._children.count)
         _parent = newParent
         unboundStacktrace = nil
-        // todo consider disabling automatic mru propogation
-        // 1. "floating windows" in FocusCommand break the MRU because of that :(
-        // 2. Misbehaved apps that abuse real window as popups https://github.com/nikitabobko/Airlock/issues/106 (the
-        //    last appeared window, is not necessarily the one that has the focus)
-        markAsMostRecentChild()
+        if updateMru {
+            // Note: misbehaved apps that abuse real windows as popups (https://github.com/nikitabobko/Airlock/issues/106)
+            // may still cause issues since the last appeared window is not necessarily the focused one
+            markAsMostRecentChild()
+        } else {
+            // Add to MRU stack without raising to top or propagating up the tree.
+            // Used by FocusCommand's floatingAsTiling to avoid corrupting MRU ordering.
+            newParent._mruChildren.pushIfAbsent(self)
+        }
         return result
     }
 
@@ -113,6 +117,12 @@ open class TreeNode: Equatable, AeroAny {
     }
 
     var mostRecentChild: TreeNode? { _mruChildren.mostRecent ?? children.last }
+
+    /// Snapshot the MRU ordering of this node's children (most recent first)
+    func mruSnapshot() -> [TreeNode] { _mruChildren.snapshot() }
+
+    /// Restore the MRU ordering of this node's children from a prior snapshot
+    func restoreMruOrder(from snapshot: [TreeNode]) { _mruChildren.restoreOrder(from: snapshot) }
 
     @discardableResult
     func unbindFromParent() -> BindingData {
