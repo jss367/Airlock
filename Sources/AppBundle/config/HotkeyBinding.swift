@@ -13,6 +13,7 @@ import TOMLKit
         key.isEnabled = false
     }
     hotkeys = [:]
+    HotKeySuppressor.shared.unregisterAll()
 }
 
 extension HotKey {
@@ -51,6 +52,12 @@ extension HotKey {
             key.isEnabled = true
         } else {
             key.isEnabled = false
+        }
+    }
+    HotKeySuppressor.shared.unregisterAll()
+    for (_, key) in hotkeys where !key.isPaused {
+        if let k = key.keyCombo.key {
+            HotKeySuppressor.shared.register(key: k, modifiers: key.keyCombo.modifiers)
         }
     }
     let oldMode = activeMode
