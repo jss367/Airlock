@@ -71,7 +71,7 @@ struct InstalledAppInfo: Hashable, Sendable {
     let url: URL
 }
 
-func discoverInstalledAppInfo() -> [InstalledAppInfo] {
+func discoverInstalledAppInfo() async -> [InstalledAppInfo] {
     let fileManager = FileManager.default
     let searchDirs = [
         "/Applications",
@@ -83,6 +83,7 @@ func discoverInstalledAppInfo() -> [InstalledAppInfo] {
     var apps: [URL: InstalledAppInfo] = [:]
 
     for dir in searchDirs {
+        guard !Task.isCancelled else { break }
         guard let urls = try? fileManager.contentsOfDirectory(
             at: URL(fileURLWithPath: dir),
             includingPropertiesForKeys: nil,

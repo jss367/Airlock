@@ -255,9 +255,7 @@ struct QuickSwitcherContent: View {
             let runningBundleIds = await MainActor.run {
                 Set(MacApp.allAppsMap.values.compactMap { $0.rawAppBundleId })
             }
-            let installed = await Task.detached {
-                discoverInstalledAppInfo()
-            }.value
+            let installed = await discoverInstalledAppInfo()
             guard !Task.isCancelled else { return }
             let appItems = installed.compactMap { app -> SwitcherItem? in
                 if let bundleId = app.bundleIdentifier, runningBundleIds.contains(bundleId) {
