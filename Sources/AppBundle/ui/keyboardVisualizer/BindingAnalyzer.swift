@@ -80,7 +80,7 @@ private enum OsascriptResult {
 }
 
 private let osascriptAppRegex = try! NSRegularExpression(
-    pattern: #"tell application "([^"]+)" to activate"#,
+    pattern: #"tell application "([^"]+)""#,
     options: []
 )
 
