@@ -73,7 +73,10 @@ struct AppPickerView: View {
     private func selectApp(_ app: InstalledApp) {
         do {
             try addBinding(key: keyNotation, appName: app.name, modifierPrefix: modifierPrefix)
-            onDismiss()
+            Task { @MainActor in
+                _ = try? await reloadConfig()
+                onDismiss()
+            }
         } catch {
             errorMessage = error.localizedDescription
         }
