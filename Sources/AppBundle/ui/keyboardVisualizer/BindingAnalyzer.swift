@@ -39,6 +39,16 @@ private func classifyBinding(_ binding: HotkeyBinding) -> KeyBindingInfo {
         return .appLauncher(appName: appName, appPath: appPath)
     }
 
+    if let osascriptResult = extractOsascriptDescription(from: script) {
+        switch osascriptResult {
+        case .launcher(let appName):
+            let appPath = findAppPath(named: appName) ?? ""
+            return .appLauncher(appName: appName, appPath: appPath)
+        case .keystroke(let description):
+            return .otherCommand(description: description)
+        }
+    }
+
     return .otherCommand(description: execArgs.bashScript)
 }
 
@@ -62,6 +72,66 @@ private func extractAppName(from script: String) -> String? {
         }
     }
     return nil
+}
+
+private enum OsascriptResult {
+    case launcher(appName: String)
+    case keystroke(description: String)
+}
+
+private let osascriptAppRegex = try! NSRegularExpression(
+    pattern: #"tell application "([^"]+)""#,
+    options: []
+)
+
+private let osascriptKeystrokeRegex = try! NSRegularExpression(
+    pattern: #"keystroke "([^"]+)"(?:\s+using\s+\{([^}]+)\})?"#,
+    options: []
+)
+
+private func extractOsascriptDescription(from script: String) -> OsascriptResult? {
+    // Only handle osascript commands (support both bare and absolute-path invocations)
+    let isOsascript = script.hasPrefix("osascript ") || script.range(of: #"^/.*/osascript\s"#, options: .regularExpression) != nil
+    guard isOsascript else { return nil }
+
+    let range = NSRange(script.startIndex..., in: script)
+
+    // Extract the target app name
+    guard let appMatch = osascriptAppRegex.firstMatch(in: script, range: range),
+          let appRange = Range(appMatch.range(at: 1), in: script) else {
+        return nil
+    }
+    let appName = String(script[appRange])
+
+    // Check for keystroke
+    guard let keystrokeMatch = osascriptKeystrokeRegex.firstMatch(in: script, range: range),
+          let keyRange = Range(keystrokeMatch.range(at: 1), in: script) else {
+        // No keystroke — just an app activation
+        return .launcher(appName: appName)
+    }
+
+    let key = String(script[keyRange]).uppercased()
+
+    // Parse modifiers if present
+    var modifierSymbols = ""
+    let modifiersGroupRange = keystrokeMatch.range(at: 2)
+    if modifiersGroupRange.location != NSNotFound, let modRange = Range(modifiersGroupRange, in: script) {
+        let modifierMap: [(String, String)] = [
+            ("control down", "⌃"),
+            ("option down", "⌥"),
+            ("shift down", "⇧"),
+            ("command down", "⌘"),
+        ]
+        let modString = String(script[modRange])
+        // Build in standard macOS order: ⌃⌥⇧⌘
+        for (name, symbol) in modifierMap {
+            if modString.contains(name) {
+                modifierSymbols += symbol
+            }
+        }
+    }
+
+    return .keystroke(description: "\(appName): \(modifierSymbols)\(key)")
 }
 
 private func findAppPath(named appName: String) -> String? {
