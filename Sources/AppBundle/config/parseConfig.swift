@@ -130,6 +130,7 @@ private let configParser: [String: any ParserProtocol<Config>] = [
     // Deprecated
     "non-empty-workspaces-root-containers-layout-on-startup": Parser(\._nonEmptyWorkspacesRootContainersLayoutOnStartup, parseStartupRootContainerLayout),
     "indent-for-nested-containers-with-the-same-orientation": Parser(\._indentForNestedContainersWithTheSameOrientation, parseIndentForNestedContainersWithTheSameOrientation),
+    "exec-on-workspace-change": Parser(\._execOnWorkspaceChange, parseExecOnWorkspaceChange),
 ]
 
 extension ParsedCmd where T == any Command {
@@ -243,6 +244,14 @@ func parseIndentForNestedContainersWithTheSameOrientation(
     _ backtrace: TomlBacktrace,
 ) -> ParsedToml<Void> {
     let msg = "Deprecated. Please drop it from the config. See https://github.com/nikitabobko/Airlock/issues/96"
+    return .failure(.semantic(backtrace, msg))
+}
+
+func parseExecOnWorkspaceChange(
+    _ _: TOMLValueConvertible,
+    _ backtrace: TomlBacktrace,
+) -> ParsedToml<Void> {
+    let msg = "Deprecated. exec-on-workspace-change is no longer supported. Use 'on-focused-workspace-changed' callback instead"
     return .failure(.semantic(backtrace, msg))
 }
 

@@ -103,10 +103,6 @@ Use these snippets as a starting point.
 # so it won't be run twice on Airlock restart
 after-startup-command = ['exec-and-forget sketchybar']
 
-# Notify Sketchybar about workspace change
-exec-on-workspace-change = ['/bin/bash', '-c',
-    'sketchybar --trigger airlock_workspace_change FOCUSED_WORKSPACE=$AIRLOCK_FOCUSED_WORKSPACE'
-]
 ----
 
 .~/.config/sketchybar/sketchybarrc
@@ -158,12 +154,6 @@ on-focus-changed = [
   "exec-and-forget osascript -e 'tell application id \"tracesOf.Uebersicht\" to refresh widget id \"simple-bar-index-jsx\"'",
 ]
 
-# Notify simple-bar about workspace change
-exec-on-workspace-change = [
-  '/bin/zsh',
-  '-c',
-  '/usr/bin/osascript -e "tell application id \"tracesOf.Uebersicht\" to refresh widget id \"simple-bar-index-jsx\""',
-]
 ----
 
 [#open-a-new-window-with-applescript]
