@@ -251,7 +251,7 @@ func parseExecOnWorkspaceChange(
     _ _: TOMLValueConvertible,
     _ backtrace: TomlBacktrace,
 ) -> ParsedToml<Void> {
-    let msg = "Deprecated. exec-on-workspace-change is no longer supported. Use 'on-focused-workspace-changed' callback instead"
+    let msg = "Deprecated. exec-on-workspace-change is no longer supported. Use 'on-focus-changed' callback instead"
     return .failure(.semantic(backtrace, msg))
 }
 
