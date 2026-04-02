@@ -64,7 +64,9 @@ final class ConfigTest: XCTestCase {
             """,
         )
         assertEquals(errors, [])
-        XCTAssertTrue(config.modes[mainModeId]?.bindings.isEmpty == true)
+        // With merge-with-defaults, an empty main mode inherits all default bindings
+        XCTAssertTrue(config.modes[mainModeId]?.bindings.isEmpty == false)
+        assertEquals(config.modes[mainModeId]?.bindings, defaultConfig.modes[mainModeId]?.bindings)
     }
 
     func testParseMode() {
@@ -76,10 +78,13 @@ final class ConfigTest: XCTestCase {
         )
         assertEquals(errors, [])
         let binding = HotkeyBinding(.option, .h, [FocusCommand.new(direction: .left)])
+        // User binding should override default
         assertEquals(
-            config.modes[mainModeId],
-            Mode(bindings: [binding.descriptionWithKeyCode: binding]),
+            config.modes[mainModeId]?.bindings[binding.descriptionWithKeyCode],
+            binding,
         )
+        // Should also contain default bindings (more than just the one user binding)
+        XCTAssertTrue(config.modes[mainModeId]!.bindings.count > 1)
     }
 
     func testModesMustContainDefaultModeError() {
@@ -89,11 +94,11 @@ final class ConfigTest: XCTestCase {
                 option-h = 'focus left'
             """,
         )
-        assertEquals(
-            errors.descriptions,
-            ["mode: Please specify \'main\' mode"],
-        )
-        assertEquals(config.modes[mainModeId], nil)
+        assertEquals(errors, [])
+        // 'main' mode comes from defaults
+        XCTAssertNotNil(config.modes[mainModeId])
+        // 'foo' mode is from user config
+        XCTAssertNotNil(config.modes["foo"])
     }
 
     func testHotkeyParseError() {
@@ -113,10 +118,13 @@ final class ConfigTest: XCTestCase {
             ],
         )
         let binding = HotkeyBinding(.option, .k, [FocusCommand.new(direction: .up)])
+        // User binding should be present
         assertEquals(
-            config.modes[mainModeId],
-            Mode(bindings: [binding.descriptionWithKeyCode: binding]),
+            config.modes[mainModeId]?.bindings[binding.descriptionWithKeyCode],
+            binding,
         )
+        // Should also have default bindings
+        XCTAssertTrue(config.modes[mainModeId]!.bindings.count > 1)
     }
 
     func testPermanentWorkspaceNames() {
@@ -130,7 +138,11 @@ final class ConfigTest: XCTestCase {
             """,
         )
         assertEquals(errors.descriptions, [])
-        assertEquals(config.persistentWorkspaces.sorted(), ["1", "2", "3", "4"])
+        // User-defined workspaces should be present
+        XCTAssertTrue(config.persistentWorkspaces.contains("1"))
+        XCTAssertTrue(config.persistentWorkspaces.contains("2"))
+        XCTAssertTrue(config.persistentWorkspaces.contains("3"))
+        XCTAssertTrue(config.persistentWorkspaces.contains("4"))
     }
 
     func testUnknownTopLevelKeyParseError() {
@@ -409,7 +421,7 @@ final class ConfigTest: XCTestCase {
             "unicorn": .u,
         ]))
         let binding = HotkeyBinding(.option, .u, [WorkspaceCommand(args: WorkspaceCmdArgs(target: .direct(.parse("unicorn").getOrDie())))])
-        assertEquals(config.modes[mainModeId]?.bindings, [binding.descriptionWithKeyCode: binding])
+        assertEquals(config.modes[mainModeId]?.bindings[binding.descriptionWithKeyCode], binding)
 
         let (_, errors1) = parseConfig(
             """
@@ -439,5 +451,50 @@ final class ConfigTest: XCTestCase {
         assertEquals(colemakErrors, [])
         assertEquals(colemakConfig.keyMapping, KeyMapping(preset: .colemak, rawKeyNotationToKeyCode: [:]))
         assertEquals(colemakConfig.keyMapping.resolve()["f"], .e)
+    }
+
+    func testDisabledBindingRemovesDefault() {
+        // Find a binding that exists in the default config
+        let defaultBindings = defaultConfig.modes[mainModeId]!.bindings
+        guard let (defaultKey, _) = defaultBindings.first else {
+            XCTFail("Default config has no bindings")
+            return
+        }
+        // Find the key notation for this binding from the default config
+        let defaultBinding = defaultBindings[defaultKey]!
+
+        let (config, errors) = parseConfig(
+            """
+            [mode.main.binding]
+                \(defaultBinding.descriptionWithKeyNotation) = 'disabled'
+            """,
+        )
+        assertEquals(errors, [])
+        // The disabled binding should be removed
+        XCTAssertNil(config.modes[mainModeId]?.bindings[defaultKey])
+        // Other default bindings should still be present
+        XCTAssertTrue(config.modes[mainModeId]!.bindings.count == defaultBindings.count - 1)
+    }
+
+    func testNoModeSectionInheritsDefaults() {
+        let (config, errors) = parseConfig(
+            """
+            enable-normalization-flatten-containers = true
+            """,
+        )
+        assertEquals(errors, [])
+        assertEquals(config.modes[mainModeId]?.bindings, defaultConfig.modes[mainModeId]?.bindings)
+    }
+
+    func testDefaultOnlyModeIsPreserved() {
+        // Default config has 'service' mode. User only defines 'main'.
+        let (config, errors) = parseConfig(
+            """
+            [mode.main.binding]
+                option-h = 'focus left'
+            """,
+        )
+        assertEquals(errors, [])
+        XCTAssertNotNil(config.modes["service"])
     }
 }

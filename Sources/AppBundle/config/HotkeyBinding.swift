@@ -106,6 +106,18 @@ func parseBindings(_ raw: TOMLValueConvertible, _ backtrace: TomlBacktrace, _ er
     var result: [String: HotkeyBinding] = [:]
     for (binding, rawCommand): (String, TOMLValueConvertible) in rawTable {
         let backtrace = backtrace + .key(binding)
+        if rawCommand.string == "disabled" {
+            // 'disabled' sentinel: parse the key combo, store binding with empty commands
+            let parsed = parseBinding(binding, backtrace, mapping)
+                .map { modifiers, key in
+                    HotkeyBinding(modifiers, key, [], descriptionWithKeyNotation: binding)
+                }
+                .getOrNil(appendErrorTo: &errors)
+            if let parsed {
+                result[parsed.descriptionWithKeyCode] = parsed
+            }
+            continue
+        }
         let binding = parseBinding(binding, backtrace, mapping)
             .flatMap { modifiers, key -> ParsedToml<HotkeyBinding> in
                 parseCommandOrCommands(rawCommand).toParsedToml(backtrace).map {
