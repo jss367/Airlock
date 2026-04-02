@@ -13,6 +13,7 @@
 - If the build or tests fail, fix the issue before creating the PR.
 - Only deploy (`./deploy.sh`) when the user explicitly asks.
 - Always create a PR for any code changes. PR against `main`.
+- When addressing PR review comments that require code changes, create a new PR with the fixes (don't push to the existing branch). Let PRs cascade.
 
 ## Build & Deploy
 
