@@ -39,6 +39,7 @@ struct Config: ConvenienceCopyable {
     var _indentForNestedContainersWithTheSameOrientation: Void = ()
     var enableNormalizationFlattenContainers: Bool = true
     var _nonEmptyWorkspacesRootContainersLayoutOnStartup: Void = ()
+    var _execOnWorkspaceChange: Void = ()
     var defaultRootContainerLayout: Layout = .tiles
     var defaultRootContainerOrientation: DefaultContainerOrientation = .auto
     var startAtLogin: Bool = false
