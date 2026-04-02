@@ -7,10 +7,13 @@ import SwiftUI
 @MainActor
 func toggleMissionControl() {
     if let panel = missionControlPanel, panel.isVisible {
-        panel.close()
-        missionControlPanel = nil
+        dismissMissionControl()
     } else {
-        let panel = MissionControlPanel()
+        // Capture all thumbnails BEFORE showing the overlay panel,
+        // otherwise the panel occludes windows and captures come back blank
+        let data = MissionControlContent.captureAllWorkspaces()
+
+        let panel = MissionControlPanel(preloadedData: data)
         missionControlPanel = panel
         panel.show()
     }
@@ -25,9 +28,9 @@ func dismissMissionControl() {
 private class MissionControlPanel: NSPanelHud {
     private var hostingView: NSHostingView<MissionControlContent>?
 
-    override init() {
+    init(preloadedData: [MissionControlContent.WorkspaceInfo]) {
         super.init()
-        let content = MissionControlContent()
+        let content = MissionControlContent(preloadedData: preloadedData)
         let hosting = NSHostingView(rootView: content)
         self.contentView = hosting
         self.hostingView = hosting
@@ -36,7 +39,7 @@ private class MissionControlPanel: NSPanelHud {
             self.setFrame(screen.frame, display: true)
         }
 
-        self.level = .screenSaver
+        self.level = .floating
         self.backgroundColor = .clear
         self.isOpaque = false
     }
@@ -48,9 +51,10 @@ private class MissionControlPanel: NSPanelHud {
 }
 
 struct MissionControlContent: View {
-    @State private var workspaceData: [WorkspaceInfo] = []
+    let preloadedData: [WorkspaceInfo]
     @State private var selectedWorkspaceIndex: Int = 0
     @State private var keyMonitor: Any?
+    @State private var isVisible: Bool = false
 
     struct WorkspaceInfo: Identifiable {
         let id: String
@@ -69,14 +73,16 @@ struct MissionControlContent: View {
 
     var body: some View {
         ZStack {
-            Color.black.opacity(0.6)
+            // Translucent blur background like Mission Control
+            Rectangle()
+                .fill(.ultraThinMaterial)
                 .ignoresSafeArea()
 
             VStack(spacing: 24) {
                 // Workspace bar at top
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 16) {
-                        ForEach(Array(workspaceData.enumerated()), id: \.element.id) { index, ws in
+                        ForEach(Array(preloadedData.enumerated()), id: \.element.id) { index, ws in
                             WorkspaceCard(workspace: ws, isSelected: index == selectedWorkspaceIndex)
                                 .onTapGesture { switchToWorkspace(ws) }
                         }
@@ -88,18 +94,18 @@ struct MissionControlContent: View {
                 // Window grid area
                 ScrollView {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 250, maximum: 350), spacing: 16)], spacing: 16) {
-                        ForEach(workspaceData) { ws in
+                        ForEach(preloadedData) { ws in
                             Section {
                                 ForEach(ws.windows) { window in
                                     WindowThumbnail(window: window)
                                         .onTapGesture { focusWindow(window) }
                                 }
                             } header: {
-                                if workspaceData.count > 1 {
+                                if preloadedData.count > 1 {
                                     HStack {
                                         Text(ws.name)
                                             .font(.system(size: 14, weight: .semibold))
-                                            .foregroundStyle(ws.isFocused ? .white : .white.opacity(0.6))
+                                            .foregroundStyle(ws.isFocused ? .primary : .secondary)
                                         Spacer()
                                     }
                                     .padding(.horizontal, 4)
@@ -113,11 +119,19 @@ struct MissionControlContent: View {
 
                 Spacer()
             }
+            .scaleEffect(isVisible ? 1.0 : 0.95)
+            .opacity(isVisible ? 1.0 : 0.0)
         }
         .onAppear {
-            loadData()
+            // Select the focused workspace
+            if let focusedIndex = preloadedData.firstIndex(where: { $0.isFocused }) {
+                selectedWorkspaceIndex = focusedIndex
+            }
             keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
                 return handleKeyEvent(event) ? nil : event
+            }
+            withAnimation(.easeOut(duration: 0.2)) {
+                isVisible = true
             }
         }
         .onDisappear {
@@ -129,6 +143,15 @@ struct MissionControlContent: View {
     }
 
     private func handleKeyEvent(_ event: NSEvent) -> Bool {
+        // Hyper+A (ctrl+option+shift+cmd + A) toggles off
+        let hyperMask: NSEvent.ModifierFlags = [.control, .option, .shift, .command]
+        if event.modifierFlags.intersection(.deviceIndependentFlagsMask) == hyperMask
+            && event.keyCode == 0 /* 'a' */
+        {
+            Task { @MainActor in dismissMissionControl() }
+            return true
+        }
+
         switch event.keyCode {
         case 53: // Escape
             Task { @MainActor in dismissMissionControl() }
@@ -137,10 +160,10 @@ struct MissionControlContent: View {
             if selectedWorkspaceIndex > 0 { selectedWorkspaceIndex -= 1 }
             return true
         case 124: // Right arrow
-            if selectedWorkspaceIndex < workspaceData.count - 1 { selectedWorkspaceIndex += 1 }
+            if selectedWorkspaceIndex < preloadedData.count - 1 { selectedWorkspaceIndex += 1 }
             return true
         case 36: // Return
-            if let ws = workspaceData[safe: selectedWorkspaceIndex] {
+            if let ws = preloadedData[safe: selectedWorkspaceIndex] {
                 switchToWorkspace(ws)
             }
             return true
@@ -150,8 +173,7 @@ struct MissionControlContent: View {
     }
 
     @MainActor
-    private func loadData() {
-        // Gather workspace/window metadata on MainActor (required for tree access)
+    static func captureAllWorkspaces() -> [WorkspaceInfo] {
         let persistentOrder = config.persistentWorkspaces
         let workspaces = Workspace.all.sorted { a, b in
             let ai = persistentOrder.firstIndex(of: a.name)
@@ -165,73 +187,44 @@ struct MissionControlContent: View {
         }
 
         let focusedWorkspaceName = focus.workspace.name
+        let windowInfoList = CGWindowListCopyWindowInfo([.optionAll], kCGNullWindowID) as? [[CFString: Any]] ?? []
 
-        struct WindowMeta: Sendable {
-            let windowId: UInt32
-            let appName: String
-        }
-        struct WorkspaceMeta: Sendable {
-            let name: String
-            let isFocused: Bool
-            let windows: [WindowMeta]
-        }
-
-        let metas: [WorkspaceMeta] = workspaces.map { ws in
+        var result: [WorkspaceInfo] = []
+        for ws in workspaces {
             let leafWindows = ws.allLeafWindowsRecursive
-            return WorkspaceMeta(
-                name: ws.name,
-                isFocused: ws.name == focusedWorkspaceName,
-                windows: leafWindows.map { WindowMeta(windowId: $0.windowId, appName: $0.app.name ?? "Unknown") }
-            )
-        }
+            let isFocused = ws.name == focusedWorkspaceName
 
-        // Select the focused workspace immediately (before thumbnails load)
-        let placeholder = metas.map { WorkspaceInfo(id: $0.name, name: $0.name, isFocused: $0.isFocused, windows: $0.windows.map { WindowInfo(id: $0.windowId, appName: $0.appName, thumbnail: nil, windowId: $0.windowId) }, compositeThumbnail: nil) }
-        workspaceData = placeholder
-        if let focusedIndex = placeholder.firstIndex(where: { $0.isFocused }) {
-            selectedWorkspaceIndex = focusedIndex
-        }
-
-        // Capture thumbnails off the main thread
-        Task.detached(priority: .userInitiated) {
-            let windowInfoList = CGWindowListCopyWindowInfo([.optionAll], kCGNullWindowID) as? [[CFString: Any]] ?? []
-
-            var result: [WorkspaceInfo] = []
-            for wsMeta in metas {
-                var windowInfos: [WindowInfo] = []
-                for winMeta in wsMeta.windows {
-                    let wid = CGWindowID(winMeta.windowId)
-                    let thumbnail = Self.captureWindowThumbnail(wid: wid, maxWidth: 350)
-                    windowInfos.append(WindowInfo(
-                        id: winMeta.windowId,
-                        appName: winMeta.appName,
-                        thumbnail: thumbnail,
-                        windowId: winMeta.windowId
-                    ))
-                }
-
-                let windowIds = Set(wsMeta.windows.map { CGWindowID($0.windowId) })
-                let compositeThumbnail = Self.captureWorkspaceComposite(
-                    windowIds: windowIds,
-                    windowInfoList: windowInfoList
-                )
-
-                result.append(WorkspaceInfo(
-                    id: wsMeta.name,
-                    name: wsMeta.name,
-                    isFocused: wsMeta.isFocused,
-                    windows: windowInfos,
-                    compositeThumbnail: compositeThumbnail
+            var windowInfos: [WindowInfo] = []
+            for window in leafWindows {
+                let wid = CGWindowID(window.windowId)
+                let thumbnail = captureWindowThumbnail(wid: wid, maxWidth: 350)
+                windowInfos.append(WindowInfo(
+                    id: window.windowId,
+                    appName: window.app.name ?? "Unknown",
+                    thumbnail: thumbnail,
+                    windowId: window.windowId
                 ))
             }
 
-            await MainActor.run {
-                workspaceData = result
-            }
+            let windowIds = Set(leafWindows.map { CGWindowID($0.windowId) })
+            let compositeThumbnail = captureWorkspaceComposite(
+                windowIds: windowIds,
+                windowInfoList: windowInfoList
+            )
+
+            result.append(WorkspaceInfo(
+                id: ws.name,
+                name: ws.name,
+                isFocused: isFocused,
+                windows: windowInfos,
+                compositeThumbnail: compositeThumbnail
+            ))
         }
+
+        return result
     }
 
-    nonisolated private static func captureWindowThumbnail(wid: CGWindowID, maxWidth: CGFloat) -> NSImage? {
+    private static func captureWindowThumbnail(wid: CGWindowID, maxWidth: CGFloat) -> NSImage? {
         guard let cgImage = CGWindowListCreateImage(
             .null,
             .optionIncludingWindow,
@@ -253,7 +246,7 @@ struct MissionControlContent: View {
         return scaled
     }
 
-    nonisolated private static func captureWorkspaceComposite(
+    private static func captureWorkspaceComposite(
         windowIds: Set<CGWindowID>,
         windowInfoList: [[CFString: Any]]
     ) -> NSImage? {
@@ -361,24 +354,24 @@ private struct WorkspaceCard: View {
                     .clipShape(RoundedRectangle(cornerRadius: 6))
             } else {
                 RoundedRectangle(cornerRadius: 6)
-                    .fill(Color.white.opacity(0.05))
+                    .fill(.quaternary)
                     .frame(width: 180, height: 110)
                     .overlay(
                         Text("Empty")
                             .font(.caption)
-                            .foregroundStyle(.white.opacity(0.3))
+                            .foregroundStyle(.tertiary)
                     )
             }
 
             // Workspace name
             Text(workspace.name)
                 .font(.system(size: 13, weight: workspace.isFocused ? .bold : .medium))
-                .foregroundStyle(.white)
+                .foregroundStyle(.primary)
         }
         .padding(10)
         .background(
             RoundedRectangle(cornerRadius: 10)
-                .fill(isSelected ? Color.white.opacity(0.15) : Color.white.opacity(0.05))
+                .fill(isSelected ? Color.accentColor.opacity(0.2) : Color.primary.opacity(0.05))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 10)
@@ -398,25 +391,22 @@ private struct WindowThumbnail: View {
                     .aspectRatio(contentMode: .fit)
                     .frame(maxHeight: 200)
                     .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                    .shadow(color: .black.opacity(0.2), radius: 4, y: 2)
             } else {
                 RoundedRectangle(cornerRadius: 6)
-                    .fill(Color.white.opacity(0.05))
+                    .fill(.quaternary)
                     .frame(height: 150)
             }
             Text(window.appName)
                 .font(.system(size: 12))
-                .foregroundStyle(.white.opacity(0.8))
+                .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .padding(.top, 6)
         }
         .padding(8)
         .background(
             RoundedRectangle(cornerRadius: 8)
-                .fill(Color.white.opacity(0.05))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                .fill(Color.primary.opacity(0.05))
         )
     }
 }
