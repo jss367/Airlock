@@ -70,6 +70,8 @@ extension CmdArgs {
                 command = SplitCommand(args: self as! SplitCmdArgs)
             case .subscribe:
                 die("subscribe is handled separately")
+            case .summonApp:
+                command = SummonAppCommand(args: self as! SummonAppCmdArgs)
             case .summonWorkspace:
                 command = SummonWorkspaceCommand(args: self as! SummonWorkspaceCmdArgs)
             case .swap:
