@@ -18,6 +18,8 @@ final class AppLauncherPanel: NSPanelHud {
         self.hasShadow = true
     }
 
+    override var canBecomeKey: Bool { true }
+
     @MainActor
     func show() {
         viewModel.reset()
