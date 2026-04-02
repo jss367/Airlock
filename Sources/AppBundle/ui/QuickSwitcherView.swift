@@ -99,6 +99,7 @@ struct QuickSwitcherContent: View {
     @State private var items: [SwitcherItem] = []
     @State private var selectedIndex: Int = 0
     @State private var keyMonitor: Any?
+    @State private var discoveryTask: Task<Void, Never>?
     @FocusState private var isFocused: Bool
 
     var filteredItems: [SwitcherItem] {
@@ -171,6 +172,8 @@ struct QuickSwitcherContent: View {
             }
         }
         .onDisappear {
+            discoveryTask?.cancel()
+            discoveryTask = nil
             if let monitor = keyMonitor {
                 NSEvent.removeMonitor(monitor)
                 keyMonitor = nil
@@ -247,22 +250,28 @@ struct QuickSwitcherContent: View {
 
         items = result
 
-        // Load installed apps asynchronously so the panel appears instantly
-        Task { @MainActor in
-            let runningBundleIds = Set(MacApp.allAppsMap.values.compactMap { $0.rawAppBundleId })
-            var appItems: [SwitcherItem] = []
-            for app in discoverInstalledApps() {
+        // Discover installed apps on a background thread to avoid blocking the UI
+        discoveryTask = Task {
+            let runningBundleIds = await MainActor.run {
+                Set(MacApp.allAppsMap.values.compactMap { $0.rawAppBundleId })
+            }
+            let installed = await discoverInstalledAppInfo()
+            guard !Task.isCancelled else { return }
+            let appItems = installed.compactMap { app -> SwitcherItem? in
                 if let bundleId = app.bundleIdentifier, runningBundleIds.contains(bundleId) {
-                    continue
+                    return nil
                 }
-                appItems.append(SwitcherItem(
+                return SwitcherItem(
                     id: "app-\(app.url.path)",
                     title: app.name,
                     subtitle: "Launch application",
                     kind: .installedApp(url: app.url)
-                ))
+                )
             }
-            items.append(contentsOf: appItems)
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                items.append(contentsOf: appItems)
+            }
         }
     }
 
