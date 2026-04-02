@@ -137,6 +137,9 @@ let split_help_generated = """
 let subscribe_help_generated = """
     USAGE: subscribe [-h|--help] [--all] [--no-send-initial] [<event>...]
     """
+let summon_app_help_generated = """
+    USAGE: summon-app [-h|--help] [--new-window] <app-name>
+    """
 let summon_workspace_help_generated = """
     USAGE: summon-workspace [-h|--help] [--fail-if-noop] <workspace>
     """
