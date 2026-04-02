@@ -50,6 +50,8 @@ extension CmdArgs {
                 command = MacosNativeFullscreenCommand(args: self as! MacosNativeFullscreenCmdArgs)
             case .macosNativeMinimize:
                 command = MacosNativeMinimizeCommand(args: self as! MacosNativeMinimizeCmdArgs)
+            case .missionControl:
+                command = MissionControlCommand(args: self as! MissionControlCmdArgs)
             case .mode:
                 command = ModeCommand(args: self as! ModeCmdArgs)
             case .move:

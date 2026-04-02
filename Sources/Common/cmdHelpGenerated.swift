@@ -98,6 +98,9 @@ let macos_native_fullscreen_help_generated = """
 let macos_native_minimize_help_generated = """
     USAGE: macos-native-minimize [-h|--help] [--window-id <window-id>]
     """
+let mission_control_help_generated = """
+    USAGE: mission-control [-h|--help]
+    """
 let mode_help_generated = """
     USAGE: mode [-h|--help] <binding-mode>
     """
