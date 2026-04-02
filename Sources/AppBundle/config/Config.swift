@@ -29,7 +29,7 @@ var defaultConfigUrl: URL {
     }
     return parsedConfig.config
 }()
-@MainActor var config: Config = defaultConfig // todo move to Ctx?
+@MainActor var config: Config = defaultConfig
 @MainActor var configUrl: URL = defaultConfigUrl
 
 struct Config: ConvenienceCopyable {
@@ -48,7 +48,7 @@ struct Config: ConvenienceCopyable {
     var accordionPadding: Int = 30
     var enableNormalizationOppositeOrientationForNestedContainers: Bool = true
     var persistentWorkspaces: OrderedSet<String> = []
-    var execOnWorkspaceChange: [String] = [] // todo deprecate
+
     var keyMapping = KeyMapping()
     var execConfig: ExecConfig = ExecConfig()
 

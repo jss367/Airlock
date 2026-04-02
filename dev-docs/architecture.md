@@ -40,8 +40,6 @@ Each time you run a CLI command:
 
 ## Commands subsystem
 
-todo
-
 ../Sources/AppBundle/command/
 ../Sources/Common/cmdArgs/
 
@@ -54,18 +52,12 @@ Command checklist:
 
 ## TOML Config parse subsystem
 
-todo
-
 ../Sources/AppBundle/config/
 
 ## Tree Model subsystem
 
-todo
-
 ../Sources/AppBundle/tree/
 
 ## Layout subsystem
-
-todo
 
 ../Sources/AppBundle/layout/

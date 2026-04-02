@@ -41,7 +41,6 @@ enum TomlParseError: Error, CustomStringConvertible, Equatable {
 
     var description: String {
         return switch self {
-            // todo Make 'split' + flatten normalization prettier
             case .semantic(let backtrace, let message) where backtrace.description.isEmpty: message
             case .semantic(let backtrace, let message): "\(backtrace): \(message)"
             case .syntax(let message): message
@@ -117,7 +116,7 @@ private let configParser: [String: any ParserProtocol<Config>] = [
     "prevent-focus-stealing": Parser(\.preventFocusStealing, parsePreventFocusStealing),
     "accordion-padding": Parser(\.accordionPadding, parseInt),
     persistentWorkspacesKey: Parser(\.persistentWorkspaces, parsePersistentWorkspaces),
-    "exec-on-workspace-change": Parser(\.execOnWorkspaceChange, parseArrayOfStrings),
+
     "exec": Parser(\.execConfig, parseExecConfig),
 
     keyMappingConfigRootKey: Parser(\.keyMapping, skipParsing(Config().keyMapping)), // Parsed manually
@@ -176,7 +175,7 @@ func parseCommandOrCommands(_ raw: TOMLValueConvertible) -> Parsed<[any Command]
     }
 }
 
-@MainActor func parseConfig(_ rawToml: String) -> (config: Config, errors: [TomlParseError]) { // todo change return value to Result
+@MainActor func parseConfig(_ rawToml: String) -> (config: Config, errors: [TomlParseError]) {
     let rawTable: TOMLTable
     do {
         rawTable = try TOMLTable(string: rawToml)
@@ -224,7 +223,7 @@ func parseCommandOrCommands(_ raw: TOMLValueConvertible) -> Parsed<[any Command]
             .contains { $0 is SplitCommand }
         if containsSplitCommand {
             errors += [.semantic(
-                .emptyRoot, // todo Make 'split' + flatten normalization prettier
+                .emptyRoot,
                 """
                 The config contains:
                 1. usage of 'split' command

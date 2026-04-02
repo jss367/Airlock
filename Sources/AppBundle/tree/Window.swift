@@ -17,7 +17,7 @@ open class Window: TreeNode, Hashable {
         super.init(parent: parent, adaptiveWeight: adaptiveWeight, index: index)
     }
 
-    @MainActor static func get(byId windowId: UInt32) -> Window? { // todo make non optional
+    @MainActor static func get(byId windowId: UInt32) -> Window? {
         isUnitTest
             ? Workspace.all.flatMap { $0.allLeafWindowsRecursive }.first(where: { $0.windowId == windowId })
             : MacWindow.allWindowsMap[windowId]
@@ -33,7 +33,7 @@ open class Window: TreeNode, Hashable {
     func getAxSize() async throws -> CGSize? { die("Not implemented") }
     var title: String { get async throws { die("Not implemented") } }
     var isMacosFullscreen: Bool { get async throws { false } }
-    var isMacosMinimized: Bool { get async throws { false } } // todo replace with enum MacOsWindowNativeState { normal, fullscreen, invisible }
+    var isMacosMinimized: Bool { get async throws { false } }
     var isHiddenInCorner: Bool { die("Not implemented") }
     @MainActor
     func nativeFocus() { die("Not implemented") }
@@ -50,7 +50,7 @@ enum LayoutReason: Equatable {
 }
 
 extension Window {
-    var isFloating: Bool { parent is Workspace } // todo drop. It will be a source of bugs when sticky is introduced
+    var isFloating: Bool { parent is Workspace }
 
     @discardableResult
     @MainActor

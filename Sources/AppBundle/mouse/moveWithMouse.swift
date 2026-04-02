@@ -24,7 +24,7 @@ func movedObs(_: AXObserver, ax: AXUIElement, notif: CFString, _: UnsafeMutableR
 }
 
 @MainActor
-private func moveWithMouse(_ window: Window) async throws { // todo cover with tests
+private func moveWithMouse(_ window: Window) async throws {
     resetClosedWindowsCache()
     guard let parent = window.parent else { return }
     switch parent.cases {

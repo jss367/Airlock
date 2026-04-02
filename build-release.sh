@@ -25,7 +25,6 @@ done
 
 swift build -c release --arch arm64 --arch x86_64 --product airlock -Xswiftc -warnings-as-errors # CLI
 
-# todo: make xcodebuild use the same toolchain as swift
 # toolchain="$(plutil -extract CFBundleIdentifier raw ~/Library/Developer/Toolchains/swift-6.1-RELEASE.xctoolchain/Info.plist)"
 # xcodebuild -toolchain "$toolchain" \
 # Unfortunately, Xcode 16 fails with:

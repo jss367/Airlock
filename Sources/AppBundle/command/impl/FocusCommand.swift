@@ -158,7 +158,7 @@ struct FocusCommand: Command {
     let workspaceMruSnapshot = workspace.mruSnapshot()
     var _floatingWindows: [FloatingWindowData] = []
     for window in workspace.floatingWindows {
-        let center = try await window.getCenter() // todo bug: we shouldn't access ax api here. What if the window was moved but it wasn't committed to ax yet?
+        let center = try await window.getCenter()
         guard let center else { continue }
 
         let tilingParent: TilingContainer

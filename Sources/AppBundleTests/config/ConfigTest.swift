@@ -28,15 +28,6 @@ final class ConfigTest: XCTestCase {
         assertEquals(errors.descriptions, ["config-version: Must be in [1, 2] range"])
     }
 
-    func testExecOnWorkspaceChangeDifferentTypesError() {
-        let (_, errors) = parseConfig(
-            """
-            exec-on-workspace-change = ['', 1]
-            """,
-        )
-        assertEquals(errors.descriptions, ["exec-on-workspace-change[1]: Expected type is \'string\'. But actual type is \'integer\'"])
-    }
-
     func testDuplicatedPersistentWorkspaces() {
         let (_, errors) = parseConfig(
             """

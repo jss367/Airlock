@@ -22,8 +22,6 @@ final class MacApp: AbstractApp {
     /*conforms*/ var execPath: String? { nsApp.executableURL?.path }
     /*conforms*/ var bundlePath: String? { nsApp.bundleURL?.path }
 
-    // todo think if it's possible to integrate this global mutable state to https://github.com/nikitabobko/Airlock/issues/1215
-    //      and make deinitialization automatic in deinit
     @MainActor static var allAppsMap: [pid_t: MacApp] = [:]
     @MainActor private static var wipPids: [pid_t: AwaitableOneTimeBroadcastLatch] = [:]
 
@@ -100,7 +98,6 @@ final class MacApp: AbstractApp {
         }
     }
 
-    // todo merge together with detectNewWindows
     func getFocusedWindow() async throws -> Window? {
         let windowId = try await thread?.runInLoop { [nsApp, axApp, windows] job in
             try axApp.threadGuarded.get(Ax.focusedWindowAttr)

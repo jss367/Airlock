@@ -46,7 +46,6 @@ extension AxUiElementMock {
             return true
         }
         // Firefox: Picture in Picture window doesn't have minimize button.
-        // todo. bug: when firefox shows non-native fullscreen, minimize button is disabled for all other non-fullscreen windows
         if id?.isFirefox == true && get(Ax.minimizeButtonAttr)?.get(Ax.enabledAttr) != true {
             return true
         }
@@ -73,7 +72,6 @@ extension AxUiElementMock {
             // "Drag out" a tab out of Chrome window. Technically, it shouldn't be necessary, but
             // apparently there is some sort of race condition between users releasing mouse up and
             // Chrome reactivating the fullscreen button
-            // todo: consider checking for fullscreen cirteria periodically (downside: will affect performance)
             id != .chrome &&
 
             id != .activityMonitor && // Activity Monitor doesn't show fullscreen button
