@@ -32,12 +32,18 @@ struct SummonAppCommand: Command {
             let windowOnCurrentWs = appWindows.first { $0.nodeWorkspace == currentWorkspace }
 
             if let windowOnCurrentWs {
-                // Already on current workspace — just focus it
+                // Already on current workspace — focus it in Airlock's model and at macOS level.
+                // Both calls are needed: focusWindow() updates the model, nativeFocus() ensures
+                // macOS activation even when the focus cache is stale (e.g. user clicked desktop).
+                // nativeFocus() is safe here because the window is already on this workspace.
+                _ = windowOnCurrentWs.focusWindow()
                 windowOnCurrentWs.nativeFocus()
             } else if let windowToMove = appWindows.first {
-                // Move a window from another workspace to current
+                // Move window from another workspace to current. Only use focusWindow() here —
+                // the session will call nativeFocus() after layoutWorkspaces() moves the window,
+                // avoiding the workspace-pull caused by activating before the move completes.
                 _ = windowToMove.bindAsFloatingWindow(to: currentWorkspace)
-                windowToMove.nativeFocus()
+                _ = windowToMove.focusWindow()
             } else {
                 // Running but no windows — launch a new instance
                 launchNewInstance(installedApp)
