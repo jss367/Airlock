@@ -36,6 +36,8 @@ func dismissQuickSwitcher() {
 private class QuickSwitcherPanel: NSPanelHud {
     private var hostingView: NSHostingView<QuickSwitcherContent>?
 
+    override var canBecomeKey: Bool { true }
+
     override init() {
         super.init()
         let content = QuickSwitcherContent()
@@ -79,6 +81,7 @@ struct QuickSwitcherContent: View {
     @State private var items: [SwitcherItem] = []
     @State private var selectedIndex: Int = 0
     @State private var keyMonitor: Any?
+    @FocusState private var isFocused: Bool
 
     var filteredItems: [SwitcherItem] {
         if query.isEmpty { return items }
@@ -95,6 +98,7 @@ struct QuickSwitcherContent: View {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(.secondary)
                 TextField("Search workspaces and windows...", text: $query)
+                    .focused($isFocused)
                     .textFieldStyle(.plain)
                     .font(.system(size: 18))
                     .onSubmit { activateSelected() }
@@ -130,6 +134,7 @@ struct QuickSwitcherContent: View {
         .shadow(color: .black.opacity(0.3), radius: 20, y: 5)
         .onAppear {
             loadItems()
+            isFocused = true
             keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
                 return handleKeyEvent(event) ? nil : event
             }
