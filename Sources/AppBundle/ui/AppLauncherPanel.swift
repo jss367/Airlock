@@ -20,8 +20,108 @@ final class AppLauncherPanel: NSPanelHud {
 
     override var canBecomeKey: Bool { true }
 
+    // MARK: - Debug Logging
+
+    private func logWindowState(_ label: String) {
+        NSLog("[AppLauncher][%@] === Window State ===", label)
+        NSLog("[AppLauncher][%@] isKeyWindow=%d isMainWindow=%d canBecomeKey=%d canBecomeMain=%d",
+              label, isKeyWindow ? 1 : 0, isMainWindow ? 1 : 0, canBecomeKey ? 1 : 0, canBecomeMain ? 1 : 0)
+        NSLog("[AppLauncher][%@] styleMask.rawValue=%lu level.rawValue=%d",
+              label, styleMask.rawValue, level.rawValue)
+        NSLog("[AppLauncher][%@] isVisible=%d isOnActiveSpace=%d",
+              label, isVisible ? 1 : 0, isOnActiveSpace ? 1 : 0)
+
+        // First responder chain
+        NSLog("[AppLauncher][%@] === First Responder Chain ===", label)
+        if let fr = firstResponder {
+            NSLog("[AppLauncher][%@] firstResponder: %@ (%@)", label, String(describing: fr), String(describing: type(of: fr)))
+            var responder: NSResponder? = fr.nextResponder
+            var depth = 1
+            while let r = responder {
+                NSLog("[AppLauncher][%@] chain[%d]: %@ (%@)", label, depth, String(describing: r), String(describing: type(of: r)))
+                responder = r.nextResponder
+                depth += 1
+                if depth > 20 { break }
+            }
+        } else {
+            NSLog("[AppLauncher][%@] firstResponder: nil", label)
+        }
+
+        // NSApp state
+        NSLog("[AppLauncher][%@] === NSApp State ===", label)
+        NSLog("[AppLauncher][%@] NSApp.isActive=%d", label, NSApp.isActive ? 1 : 0)
+        if let kw = NSApp.keyWindow {
+            NSLog("[AppLauncher][%@] NSApp.keyWindow: %@ (isSelf=%d)", label, String(describing: type(of: kw)), kw === self ? 1 : 0)
+        } else {
+            NSLog("[AppLauncher][%@] NSApp.keyWindow: nil", label)
+        }
+        if let mw = NSApp.mainWindow {
+            NSLog("[AppLauncher][%@] NSApp.mainWindow: %@ (isSelf=%d)", label, String(describing: type(of: mw)), mw === self ? 1 : 0)
+        } else {
+            NSLog("[AppLauncher][%@] NSApp.mainWindow: nil", label)
+        }
+
+        // Content view hierarchy
+        NSLog("[AppLauncher][%@] === Content View ===", label)
+        if let cv = contentView {
+            NSLog("[AppLauncher][%@] contentView: %@ (%@)", label, String(describing: cv), String(describing: type(of: cv)))
+            logSubviews(cv, label: label, depth: 1)
+        } else {
+            NSLog("[AppLauncher][%@] contentView: nil", label)
+        }
+    }
+
+    private func logSubviews(_ view: NSView, label: String, depth: Int) {
+        for (i, subview) in view.subviews.enumerated() {
+            let indent = String(repeating: "  ", count: depth)
+            NSLog("[AppLauncher][%@] %@subview[%d]: %@ frame=%@", label, indent, i,
+                  String(describing: type(of: subview)), NSStringFromRect(subview.frame))
+            if depth < 5 {
+                logSubviews(subview, label: label, depth: depth + 1)
+            }
+        }
+    }
+
+    override func sendEvent(_ event: NSEvent) {
+        if event.type == .keyDown {
+            NSLog("[AppLauncher][sendEvent] keyDown keyCode=%d chars='%@' charsIgnoringMods='%@' firstResponder=%@",
+                  event.keyCode,
+                  event.characters ?? "<nil>",
+                  event.charactersIgnoringModifiers ?? "<nil>",
+                  String(describing: firstResponder.map { type(of: $0) }))
+        }
+        super.sendEvent(event)
+    }
+
+    override func keyDown(with event: NSEvent) {
+        NSLog("[AppLauncher][keyDown] PANEL received keyDown keyCode=%d chars='%@' — this means no responder handled it",
+              event.keyCode, event.characters ?? "<nil>")
+        super.keyDown(with: event)
+    }
+
+    override func becomeKey() {
+        NSLog("[AppLauncher][becomeKey] Panel becoming key window")
+        super.becomeKey()
+    }
+
+    override func resignKey() {
+        NSLog("[AppLauncher][resignKey] Panel resigning key window")
+        super.resignKey()
+    }
+
+    override func makeFirstResponder(_ responder: NSResponder?) -> Bool {
+        let result = super.makeFirstResponder(responder)
+        NSLog("[AppLauncher][makeFirstResponder] responder=%@ (%@) result=%d",
+              String(describing: responder),
+              String(describing: responder.map { type(of: $0) }),
+              result ? 1 : 0)
+        return result
+    }
+
     @MainActor
     func show() {
+        NSLog("[AppLauncher] === show() called ===")
+
         viewModel.reset()
 
         let hostingView = NSHostingView(rootView: AppLauncherView(viewModel: viewModel, panel: self))
@@ -32,8 +132,21 @@ final class AppLauncherPanel: NSPanelHud {
         let y = monitor.rect.minY + (monitor.height - panelHeight) / 2
         self.setFrame(NSRect(x: x, y: y, width: panelWidth, height: panelHeight), display: true)
 
+        NSLog("[AppLauncher] Before makeKeyAndOrderFront — isKeyWindow=%d", isKeyWindow ? 1 : 0)
         self.makeKeyAndOrderFront(nil)
+        NSLog("[AppLauncher] After makeKeyAndOrderFront — isKeyWindow=%d", isKeyWindow ? 1 : 0)
+
         NSApp.activate(ignoringOtherApps: true)
+        NSLog("[AppLauncher] After NSApp.activate — NSApp.isActive=%d", NSApp.isActive ? 1 : 0)
+
+        logWindowState("show-immediate")
+
+        // Log again after a delay to capture state once the window is fully presented
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            guard let self else { return }
+            self.logWindowState("show-delayed-0.5s")
+        }
+
         removeEventMonitor()
         installEventMonitor()
     }
@@ -87,12 +200,19 @@ final class AppLauncherPanel: NSPanelHud {
 
     private func installEventMonitor() {
         eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            guard let self else { return event }
+            guard let self else {
+                NSLog("[AppLauncher][eventMonitor] self is nil, passing event through keyCode=%d", event.keyCode)
+                return event
+            }
+            NSLog("[AppLauncher][eventMonitor] keyDown keyCode=%d chars='%@' charsIgnoringMods='%@'",
+                  event.keyCode, event.characters ?? "<nil>", event.charactersIgnoringModifiers ?? "<nil>")
             switch event.keyCode {
             case 53: // Escape
+                NSLog("[AppLauncher][eventMonitor] Escape — consuming event, will dismiss")
                 MainActor.assumeIsolated { self.dismiss() }
                 return nil
             case 36: // Return
+                NSLog("[AppLauncher][eventMonitor] Return — consuming event, will launch")
                 MainActor.assumeIsolated {
                     if let app = self.viewModel.selectedApp {
                         self.launchApp(app)
@@ -100,12 +220,15 @@ final class AppLauncherPanel: NSPanelHud {
                 }
                 return nil
             case 125: // Down arrow
+                NSLog("[AppLauncher][eventMonitor] Down arrow — consuming event")
                 MainActor.assumeIsolated { self.viewModel.selectNext() }
                 return nil
             case 126: // Up arrow
+                NSLog("[AppLauncher][eventMonitor] Up arrow — consuming event")
                 MainActor.assumeIsolated { self.viewModel.selectPrevious() }
                 return nil
             default:
+                NSLog("[AppLauncher][eventMonitor] keyCode=%d — passing event through (NOT consumed)", event.keyCode)
                 return event
             }
         }
