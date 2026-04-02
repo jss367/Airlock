@@ -51,6 +51,9 @@ public func menuBar(viewModel: TrayMenuModel) -> some Scene { // todo should it 
         Button("Quick Switcher") {
             toggleQuickSwitcher()
         }.keyboardShortcut("P", modifiers: .command)
+        Button("Mission Control") {
+            toggleMissionControl()
+        }.keyboardShortcut("M", modifiers: .command)
         Button("Show Keybindings") {
             showKeybindingsHelp()
         }.keyboardShortcut("K", modifiers: .command)
