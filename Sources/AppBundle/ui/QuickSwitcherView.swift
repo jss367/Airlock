@@ -245,21 +245,25 @@ struct QuickSwitcherContent: View {
             }
         }
 
-        // Add installed apps that aren't already running
-        let runningBundleIds = Set(MacApp.allAppsMap.values.compactMap { $0.rawAppBundleId })
-        for app in discoverInstalledApps() {
-            if let bundleId = app.bundleIdentifier, runningBundleIds.contains(bundleId) {
-                continue // Already shown as windows above
-            }
-            result.append(SwitcherItem(
-                id: "app-\(app.url.path)",
-                title: app.name,
-                subtitle: "Launch application",
-                kind: .installedApp(url: app.url)
-            ))
-        }
-
         items = result
+
+        // Load installed apps asynchronously so the panel appears instantly
+        Task { @MainActor in
+            let runningBundleIds = Set(MacApp.allAppsMap.values.compactMap { $0.rawAppBundleId })
+            var appItems: [SwitcherItem] = []
+            for app in discoverInstalledApps() {
+                if let bundleId = app.bundleIdentifier, runningBundleIds.contains(bundleId) {
+                    continue
+                }
+                appItems.append(SwitcherItem(
+                    id: "app-\(app.url.path)",
+                    title: app.name,
+                    subtitle: "Launch application",
+                    kind: .installedApp(url: app.url)
+                ))
+            }
+            items.append(contentsOf: appItems)
+        }
     }
 
     @MainActor
