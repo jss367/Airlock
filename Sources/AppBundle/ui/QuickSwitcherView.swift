@@ -61,6 +61,22 @@ private class QuickSwitcherPanel: NSPanelHud {
     func show() {
         makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+        // SwiftUI @FocusState doesn't reliably focus fields in NSPanel.
+        // Explicitly walk the view hierarchy to find and focus the text field.
+        DispatchQueue.main.async { [weak self] in
+            guard let self, let hosting = self.hostingView else { return }
+            if let textField = self.findTextField(in: hosting) {
+                self.makeFirstResponder(textField)
+            }
+        }
+    }
+
+    private func findTextField(in view: NSView) -> NSTextField? {
+        if let tf = view as? NSTextField, tf.isEditable { return tf }
+        for sub in view.subviews {
+            if let found = findTextField(in: sub) { return found }
+        }
+        return nil
     }
 }
 
