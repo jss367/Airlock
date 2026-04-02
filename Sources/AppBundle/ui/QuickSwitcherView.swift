@@ -89,6 +89,8 @@ struct SwitcherItem: Identifiable, Hashable {
     enum Kind: Hashable {
         case workspace(name: String)
         case window(id: UInt32)
+        case installedApp(url: URL)
+        case webSearch(query: String)
     }
 }
 
@@ -97,14 +99,28 @@ struct QuickSwitcherContent: View {
     @State private var items: [SwitcherItem] = []
     @State private var selectedIndex: Int = 0
     @State private var keyMonitor: Any?
+    @State private var discoveryTask: Task<Void, Never>?
     @FocusState private var isFocused: Bool
 
     var filteredItems: [SwitcherItem] {
-        if query.isEmpty { return items }
-        let q = query.lowercased()
-        return items.filter {
-            $0.title.lowercased().contains(q) || $0.subtitle.lowercased().contains(q)
+        let base: [SwitcherItem]
+        if query.isEmpty {
+            base = items
+        } else {
+            let q = query.lowercased()
+            base = items.filter {
+                $0.title.lowercased().contains(q) || $0.subtitle.lowercased().contains(q)
+            }
         }
+        if base.isEmpty && !query.trimmingCharacters(in: .whitespaces).isEmpty {
+            return [SwitcherItem(
+                id: "web-search",
+                title: "Search Google for '\(query)'",
+                subtitle: "Open in browser",
+                kind: .webSearch(query: query)
+            )]
+        }
+        return base
     }
 
     var body: some View {
@@ -156,6 +172,8 @@ struct QuickSwitcherContent: View {
             }
         }
         .onDisappear {
+            discoveryTask?.cancel()
+            discoveryTask = nil
             if let monitor = keyMonitor {
                 NSEvent.removeMonitor(monitor)
                 keyMonitor = nil
@@ -231,25 +249,65 @@ struct QuickSwitcherContent: View {
         }
 
         items = result
+
+        // Discover installed apps on a background thread to avoid blocking the UI
+        discoveryTask = Task {
+            let runningBundleIds = await MainActor.run {
+                Set(MacApp.allAppsMap.values.compactMap { $0.rawAppBundleId })
+            }
+            let installed = await discoverInstalledAppInfo()
+            guard !Task.isCancelled else { return }
+            let appItems = installed.compactMap { app -> SwitcherItem? in
+                if let bundleId = app.bundleIdentifier, runningBundleIds.contains(bundleId) {
+                    return nil
+                }
+                return SwitcherItem(
+                    id: "app-\(app.url.path)",
+                    title: app.name,
+                    subtitle: "Launch application",
+                    kind: .installedApp(url: app.url)
+                )
+            }
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                items.append(contentsOf: appItems)
+            }
+        }
     }
 
     @MainActor
     private func activateSelected() {
         guard let item = filteredItems[safe: selectedIndex] else { return }
-        guard let token: RunSessionGuard = .isServerEnabled else { return }
 
-        Task {
-            try await runLightSession(.menuBarButton, token) {
-                switch item.kind {
-                case .workspace(let name):
-                    _ = Workspace.get(byName: name).focusWorkspace()
-                case .window(let id):
-                    if let window = Window.get(byId: id) {
-                        _ = window.focusWindow()
-                    }
-                }
+        switch item.kind {
+        case .installedApp(let url):
+            let config = NSWorkspace.OpenConfiguration()
+            config.activates = true
+            NSWorkspace.shared.openApplication(at: url, configuration: config)
+            dismissQuickSwitcher()
+        case .webSearch(let query):
+            if let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+               let url = URL(string: "https://google.com/search?q=\(encoded)") {
+                NSWorkspace.shared.open(url)
             }
             dismissQuickSwitcher()
+        case .workspace, .window:
+            guard let token: RunSessionGuard = .isServerEnabled else { return }
+            Task {
+                try await runLightSession(.menuBarButton, token) {
+                    switch item.kind {
+                    case .workspace(let name):
+                        _ = Workspace.get(byName: name).focusWorkspace()
+                    case .window(let id):
+                        if let window = Window.get(byId: id) {
+                            _ = window.focusWindow()
+                        }
+                    default:
+                        break
+                    }
+                }
+                dismissQuickSwitcher()
+            }
         }
     }
 }
@@ -282,6 +340,8 @@ private struct SwitcherRow: View {
         switch item.kind {
         case .workspace: return "square.grid.2x2"
         case .window: return "macwindow"
+        case .installedApp: return "app.badge"
+        case .webSearch: return "magnifyingglass"
         }
     }
 }
