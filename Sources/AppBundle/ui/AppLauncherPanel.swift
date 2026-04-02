@@ -165,6 +165,7 @@ struct AppLauncherView: View {
     let panel: AppLauncherPanel
 
     @Environment(\.colorScheme) var colorScheme
+    @FocusState private var isFocused: Bool
 
     private var backgroundColor: Color {
         colorScheme == .dark
@@ -180,6 +181,7 @@ struct AppLauncherView: View {
                     .foregroundStyle(.secondary)
                     .font(.system(size: 18))
                 TextField("Search apps...", text: $viewModel.searchText)
+                    .focused($isFocused)
                     .textFieldStyle(.plain)
                     .font(.system(size: 20))
                     .onSubmit {
@@ -219,6 +221,7 @@ struct AppLauncherView: View {
         }
         .background(backgroundColor)
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .onAppear { isFocused = true }
     }
 }
 
