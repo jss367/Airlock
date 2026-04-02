@@ -9,8 +9,9 @@
 - **Never modify `main` directly.** No commits, no edits on the main branch.
 - Always work in a **git worktree** (`isolation: "worktree"` for agents). This keeps the main checkout clean.
 - Create a new branch from `main` for each piece of work. Use the naming convention `claude/<short-description>`.
-- After making code changes, build and deploy the app by running `./deploy.sh`.
-- If the build fails, fix the issue before creating the PR.
+- After making code changes, run `./build.sh` to build and run tests. This verifies the code compiles without disrupting the running app.
+- If the build or tests fail, fix the issue before creating the PR.
+- Only deploy (`./deploy.sh`) when the user explicitly asks.
 - Always create a PR for any code changes. PR against `main`.
 
 ## Build & Deploy
