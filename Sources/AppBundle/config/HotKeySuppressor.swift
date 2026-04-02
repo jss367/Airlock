@@ -77,7 +77,7 @@ private func hotKeySuppressorCallback(
         if let tap = HotKeySuppressor.shared.eventTap {
             CGEvent.tapEnable(tap: tap, enable: true)
         }
-        return Unmanaged.passRetained(event)
+        return Unmanaged.passUnretained(event)
     }
 
     let keyCode = UInt32(event.getIntegerValueField(.keyboardEventKeycode))
@@ -87,5 +87,5 @@ private func hotKeySuppressorCallback(
     if HotKeySuppressor.shared.registeredKeys.contains(entry) {
         return nil // suppress — the Carbon hotkey handler will still fire
     }
-    return Unmanaged.passRetained(event)
+    return Unmanaged.passUnretained(event)
 }
