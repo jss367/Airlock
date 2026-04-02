@@ -90,8 +90,9 @@ private let osascriptKeystrokeRegex = try! NSRegularExpression(
 )
 
 private func extractOsascriptDescription(from script: String) -> OsascriptResult? {
-    // Only handle osascript commands
-    guard script.hasPrefix("osascript ") else { return nil }
+    // Only handle osascript commands (support both bare and absolute-path invocations)
+    let isOsascript = script.hasPrefix("osascript ") || script.range(of: #"^/.*/osascript\s"#, options: .regularExpression) != nil
+    guard isOsascript else { return nil }
 
     let range = NSRange(script.startIndex..., in: script)
 
