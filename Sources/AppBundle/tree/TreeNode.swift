@@ -118,6 +118,12 @@ open class TreeNode: Equatable, AeroAny {
 
     var mostRecentChild: TreeNode? { _mruChildren.mostRecent ?? children.last }
 
+    /// Snapshot the MRU ordering of this node's children (most recent first)
+    func mruSnapshot() -> [TreeNode] { _mruChildren.snapshot() }
+
+    /// Restore the MRU ordering of this node's children from a prior snapshot
+    func restoreMruOrder(from snapshot: [TreeNode]) { _mruChildren.restoreOrder(from: snapshot) }
+
     @discardableResult
     func unbindFromParent() -> BindingData {
         unbindIfBound() ?? dieT("\(self) is already unbound. The stacktrace where it was unbound:\n\(unboundStacktrace ?? "nil")")

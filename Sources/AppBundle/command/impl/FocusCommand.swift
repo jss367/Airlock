@@ -7,10 +7,10 @@ struct FocusCommand: Command {
 
     func run(_ env: CmdEnv, _ io: CmdIo) async throws -> Bool {
         guard let target = args.resolveTargetOrReportError(env, io) else { return false }
-        let floatingWindows = args.floatingAsTiling ? try await makeFloatingWindowsSeenAsTiling(workspace: target.workspace) : []
+        let floatingSnapshot: FloatingWindowsSnapshot? = args.floatingAsTiling ? try await makeFloatingWindowsSeenAsTiling(workspace: target.workspace) : nil
         defer {
-            if args.floatingAsTiling {
-                restoreFloatingWindows(floatingWindows: floatingWindows, workspace: target.workspace)
+            if let floatingSnapshot {
+                restoreFloatingWindows(floatingSnapshot, workspace: target.workspace)
             }
         }
 
@@ -154,7 +154,8 @@ struct FocusCommand: Command {
     return windowToFocus.focusWindow()
 }
 
-@MainActor private func makeFloatingWindowsSeenAsTiling(workspace: Workspace) async throws -> [FloatingWindowData] {
+@MainActor private func makeFloatingWindowsSeenAsTiling(workspace: Workspace) async throws -> FloatingWindowsSnapshot {
+    let workspaceMruSnapshot = workspace.mruSnapshot()
     var _floatingWindows: [FloatingWindowData] = []
     for window in workspace.floatingWindows {
         let center = try await window.getCenter() // todo bug: we shouldn't access ax api here. What if the window was moved but it wasn't committed to ax yet?
@@ -191,13 +192,21 @@ struct FocusCommand: Command {
     for floating in floatingWindows { // Make floating windows be seen as tiling
         floating.window.bind(to: floating.parent, adaptiveWeight: 1, index: floating.index, updateMru: false)
     }
-    return floatingWindows
+    return FloatingWindowsSnapshot(windows: floatingWindows, workspaceMruSnapshot: workspaceMruSnapshot)
 }
 
-@MainActor private func restoreFloatingWindows(floatingWindows: [FloatingWindowData], workspace: Workspace) {
-    for floating in floatingWindows {
+@MainActor private func restoreFloatingWindows(_ snapshot: FloatingWindowsSnapshot, workspace: Workspace) {
+    for floating in snapshot.windows {
         floating.window.bind(to: workspace, adaptiveWeight: floating.adaptiveWeight, index: INDEX_BIND_LAST, updateMru: false)
     }
+    // Restore workspace MRU to the exact order before the floating-as-tiling operation,
+    // so that floating windows retain their prior recency positions.
+    workspace.restoreMruOrder(from: snapshot.workspaceMruSnapshot)
+}
+
+private struct FloatingWindowsSnapshot {
+    let windows: [FloatingWindowData]
+    let workspaceMruSnapshot: [TreeNode]
 }
 
 private struct FloatingWindowData {

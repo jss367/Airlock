@@ -10,6 +10,24 @@ final class MruStack<T: Equatable>: Sequence {
 
     var mostRecent: T? { mruNode?.value }
 
+    /// Returns the current ordering as an array (most recent first)
+    func snapshot() -> [T] {
+        Array(self)
+    }
+
+    /// Restores the MRU ordering from a snapshot (most recent first).
+    /// Elements in the snapshot that are not currently in the stack are skipped.
+    /// Elements currently in the stack but not in the snapshot retain their relative order at the bottom.
+    func restoreOrder(from snapshot: [T]) {
+        // Replay in reverse so the most-recent element ends up on top
+        for value in snapshot.reversed() {
+            // Only raise if still present
+            if contains(where: { $0 == value }) {
+                pushOrRaise(value)
+            }
+        }
+    }
+
     func pushOrRaise(_ value: T) {
         remove(value)
         mruNode = Node(value, mruNode)
