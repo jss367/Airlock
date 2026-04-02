@@ -202,12 +202,16 @@ func parseCommandOrCommands(_ raw: TOMLValueConvertible) -> Parsed<[any Command]
     // Parse modeConfigRootKey after keyMappingConfigRootKey
     if let userModes = rawTable[modeConfigRootKey].flatMap({ parseModes($0, .rootKey(modeConfigRootKey), &errors, config.keyMapping.resolve()) }) {
         if mergeWithDefaults {
-            config.modes = mergeModesWithDefaults(userModes: userModes, defaultModes: defaultConfig.modes)
+            // Re-parse default config modes using the user's key mapping so that
+            // descriptionWithKeyCode values match when merging (important for non-qwerty layouts)
+            let resolvedDefaultModes = resolveDefaultModes(with: config.keyMapping.resolve())
+            config.modes = mergeModesWithDefaults(userModes: userModes, defaultModes: resolvedDefaultModes)
         } else {
             config.modes = userModes
         }
     } else if mergeWithDefaults {
-        config.modes = defaultConfig.modes
+        let resolvedDefaultModes = resolveDefaultModes(with: config.keyMapping.resolve())
+        config.modes = resolvedDefaultModes
     }
 
     // Validate that 'main' mode exists after merging
@@ -430,6 +434,28 @@ private func expandWorkspacesShorthand(
     for (key, _) in table where !knownKeys.contains(key) {
         errors += [unknownKeyError(backtrace + .key(key))]
     }
+}
+
+/// Re-parse the default config's mode bindings using a specific key mapping.
+/// This ensures that descriptionWithKeyCode values match the user's layout when merging.
+@MainActor private func resolveDefaultModes(with mapping: [String: Key]) -> [String: Mode] {
+    // If the mapping matches qwerty (the default), just return the pre-parsed defaults
+    if mapping == getKeysPreset(.qwerty) {
+        return defaultConfig.modes
+    }
+    // Re-parse the default config TOML with the user's key mapping
+    let defaultToml = Result { try String(contentsOf: defaultConfigUrl, encoding: .utf8) }.getOrDie()
+    let rawTable: TOMLTable
+    do {
+        rawTable = try TOMLTable(string: defaultToml)
+    } catch {
+        return defaultConfig.modes
+    }
+    var errors: [TomlParseError] = []
+    if let modes = rawTable["mode"].flatMap({ parseModes($0, .rootKey("mode"), &errors, mapping) }) {
+        return modes
+    }
+    return defaultConfig.modes
 }
 
 private func parseArrayOfStrings(_ raw: TOMLValueConvertible, _ backtrace: TomlBacktrace) -> ParsedToml<[String]> {
