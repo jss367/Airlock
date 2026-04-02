@@ -99,6 +99,7 @@ struct QuickSwitcherContent: View {
     @State private var items: [SwitcherItem] = []
     @State private var selectedIndex: Int = 0
     @State private var keyMonitor: Any?
+    @State private var discoveryTask: Task<Void, Never>?
     @FocusState private var isFocused: Bool
 
     var filteredItems: [SwitcherItem] {
@@ -171,6 +172,8 @@ struct QuickSwitcherContent: View {
             }
         }
         .onDisappear {
+            discoveryTask?.cancel()
+            discoveryTask = nil
             if let monitor = keyMonitor {
                 NSEvent.removeMonitor(monitor)
                 keyMonitor = nil
@@ -245,21 +248,31 @@ struct QuickSwitcherContent: View {
             }
         }
 
-        // Add installed apps that aren't already running
-        let runningBundleIds = Set(MacApp.allAppsMap.values.compactMap { $0.rawAppBundleId })
-        for app in discoverInstalledApps() {
-            if let bundleId = app.bundleIdentifier, runningBundleIds.contains(bundleId) {
-                continue // Already shown as windows above
-            }
-            result.append(SwitcherItem(
-                id: "app-\(app.url.path)",
-                title: app.name,
-                subtitle: "Launch application",
-                kind: .installedApp(url: app.url)
-            ))
-        }
-
         items = result
+
+        // Discover installed apps on a background thread to avoid blocking the UI
+        discoveryTask = Task {
+            let runningBundleIds = await MainActor.run {
+                Set(MacApp.allAppsMap.values.compactMap { $0.rawAppBundleId })
+            }
+            let installed = await discoverInstalledAppInfo()
+            guard !Task.isCancelled else { return }
+            let appItems = installed.compactMap { app -> SwitcherItem? in
+                if let bundleId = app.bundleIdentifier, runningBundleIds.contains(bundleId) {
+                    return nil
+                }
+                return SwitcherItem(
+                    id: "app-\(app.url.path)",
+                    title: app.name,
+                    subtitle: "Launch application",
+                    kind: .installedApp(url: app.url)
+                )
+            }
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                items.append(contentsOf: appItems)
+            }
+        }
     }
 
     @MainActor
