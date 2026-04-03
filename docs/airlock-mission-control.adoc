@@ -1,0 +1,30 @@
+= airlock-mission-control(1)
+include::util/man-attributes.adoc[]
+// tag::purpose[]
+:manpurpose: Open macOS Mission Control
+// end::purpose[]
+:manname: airlock-mission-control
+
+// =========================================================== Synopsis
+== Synopsis
+[verse]
+// tag::synopsis[]
+airlock mission-control [-h|--help]
+
+// end::synopsis[]
+
+// =========================================================== Description
+== Description
+
+// tag::body[]
+{manpurpose}
+
+// =========================================================== Options
+include::./util/conditional-options-header.adoc[]
+
+-h, --help:: Print help
+
+// end::body[]
+
+// =========================================================== Footer
+include::util/man-footer.adoc[]

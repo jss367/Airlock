@@ -8,7 +8,9 @@ airlock -h;
 
 <subcommand> ::=
 
-    balance-sizes [--workspace <workspace>]
+    app-launcher
+
+    | balance-sizes [--workspace <workspace>]
 
     | close [--quit-if-last-window|--window-id <window_id>]...
 
@@ -24,6 +26,7 @@ airlock -h;
     | focus --window-id <window_id>
     | focus --dfs-index <number>
     | focus [<focus_dfs_relative_flag>]... (dfs-next|dfs-prev) [<focus_dfs_relative_flag>]...
+    | focus [--ignore-floating] (app-next|app-prev|same-app-next|same-app-prev)
 
     | focus-back-and-forth
 
@@ -42,6 +45,8 @@ airlock -h;
     | macos-native-fullscreen [--fail-if-noop|--window-id <window_id>]... [on|off] [--fail-if-noop|--window-id <window_id>]...
 
     | macos-native-minimize [--window-id <window_id>]
+
+    | mission-control
 
     | mode <mode_id>
 
@@ -67,6 +72,8 @@ airlock -h;
     | swap [--swap-focus|--wrap-around|--window-id <window_id>]... (left|down|up|right|dfs-next|dfs-prev) [--swap-focus|--wrap-around|--window-id <window_id>]...
 
     | summon-workspace [--fail-if-noop] <workspace> [--fail-if-noop]
+
+    | summon-app [--new-window] <app_name> [--new-window]
 
     | trigger-binding <binding> --mode <mode_id>
     | trigger-binding --mode <mode_id> <binding>
@@ -110,6 +117,7 @@ airlock -h;
 <workspace> ::= {{{ airlock list-workspaces --monitor all --empty no }}};
 <number> ::= {{{ true }}};
 <monitor_pattern> ::= {{{ true }}};
+<app_name> ::= {{{ airlock list-apps --format '%{app-name}' }}};
 
 <list_workspaces1_flag> ::= --visible [no] | --empty [no] | --format <output_format> | --format <output_format> | --count | --json;
 
