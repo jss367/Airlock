@@ -20,32 +20,66 @@ final class ConfigWriterTest: XCTestCase {
         super.tearDown()
     }
 
-    // MARK: - removeMatchingBindingLines (tested via round-trip)
+    // MARK: - addBindingToLines / removeMatchingBindingLines
 
-    func testRemoveMatchingBindingLinesMatchesRegardlessOfModifierOrder() {
-        // "shift-cmd-k" should match "cmd-shift-k" because they parse to the same modifier flags
+    func testAddBindingReplacesExistingRegardlessOfModifierOrder() {
+        // "shift-cmd-k" should be replaced when adding "cmd-shift-k" (same modifiers, different text order)
         let lines = [
             "[mode.main.binding]",
-            "    shift-cmd-k = 'focus up'",
+            "    shift-cmd-k = 'exec-and-forget open -a \"OldApp\"'",
             "    option-h = 'focus left'",
         ]
-        // The internal function is private, so we test via the public behavior:
-        // Writing a binding for cmd-shift-k should replace the existing shift-cmd-k line
-        let content = lines.joined(separator: "\n")
-        try! content.write(to: tempConfigURL, atomically: true, encoding: .utf8)
 
-        // Use addBinding to write a new binding for the same key combo
-        // We need to use the config file directly, so let's test removeMatchingBindingLines
-        // indirectly by checking the TOML content after re-writing
+        let result = addBindingToLines(lines, key: "k", appName: "NewApp", modifierPrefix: [.command, .shift])
 
-        // Since addBinding uses findCustomConfigUrl internally, we test the line-removal
-        // logic through the parseConfig round-trip instead
-        let (config, errors) = parseConfig(content)
-        assertEquals(errors, [])
+        // The old shift-cmd-k line should be gone
+        let hasOldBinding = result.contains { $0.contains("OldApp") }
+        XCTAssertFalse(hasOldBinding, "Old binding should have been removed")
 
-        // Both modifier orderings should parse to the same binding key
-        let binding = HotkeyBinding([.command, .shift], .k, [FocusCommand.new(direction: .up)])
-        assertNotNil(config.modes[mainModeId]?.bindings[binding.descriptionWithKeyCode])
+        // The new binding should be present
+        let hasNewBinding = result.contains { $0.contains("NewApp") }
+        assertTrue(hasNewBinding)
+
+        // option-h should be untouched
+        let hasOptionH = result.contains { $0.contains("option-h") }
+        assertTrue(hasOptionH)
+
+        // There should be exactly one binding for key k with cmd+shift
+        let kBindings = result.filter { line in
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            return trimmed.contains("-k") && trimmed.contains("=") && !trimmed.hasPrefix("#") && !trimmed.hasPrefix("[")
+        }
+        assertEquals(kBindings.count, 1)
+    }
+
+    func testAddBindingAppendsWhenNoMatchingKeyExists() {
+        let lines = [
+            "[mode.main.binding]",
+            "    option-h = 'focus left'",
+        ]
+
+        let result = addBindingToLines(lines, key: "s", appName: "Spotify", modifierPrefix: [.option, .control, .command, .shift])
+
+        let hasSpotify = result.contains { $0.contains("Spotify") }
+        assertTrue(hasSpotify)
+
+        // Original binding should still be there
+        let hasOptionH = result.contains { $0.contains("option-h") }
+        assertTrue(hasOptionH)
+    }
+
+    func testAddBindingCreatesSection() {
+        let lines = [
+            "start-at-login = true",
+        ]
+
+        let result = addBindingToLines(lines, key: "s", appName: "Spotify", modifierPrefix: .option)
+
+        let hasSectionHeader = result.contains { $0.contains("[mode.main.binding]") }
+        assertTrue(hasSectionHeader)
+
+        let hasBinding = result.contains { $0.contains("Spotify") }
+        assertTrue(hasBinding)
     }
 
     // MARK: - Binding line format
@@ -73,16 +107,18 @@ final class ConfigWriterTest: XCTestCase {
     }
 
     func testBindingLineWithQuoteInAppName() {
-        // App names with single quotes should be properly escaped
-        let toml = """
-            [mode.main.binding]
-                option-s = 'summon-app "Levi'\\''s App"'
-            """
-        // This is hard to test via TOML parsing since TOML has its own escaping rules.
-        // Instead verify the format string construction:
-        let appName = "Test's App"
-        let escaped = appName.replacingOccurrences(of: "'", with: "'\\''")
-        assertEquals(escaped, "Test'\\''s App")
+        // Exercise addBindingToLines with a single-quote in the app name
+        let lines = [
+            "[mode.main.binding]",
+        ]
+
+        let result = addBindingToLines(lines, key: "t", appName: "Test's App", modifierPrefix: .option)
+
+        // The output line should contain the escaped app name
+        let bindingLine = result.first { $0.contains("option-t") }
+        assertNotNil(bindingLine)
+        // The single quote should be escaped for shell: ' becomes '\''
+        XCTAssertTrue(bindingLine!.contains("Test'\\''s App"), "Expected escaped quote in: \(bindingLine!)")
     }
 
     // MARK: - Config parsing round-trip with summon-app

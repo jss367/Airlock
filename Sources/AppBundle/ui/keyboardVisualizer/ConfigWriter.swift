@@ -18,6 +18,13 @@ enum ConfigWriterError: LocalizedError {
 
 func addBinding(key: String, appName: String, modifierPrefix: NSEvent.ModifierFlags) throws {
     let (url, lines) = try loadOrCreateConfig()
+    let content = addBindingToLines(lines, key: key, appName: appName, modifierPrefix: modifierPrefix)
+    let output = content.joined(separator: "\n")
+    try output.write(to: url, atomically: true, encoding: .utf8)
+}
+
+/// Pure line-manipulation logic for adding a binding, separated from file I/O for testability.
+func addBindingToLines(_ lines: [String], key: String, appName: String, modifierPrefix: NSEvent.ModifierFlags) -> [String] {
     var content = lines
 
     let modStr = modifierPrefix.toString()
@@ -59,8 +66,7 @@ func addBinding(key: String, appName: String, modifierPrefix: NSEvent.ModifierFl
         content.append(bindingLine)
     }
 
-    let output = content.joined(separator: "\n")
-    try output.write(to: url, atomically: true, encoding: .utf8)
+    return content
 }
 
 func removeBinding(key: String, modifierPrefix: NSEvent.ModifierFlags) throws {
@@ -98,7 +104,7 @@ func removeBinding(key: String, modifierPrefix: NSEvent.ModifierFlags) throws {
 
 /// Remove lines within a binding section that bind the same key+modifiers,
 /// regardless of modifier order in the text (e.g. "shift-cmd-k" matches "cmd-shift-k").
-private func removeMatchingBindingLines(_ lines: [String], sectionStart: Int, sectionEnd: Int, key: String, modifiers: NSEvent.ModifierFlags) -> [String] {
+func removeMatchingBindingLines(_ lines: [String], sectionStart: Int, sectionEnd: Int, key: String, modifiers: NSEvent.ModifierFlags) -> [String] {
     return lines.enumerated().filter { index, line in
         guard index > sectionStart && index < sectionEnd else { return true }
         let trimmed = line.trimmingCharacters(in: CharacterSet.whitespaces)
