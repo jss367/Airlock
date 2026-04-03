@@ -372,7 +372,7 @@ private func expandWorkspacesShorthand(
     _ raw: TOMLValueConvertible,
     _ rawTable: TOMLTable,
     _ config: inout Config,
-    _ errors: inout [TomlParseError]
+    _ errors: inout [TomlParseError],
 ) {
     let backtrace = TomlBacktrace.rootKey(workspacesShorthandKey)
     guard let table = raw.table else {

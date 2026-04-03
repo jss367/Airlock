@@ -103,7 +103,5 @@ enum KeyboardLayout {
 
     /// Keys that are bindable (have entries in keyNotationToKeyCode).
     /// Modifier-only keys (prefixed with _) are excluded.
-    static let bindableKeyNotations: Set<String> = {
-        Set(qwerty.flatMap(\.keys).map(\.id).filter { !$0.hasPrefix("_") })
-    }()
+    static let bindableKeyNotations: Set<String> = Set(qwerty.flatMap(\.keys).map(\.id).filter { !$0.hasPrefix("_") })
 }

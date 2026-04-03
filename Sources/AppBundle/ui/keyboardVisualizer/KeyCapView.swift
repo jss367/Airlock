@@ -17,8 +17,8 @@ struct KeyCapView: View {
     private var isTappable: Bool {
         guard !isNonBindable else { return false }
         switch bindingInfo {
-        case .otherCommand: return false
-        case .appLauncher, .unbound: return true
+            case .otherCommand: return false
+            case .appLauncher, .unbound: return true
         }
     }
 
@@ -32,7 +32,7 @@ struct KeyCapView: View {
                 .fill(backgroundColor)
                 .overlay(
                     RoundedRectangle(cornerRadius: 6)
-                        .strokeBorder(Color.gray.opacity(0.4), lineWidth: 0.5)
+                        .strokeBorder(Color.gray.opacity(0.4), lineWidth: 0.5),
                 )
 
             if isNonBindable {
@@ -48,10 +48,10 @@ struct KeyCapView: View {
         }
         .onTapGesture {
             switch bindingInfo {
-            case .otherCommand:
-                showCommandPopover = true
-            case .appLauncher, .unbound:
-                if isTappable { onTap?() }
+                case .otherCommand:
+                    showCommandPopover = true
+                case .appLauncher, .unbound:
+                    if isTappable { onTap?() }
             }
         }
         .popover(isPresented: $showCommandPopover, arrowEdge: .bottom) {
@@ -82,12 +82,12 @@ struct KeyCapView: View {
     @ViewBuilder
     private var bindingContent: some View {
         switch bindingInfo {
-        case .appLauncher(let appName, let appPath):
-            appLauncherContent(appName: appName, appPath: appPath)
-        case .otherCommand(let description):
-            otherCommandContent(description: description)
-        case .unbound:
-            unboundContent
+            case .appLauncher(let appName, let appPath):
+                appLauncherContent(appName: appName, appPath: appPath)
+            case .otherCommand(let description):
+                otherCommandContent(description: description)
+            case .unbound:
+                unboundContent
         }
     }
 
@@ -152,12 +152,12 @@ struct KeyCapView: View {
         }
         let hoverBoost: CGFloat = isHovered ? 0.08 : 0.0
         switch bindingInfo {
-        case .appLauncher:
-            return Color.accentColor.opacity(0.18 + hoverBoost)
-        case .otherCommand:
-            return Color.orange.opacity(0.15 + hoverBoost)
-        case .unbound:
-            return Color.gray.opacity(0.08 + hoverBoost)
+            case .appLauncher:
+                return Color.accentColor.opacity(0.18 + hoverBoost)
+            case .otherCommand:
+                return Color.orange.opacity(0.15 + hoverBoost)
+            case .unbound:
+                return Color.gray.opacity(0.08 + hoverBoost)
         }
     }
 }

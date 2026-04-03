@@ -225,29 +225,29 @@ final class AppLauncherPanel: NSPanelHud {
                       event.keyCode, event.characters ?? "<nil>", event.charactersIgnoringModifiers ?? "<nil>")
             }
             switch event.keyCode {
-            case 53: // Escape
-                if Self.debugLogging { NSLog("[AppLauncher][eventMonitor] Escape — consuming event, will dismiss") }
-                MainActor.assumeIsolated { self.dismiss() }
-                return nil
-            case 36: // Return
-                if Self.debugLogging { NSLog("[AppLauncher][eventMonitor] Return — consuming event, will launch") }
-                MainActor.assumeIsolated {
-                    if let app = self.viewModel.selectedApp {
-                        self.launchApp(app)
+                case 53: // Escape
+                    if Self.debugLogging { NSLog("[AppLauncher][eventMonitor] Escape — consuming event, will dismiss") }
+                    MainActor.assumeIsolated { self.dismiss() }
+                    return nil
+                case 36: // Return
+                    if Self.debugLogging { NSLog("[AppLauncher][eventMonitor] Return — consuming event, will launch") }
+                    MainActor.assumeIsolated {
+                        if let app = self.viewModel.selectedApp {
+                            self.launchApp(app)
+                        }
                     }
-                }
-                return nil
-            case 125: // Down arrow
-                if Self.debugLogging { NSLog("[AppLauncher][eventMonitor] Down arrow — consuming event") }
-                MainActor.assumeIsolated { self.viewModel.selectNext() }
-                return nil
-            case 126: // Up arrow
-                if Self.debugLogging { NSLog("[AppLauncher][eventMonitor] Up arrow — consuming event") }
-                MainActor.assumeIsolated { self.viewModel.selectPrevious() }
-                return nil
-            default:
-                if Self.debugLogging { NSLog("[AppLauncher][eventMonitor] keyCode=%d — passing event through (NOT consumed)", event.keyCode) }
-                return event
+                    return nil
+                case 125: // Down arrow
+                    if Self.debugLogging { NSLog("[AppLauncher][eventMonitor] Down arrow — consuming event") }
+                    MainActor.assumeIsolated { self.viewModel.selectNext() }
+                    return nil
+                case 126: // Up arrow
+                    if Self.debugLogging { NSLog("[AppLauncher][eventMonitor] Up arrow — consuming event") }
+                    MainActor.assumeIsolated { self.viewModel.selectPrevious() }
+                    return nil
+                default:
+                    if Self.debugLogging { NSLog("[AppLauncher][eventMonitor] keyCode=%d — passing event through (NOT consumed)", event.keyCode) }
+                    return event
             }
         }
     }

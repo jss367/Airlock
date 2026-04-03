@@ -48,15 +48,15 @@ func shouldAllowFocusChange(to newWindow: Window?) -> Bool {
     let currentFocus = focus
 
     switch mode {
-    case .off:
-        return true
-    case .crossWorkspace:
-        // Block if the new window is on a different workspace
-        guard let newWorkspace = newWindow.nodeWorkspace else { return true }
-        return newWorkspace == currentFocus.workspace
-    case .always:
-        // Block if the newly focused window differs from the current one at all
-        guard let currentWindow = currentFocus.windowOrNil else { return true }
-        return newWindow.windowId == currentWindow.windowId
+        case .off:
+            return true
+        case .crossWorkspace:
+            // Block if the new window is on a different workspace
+            guard let newWorkspace = newWindow.nodeWorkspace else { return true }
+            return newWorkspace == currentFocus.workspace
+        case .always:
+            // Block if the newly focused window differs from the current one at all
+            guard let currentWindow = currentFocus.windowOrNil else { return true }
+            return newWindow.windowId == currentWindow.windowId
     }
 }

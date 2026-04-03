@@ -87,8 +87,8 @@ final class ConfigWriterTest: XCTestCase {
         // Verify that the generated binding line uses summon-app format
         // We test this by parsing the expected output format
         let expectedLine = """
-            option-ctrl-cmd-shift-s = 'summon-app "Spotify"'
-        """
+                option-ctrl-cmd-shift-s = 'summon-app "Spotify"'
+            """
         let toml = """
             [mode.main.binding]
                 \(expectedLine.trimmingCharacters(in: .whitespaces))
@@ -157,14 +157,14 @@ final class ConfigWriterTest: XCTestCase {
 
         // option-s should be workspace command
         let wsBinding = config.modes[mainModeId]?.bindings[
-            HotkeyBinding(.option, .s, []).descriptionWithKeyCode
+            HotkeyBinding(.option, .s, []).descriptionWithKeyCode,
         ]
         XCTAssertTrue(wsBinding?.commands.first is WorkspaceCommand)
 
         // hyper-s should be summon-app
         let hyper: NSEvent.ModifierFlags = [.option, .control, .command, .shift]
         let summonBinding = config.modes[mainModeId]?.bindings[
-            HotkeyBinding(hyper, .s, []).descriptionWithKeyCode
+            HotkeyBinding(hyper, .s, []).descriptionWithKeyCode,
         ]
         XCTAssertTrue(summonBinding?.commands.first?.args is SummonAppCmdArgs)
     }
@@ -183,13 +183,13 @@ final class ConfigWriterTest: XCTestCase {
         // User's hyper-s binding should be present
         let hyper: NSEvent.ModifierFlags = [.option, .control, .command, .shift]
         let summonBinding = config.modes[mainModeId]?.bindings[
-            HotkeyBinding(hyper, .s, []).descriptionWithKeyCode
+            HotkeyBinding(hyper, .s, []).descriptionWithKeyCode,
         ]
         assertNotNil(summonBinding)
 
         // Default bindings should also be present (e.g., option-h = 'focus left')
         let focusBinding = config.modes[mainModeId]?.bindings[
-            HotkeyBinding(.option, .h, []).descriptionWithKeyCode
+            HotkeyBinding(.option, .h, []).descriptionWithKeyCode,
         ]
         assertNotNil(focusBinding)
         XCTAssertTrue(focusBinding?.commands.first is FocusCommand)

@@ -8,10 +8,10 @@ enum ConfigWriterError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .ambiguousConfig(let urls):
-            return "Multiple config files found: \(urls.map(\.path).joined(separator: ", "))"
-        case .writeError(let msg):
-            return "Failed to write config: \(msg)"
+            case .ambiguousConfig(let urls):
+                return "Multiple config files found: \(urls.map(\.path).joined(separator: ", "))"
+            case .writeError(let msg):
+                return "Failed to write config: \(msg)"
         }
     }
 }
@@ -35,7 +35,7 @@ func addBindingToLines(_ lines: [String], key: String, appName: String, modifier
     if let sectionIndex = content.firstIndex(where: { $0.trimmingCharacters(in: CharacterSet.whitespaces) == "[mode.main.binding]" }) {
         // Find the insertion point: before the next section header or end of file
         var insertIndex = content.count
-        for i in (sectionIndex + 1)..<content.count {
+        for i in (sectionIndex + 1) ..< content.count {
             let trimmed = content[i].trimmingCharacters(in: CharacterSet.whitespaces)
             if trimmed.hasPrefix("[") && trimmed.hasSuffix("]") {
                 insertIndex = i
@@ -48,7 +48,7 @@ func addBindingToLines(_ lines: [String], key: String, appName: String, modifier
 
         // Recalculate insert index after removal
         var newInsertIndex = content.count
-        for i in (sectionIndex + 1)..<content.count {
+        for i in (sectionIndex + 1) ..< content.count {
             let trimmed = content[i].trimmingCharacters(in: CharacterSet.whitespaces)
             if trimmed.hasPrefix("[") && trimmed.hasSuffix("]") {
                 newInsertIndex = i
@@ -86,7 +86,7 @@ func removeBinding(key: String, modifierPrefix: NSEvent.ModifierFlags) throws {
 
     // Find the end of this section
     var sectionEnd = lines.count
-    for i in (sectionIndex + 1)..<lines.count {
+    for i in (sectionIndex + 1) ..< lines.count {
         let trimmed = lines[i].trimmingCharacters(in: CharacterSet.whitespaces)
         if trimmed.hasPrefix("[") && trimmed.hasSuffix("]") {
             sectionEnd = i
@@ -111,7 +111,7 @@ func removeMatchingBindingLines(_ lines: [String], sectionStart: Int, sectionEnd
         guard !trimmed.isEmpty && !trimmed.hasPrefix("#") else { return true }
         // Extract the binding key (everything before " =" or "=")
         guard let eqIndex = trimmed.firstIndex(of: "=") else { return true }
-        let bindingKey = trimmed[trimmed.startIndex..<eqIndex].trimmingCharacters(in: CharacterSet.whitespaces)
+        let bindingKey = trimmed[trimmed.startIndex ..< eqIndex].trimmingCharacters(in: CharacterSet.whitespaces)
         // Parse the binding key into parts: the last part is the key, everything before is modifiers
         let parts = bindingKey.split(separator: "-")
         guard let lastPart = parts.last, String(lastPart) == key else { return true }
@@ -130,17 +130,17 @@ private func loadOrCreateConfig() throws -> (URL, [String]) {
     let configFile = findCustomConfigUrl()
 
     switch configFile {
-    case .file(let url):
-        let text = try String(contentsOf: url, encoding: .utf8)
-        return (url, text.components(separatedBy: "\n"))
+        case .file(let url):
+            let text = try String(contentsOf: url, encoding: .utf8)
+            return (url, text.components(separatedBy: "\n"))
 
-    case .noCustomConfigExists:
-        let url = FileManager.default.homeDirectoryForCurrentUser.appending(path: configDotfileName)
-        let initial = "[mode.main.binding]\n"
-        try initial.write(to: url, atomically: true, encoding: .utf8)
-        return (url, initial.components(separatedBy: "\n"))
+        case .noCustomConfigExists:
+            let url = FileManager.default.homeDirectoryForCurrentUser.appending(path: configDotfileName)
+            let initial = "[mode.main.binding]\n"
+            try initial.write(to: url, atomically: true, encoding: .utf8)
+            return (url, initial.components(separatedBy: "\n"))
 
-    case .ambiguousConfigError(let urls):
-        throw ConfigWriterError.ambiguousConfig(urls)
+        case .ambiguousConfigError(let urls):
+            throw ConfigWriterError.ambiguousConfig(urls)
     }
 }
