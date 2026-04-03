@@ -15,6 +15,8 @@ airlock focus [-h|--help] [--ignore-floating] [--wrap-around]
 airlock focus [-h|--help] [--ignore-floating] [--wrap-around]
                 [--boundaries <boundary>] [--boundaries-action <action>]
                 (dfs-next|dfs-prev)
+airlock focus [-h|--help] [--ignore-floating]
+                (app-next|app-prev|same-app-next|same-app-prev)
 airlock focus [-h|--help] --window-id <window-id>
 airlock focus [-h|--help] --dfs-index <dfs-index>
 
@@ -74,6 +76,9 @@ Set focus to the nearest window in the given direction.
 (dfs-next|dfs-prev)::
 Set focus to the window before or after the current window in the depth-first order (top-to-bottom and left-to-right) of windows in the current workspace tree.
 In this mode, `--boundaries` must be `workspace` (the default) and `--boundaries-action` can be set to one of `(stop|fail|wrap-around-the-workspace)`.
+
+(app-next|app-prev|same-app-next|same-app-prev)::
+Cycle focus between applications or between windows of the same application within the current workspace.
 
 // end::body[]
 

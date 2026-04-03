@@ -1,0 +1,40 @@
+= airlock-summon-app(1)
+include::util/man-attributes.adoc[]
+// tag::purpose[]
+:manpurpose: Summon an application to the focused workspace
+// end::purpose[]
+:manname: airlock-summon-app
+
+// =========================================================== Synopsis
+== Synopsis
+[verse]
+// tag::synopsis[]
+airlock summon-app [-h|--help] [--new-window] <app-name>
+
+// end::synopsis[]
+
+// =========================================================== Description
+== Description
+
+// tag::body[]
+{manpurpose}
+
+If the app is running and has a window on the current workspace, focus it.
+If the app is running but its windows are on another workspace, move one to the current workspace.
+If the app is not running, launch it.
+
+// =========================================================== Options
+include::./util/conditional-options-header.adoc[]
+
+-h, --help:: Print help
+--new-window:: Always launch a new instance of the application instead of summoning an existing window.
+
+// =========================================================== Arguments
+include::./util/conditional-arguments-header.adoc[]
+
+<app-name>:: The name of the application to summon.
+
+// end::body[]
+
+// =========================================================== Footer
+include::util/man-footer.adoc[]
