@@ -6,6 +6,7 @@ func checkMacOsSettings() {
     checkAutoSwoosh()
 }
 
+@MainActor
 private func checkAutoSwoosh() {
     guard let dockDefaults = UserDefaults(suiteName: "com.apple.dock") else { return }
     // workspaces-auto-swoosh defaults to true when unset
