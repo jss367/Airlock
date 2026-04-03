@@ -85,6 +85,7 @@ struct SwitcherItem: Identifiable, Hashable {
     let title: String
     let subtitle: String
     let kind: Kind
+    let icon: NSImage?
 
     enum Kind: Hashable {
         case workspace(name: String)
@@ -92,6 +93,28 @@ struct SwitcherItem: Identifiable, Hashable {
         case installedApp(url: URL)
         case webSearch(query: String)
     }
+
+    var sectionTitle: String {
+        switch kind {
+            case .workspace: return "Workspaces"
+            case .window: return "Windows"
+            case .installedApp: return "Applications"
+            case .webSearch: return "Web"
+        }
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+    }
+
+    static func == (lhs: SwitcherItem, rhs: SwitcherItem) -> Bool {
+        lhs.id == rhs.id
+    }
+}
+
+private struct IndexedItem {
+    let index: Int
+    let item: SwitcherItem
 }
 
 struct QuickSwitcherContent: View {
@@ -118,9 +141,32 @@ struct QuickSwitcherContent: View {
                 title: "Search Google for '\(query)'",
                 subtitle: "Open in browser",
                 kind: .webSearch(query: query),
+                icon: nil,
             )]
         }
         return base
+    }
+
+    private var groupedItems: [(String, [IndexedItem])] {
+        var sections: [(String, [IndexedItem])] = []
+        var currentSection: String?
+        var currentItems: [IndexedItem] = []
+
+        for (index, item) in filteredItems.enumerated() {
+            let section = item.sectionTitle
+            if section != currentSection {
+                if let current = currentSection {
+                    sections.append((current, currentItems))
+                }
+                currentSection = section
+                currentItems = []
+            }
+            currentItems.append(IndexedItem(index: index, item: item))
+        }
+        if let current = currentSection {
+            sections.append((current, currentItems))
+        }
+        return sections
     }
 
     var body: some View {
@@ -128,14 +174,16 @@ struct QuickSwitcherContent: View {
             // Search field
             HStack {
                 Image(systemName: "magnifyingglass")
+                    .font(.system(size: 18))
                     .foregroundStyle(.secondary)
                 TextField("Search workspaces and windows...", text: $query)
                     .focused($isFocused)
                     .textFieldStyle(.plain)
-                    .font(.system(size: 18))
+                    .font(.system(size: 20))
                     .onSubmit { activateSelected() }
             }
-            .padding(12)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
             .background(.ultraThickMaterial)
 
             Divider()
@@ -144,13 +192,26 @@ struct QuickSwitcherContent: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(spacing: 0) {
-                        ForEach(Array(filteredItems.enumerated()), id: \.element.id) { index, item in
-                            SwitcherRow(item: item, isSelected: index == selectedIndex)
-                                .id(item.id)
-                                .onTapGesture {
-                                    selectedIndex = index
-                                    activateSelected()
-                                }
+                        ForEach(groupedItems, id: \.0) { sectionTitle, sectionItems in
+                            // Section header
+                            HStack {
+                                Text(sectionTitle.uppercased())
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundStyle(.secondary)
+                                Spacer()
+                            }
+                            .padding(.horizontal, 18)
+                            .padding(.top, 10)
+                            .padding(.bottom, 4)
+
+                            ForEach(sectionItems, id: \.item.id) { indexed in
+                                SwitcherRow(item: indexed.item, isSelected: indexed.index == selectedIndex)
+                                    .id(indexed.item.id)
+                                    .onTapGesture {
+                                        selectedIndex = indexed.index
+                                        activateSelected()
+                                    }
+                            }
                         }
                     }
                 }
@@ -160,7 +221,7 @@ struct QuickSwitcherContent: View {
                     }
                 }
             }
-            .background(.ultraThinMaterial)
+            .background(.ultraThickMaterial)
         }
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .shadow(color: .black.opacity(0.3), radius: 20, y: 5)
@@ -232,6 +293,7 @@ struct QuickSwitcherContent: View {
                 title: ws.name,
                 subtitle: subtitle,
                 kind: .workspace(name: ws.name),
+                icon: nil,
             ))
         }
 
@@ -239,11 +301,13 @@ struct QuickSwitcherContent: View {
         for ws in workspaces {
             for window in ws.allLeafWindowsRecursive {
                 let appName = window.app.name ?? "Unknown"
+                let icon = (window.app as? MacApp).flatMap { $0.bundlePath }.map { NSWorkspace.shared.icon(forFile: $0) }
                 result.append(SwitcherItem(
                     id: "win-\(window.windowId)",
                     title: appName,
                     subtitle: "on \(ws.name)",
                     kind: .window(id: window.windowId),
+                    icon: icon,
                 ))
             }
         }
@@ -261,11 +325,13 @@ struct QuickSwitcherContent: View {
                 if let bundleId = app.bundleIdentifier, runningBundleIds.contains(bundleId) {
                     return nil
                 }
+                let icon = NSWorkspace.shared.icon(forFile: app.url.path)
                 return SwitcherItem(
                     id: "app-\(app.url.path)",
                     title: app.name,
                     subtitle: "Launch application",
                     kind: .installedApp(url: app.url),
+                    icon: icon,
                 )
             }
             guard !Task.isCancelled else { return }
@@ -318,10 +384,17 @@ private struct SwitcherRow: View {
     let isSelected: Bool
 
     var body: some View {
-        HStack {
-            Image(systemName: iconName)
-                .frame(width: 24)
-                .foregroundStyle(isSelected ? .white : .secondary)
+        HStack(spacing: 10) {
+            if let nsIcon = item.icon {
+                Image(nsImage: nsIcon)
+                    .resizable()
+                    .frame(width: 28, height: 28)
+            } else {
+                Image(systemName: iconName)
+                    .font(.system(size: 16))
+                    .frame(width: 28, height: 28)
+                    .foregroundStyle(isSelected ? .white : .secondary)
+            }
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.title)
                     .font(.system(size: 14, weight: .medium))
@@ -333,8 +406,13 @@ private struct SwitcherRow: View {
             Spacer()
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(isSelected ? Color.accentColor : Color.clear)
+        .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(isSelected ? Color.accentColor : Color.clear)
+                .padding(.horizontal, 6),
+        )
+        .contentShape(Rectangle())
     }
 
     private var iconName: String {
