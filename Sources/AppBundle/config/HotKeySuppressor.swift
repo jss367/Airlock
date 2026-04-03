@@ -7,7 +7,7 @@ import os
 /// from leaking through to focused applications (e.g. Chrome interpreting
 /// Option+Shift+I from a Hyper+I combo as "Report an Issue").
 ///
-/// Uses a Carbon event handler for `kEventRawKeyDown` / `kEventRawKeyUp`.
+/// Uses a Carbon event handler for `kEventRawKeyDown` / `kEventRawKeyUp` / `kEventRawKeyRepeat`.
 /// When a Carbon hotkey fires, two events are dispatched:
 ///   1. `kEventHotKeyPressed` — intercepted by the HotKey library
 ///   2. `kEventRawKeyDown` — would leak through to the focused app
@@ -49,12 +49,13 @@ final class HotKeySuppressor: @unchecked Sendable {
         var eventSpec = [
             EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventRawKeyDown)),
             EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventRawKeyUp)),
+            EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventRawKeyRepeat)),
         ]
 
         InstallEventHandler(
             GetEventDispatcherTarget(),
             carbonSuppressorCallback,
-            eventSpec.count,
+            3,
             &eventSpec,
             nil,
             &eventHandlerRef
@@ -91,7 +92,10 @@ private func carbonSuppressorCallback(
         &carbonMods
     )
 
-    let entry = HotKeySuppressor.KeyEntry(keyCode: keyCode, modifiers: carbonMods)
+    // Mask to only the modifier bits we track (cmd/shift/option/control) so that
+    // extra flags in the raw event (e.g. numpad, function) don't cause lookup misses.
+    let modifierMask = UInt32(cmdKey | shiftKey | optionKey | controlKey)
+    let entry = HotKeySuppressor.KeyEntry(keyCode: keyCode, modifiers: carbonMods & modifierMask)
     if HotKeySuppressor.shared.registeredKeys.contains(entry) {
         return noErr // consume the event
     }
