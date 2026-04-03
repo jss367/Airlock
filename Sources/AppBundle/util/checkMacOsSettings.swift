@@ -29,12 +29,12 @@ private func checkAutoSwoosh() {
 
         let response = alert.runModal()
         switch response {
-        case .alertFirstButtonReturn:
-            disableAutoSwoosh()
-        case .alertThirdButtonReturn:
-            UserDefaults.standard.set(true, forKey: "airlock-ignore-auto-swoosh")
-        default:
-            break
+            case .alertFirstButtonReturn:
+                disableAutoSwoosh()
+            case .alertThirdButtonReturn:
+                UserDefaults.standard.set(true, forKey: "airlock-ignore-auto-swoosh")
+            default:
+                break
         }
     }
 }

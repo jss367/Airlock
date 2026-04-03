@@ -33,7 +33,7 @@ func dismissQuickSwitcher() {
     quickSwitcherPanel = nil
 }
 
-private class QuickSwitcherPanel: NSPanelHud {
+private final class QuickSwitcherPanel: NSPanelHud {
     private var hostingView: NSHostingView<QuickSwitcherContent>?
 
     override var canBecomeKey: Bool { true }
@@ -117,7 +117,7 @@ struct QuickSwitcherContent: View {
                 id: "web-search",
                 title: "Search Google for '\(query)'",
                 subtitle: "Open in browser",
-                kind: .webSearch(query: query)
+                kind: .webSearch(query: query),
             )]
         }
         return base
@@ -186,20 +186,20 @@ struct QuickSwitcherContent: View {
 
     private func handleKeyEvent(_ event: NSEvent) -> Bool {
         switch event.keyCode {
-        case 125: // Down arrow
-            if selectedIndex < filteredItems.count - 1 { selectedIndex += 1 }
-            return true
-        case 126: // Up arrow
-            if selectedIndex > 0 { selectedIndex -= 1 }
-            return true
-        case 36: // Return
-            activateSelected()
-            return true
-        case 53: // Escape
-            Task { @MainActor in dismissQuickSwitcher() }
-            return true
-        default:
-            return false
+            case 125: // Down arrow
+                if selectedIndex < filteredItems.count - 1 { selectedIndex += 1 }
+                return true
+            case 126: // Up arrow
+                if selectedIndex > 0 { selectedIndex -= 1 }
+                return true
+            case 36: // Return
+                activateSelected()
+                return true
+            case 53: // Escape
+                Task { @MainActor in dismissQuickSwitcher() }
+                return true
+            default:
+                return false
         }
     }
 
@@ -213,10 +213,10 @@ struct QuickSwitcherContent: View {
             let ai = persistentOrder.firstIndex(of: a.name)
             let bi = persistentOrder.firstIndex(of: b.name)
             switch (ai, bi) {
-            case (.some(let ai), .some(let bi)): return ai < bi
-            case (.some, .none): return true
-            case (.none, .some): return false
-            case (.none, .none): return a < b
+                case (.some(let ai), .some(let bi)): return ai < bi
+                case (.some, .none): return true
+                case (.none, .some): return false
+                case (.none, .none): return a < b
             }
         }
 
@@ -231,7 +231,7 @@ struct QuickSwitcherContent: View {
                 id: "ws-\(ws.name)",
                 title: ws.name,
                 subtitle: subtitle,
-                kind: .workspace(name: ws.name)
+                kind: .workspace(name: ws.name),
             ))
         }
 
@@ -243,7 +243,7 @@ struct QuickSwitcherContent: View {
                     id: "win-\(window.windowId)",
                     title: appName,
                     subtitle: "on \(ws.name)",
-                    kind: .window(id: window.windowId)
+                    kind: .window(id: window.windowId),
                 ))
             }
         }
@@ -265,7 +265,7 @@ struct QuickSwitcherContent: View {
                     id: "app-\(app.url.path)",
                     title: app.name,
                     subtitle: "Launch application",
-                    kind: .installedApp(url: app.url)
+                    kind: .installedApp(url: app.url),
                 )
             }
             guard !Task.isCancelled else { return }
@@ -280,34 +280,35 @@ struct QuickSwitcherContent: View {
         guard let item = filteredItems[safe: selectedIndex] else { return }
 
         switch item.kind {
-        case .installedApp(let url):
-            let config = NSWorkspace.OpenConfiguration()
-            config.activates = true
-            NSWorkspace.shared.openApplication(at: url, configuration: config)
-            dismissQuickSwitcher()
-        case .webSearch(let query):
-            if let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-               let url = URL(string: "https://google.com/search?q=\(encoded)") {
-                NSWorkspace.shared.open(url)
-            }
-            dismissQuickSwitcher()
-        case .workspace, .window:
-            guard let token: RunSessionGuard = .isServerEnabled else { return }
-            Task {
-                try await runLightSession(.menuBarButton, token) {
-                    switch item.kind {
-                    case .workspace(let name):
-                        _ = Workspace.get(byName: name).focusWorkspace()
-                    case .window(let id):
-                        if let window = Window.get(byId: id) {
-                            _ = window.focusWindow()
-                        }
-                    default:
-                        break
-                    }
+            case .installedApp(let url):
+                let config = NSWorkspace.OpenConfiguration()
+                config.activates = true
+                NSWorkspace.shared.openApplication(at: url, configuration: config)
+                dismissQuickSwitcher()
+            case .webSearch(let query):
+                if let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+                   let url = URL(string: "https://google.com/search?q=\(encoded)")
+                {
+                    NSWorkspace.shared.open(url)
                 }
                 dismissQuickSwitcher()
-            }
+            case .workspace, .window:
+                guard let token: RunSessionGuard = .isServerEnabled else { return }
+                Task {
+                    try await runLightSession(.menuBarButton, token) {
+                        switch item.kind {
+                            case .workspace(let name):
+                                _ = Workspace.get(byName: name).focusWorkspace()
+                            case .window(let id):
+                                if let window = Window.get(byId: id) {
+                                    _ = window.focusWindow()
+                                }
+                            default:
+                                break
+                        }
+                    }
+                    dismissQuickSwitcher()
+                }
         }
     }
 }
@@ -338,10 +339,10 @@ private struct SwitcherRow: View {
 
     private var iconName: String {
         switch item.kind {
-        case .workspace: return "square.grid.2x2"
-        case .window: return "macwindow"
-        case .installedApp: return "app.badge"
-        case .webSearch: return "magnifyingglass"
+            case .workspace: return "square.grid.2x2"
+            case .window: return "macwindow"
+            case .installedApp: return "app.badge"
+            case .webSearch: return "magnifyingglass"
         }
     }
 }

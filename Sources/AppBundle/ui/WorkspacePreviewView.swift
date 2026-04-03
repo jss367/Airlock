@@ -16,7 +16,7 @@ struct WorkspacePreviewView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 6))
                     .overlay(
                         RoundedRectangle(cornerRadius: 6)
-                            .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                            .stroke(Color.gray.opacity(0.3), lineWidth: 1),
                     )
             } else {
                 Text("Empty workspace")
@@ -90,21 +90,21 @@ struct WorkspacePreviewView: View {
                 .null,
                 .optionIncludingWindow,
                 wid,
-                [.boundsIgnoreFraming, .bestResolution]
+                [.boundsIgnoreFraming, .bestResolution],
             ) {
                 // Get this window's bounds to position it correctly
                 if let info = windowInfoList.first(where: {
                     ($0[kCGWindowNumber] as? NSNumber)?.uint32Value == wid
                 }),
-                   let boundsDict = info[kCGWindowBounds] as? [String: CGFloat],
-                   let x = boundsDict["X"], let y = boundsDict["Y"],
-                   let w = boundsDict["Width"], let h = boundsDict["Height"]
+                    let boundsDict = info[kCGWindowBounds] as? [String: CGFloat],
+                    let x = boundsDict["X"], let y = boundsDict["Y"],
+                    let w = boundsDict["Width"], let h = boundsDict["Height"]
                 {
                     let destRect = NSRect(
                         x: (x - minX) * scale,
                         y: (captureRect.height - (y - minY) - h) * scale, // Flip Y
                         width: w * scale,
-                        height: h * scale
+                        height: h * scale,
                     )
                     let nsImage = NSImage(cgImage: cgImage, size: NSSize(width: w, height: h))
                     nsImage.draw(in: destRect)

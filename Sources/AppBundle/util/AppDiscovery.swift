@@ -31,7 +31,7 @@ func discoverInstalledApps() -> [InstalledApp] {
         guard let urls = try? fileManager.contentsOfDirectory(
             at: URL(fileURLWithPath: dir),
             includingPropertiesForKeys: nil,
-            options: [.skipsHiddenFiles]
+            options: [.skipsHiddenFiles],
         ) else { continue }
 
         for url in urls {
@@ -42,7 +42,7 @@ func discoverInstalledApps() -> [InstalledApp] {
                 if let subUrls = try? fileManager.contentsOfDirectory(
                     at: url,
                     includingPropertiesForKeys: nil,
-                    options: [.skipsHiddenFiles]
+                    options: [.skipsHiddenFiles],
                 ) {
                     for subUrl in subUrls {
                         addApp(url: subUrl, into: &apps)
@@ -87,7 +87,7 @@ func discoverInstalledAppInfo() async -> [InstalledAppInfo] {
         guard let urls = try? fileManager.contentsOfDirectory(
             at: URL(fileURLWithPath: dir),
             includingPropertiesForKeys: nil,
-            options: [.skipsHiddenFiles]
+            options: [.skipsHiddenFiles],
         ) else { continue }
 
         for url in urls {
@@ -97,7 +97,7 @@ func discoverInstalledAppInfo() async -> [InstalledAppInfo] {
                 if let subUrls = try? fileManager.contentsOfDirectory(
                     at: url,
                     includingPropertiesForKeys: nil,
-                    options: [.skipsHiddenFiles]
+                    options: [.skipsHiddenFiles],
                 ) {
                     for subUrl in subUrls {
                         addAppInfo(url: subUrl, into: &apps)

@@ -11,13 +11,13 @@ func showKeyboardVisualizer() {
     window.window?.makeKeyAndOrderFront(nil)
 }
 
-private class KeyboardVisualizerWindowController: NSWindowController {
+private final class KeyboardVisualizerWindowController: NSWindowController {
     @MainActor static let shared: KeyboardVisualizerWindowController = {
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 960, height: 450),
             styleMask: [.titled, .closable, .resizable],
             backing: .buffered,
-            defer: false
+            defer: false,
         )
         window.title = "Keyboard Visualizer"
         window.center()
@@ -38,6 +38,7 @@ private struct ModifierOption: Identifiable {
     let rawValue: UInt
 
     var id: UInt { rawValue }
+    // periphery:ignore
     var flags: NSEvent.ModifierFlags { NSEvent.ModifierFlags(rawValue: rawValue) }
 }
 
@@ -122,7 +123,7 @@ private struct KeyboardVisualizerContent: View {
         .sheet(item: $selectedKey) { key in
             AppPickerView(
                 keyNotation: key.id,
-                modifierPrefix: selectedModifier
+                modifierPrefix: selectedModifier,
             ) {
                 selectedKey = nil
                 refreshBindings()
@@ -139,7 +140,7 @@ private struct KeyboardVisualizerContent: View {
                 .fill(color)
                 .overlay(
                     RoundedRectangle(cornerRadius: 3)
-                        .strokeBorder(Color.gray.opacity(0.4), lineWidth: 0.5)
+                        .strokeBorder(Color.gray.opacity(0.4), lineWidth: 0.5),
                 )
                 .frame(width: 16, height: 16)
             Text(label)
@@ -150,12 +151,12 @@ private struct KeyboardVisualizerContent: View {
 
     private func tooltipText(for info: KeyBindingInfo) -> String {
         switch info {
-        case .appLauncher(let appName, let appPath):
-            return appPath.isEmpty ? appName : "\(appName) (\(appPath))"
-        case .otherCommand(let description):
-            return description
-        case .unbound:
-            return "Click to assign an app"
+            case .appLauncher(let appName, let appPath):
+                return appPath.isEmpty ? appName : "\(appName) (\(appPath))"
+            case .otherCommand(let description):
+                return description
+            case .unbound:
+                return "Click to assign an app"
         }
     }
 
@@ -171,7 +172,7 @@ private struct KeyboardVisualizerContent: View {
         options.append(ModifierOption(
             label: "Hyper",
             subtitle: "\u{2325} + \u{2303} + \u{2318} + \u{21E7}",
-            rawValue: hyperRaw
+            rawValue: hyperRaw,
         ))
         seen.insert(hyperRaw)
 
@@ -184,7 +185,7 @@ private struct KeyboardVisualizerContent: View {
                     options.append(ModifierOption(
                         label: binding.modifiers.toString(),
                         subtitle: nil,
-                        rawValue: raw
+                        rawValue: raw,
                     ))
                 }
             }

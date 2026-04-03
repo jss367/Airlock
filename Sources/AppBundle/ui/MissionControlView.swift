@@ -25,7 +25,8 @@ func dismissMissionControl() {
     missionControlPanel = nil
 }
 
-private class MissionControlPanel: NSPanelHud {
+private final class MissionControlPanel: NSPanelHud {
+    // periphery:ignore
     private var hostingView: NSHostingView<MissionControlContent>?
 
     init(preloadedData: [MissionControlContent.WorkspaceInfo]) {
@@ -153,22 +154,22 @@ struct MissionControlContent: View {
         }
 
         switch event.keyCode {
-        case 53: // Escape
-            Task { @MainActor in dismissMissionControl() }
-            return true
-        case 123: // Left arrow
-            if selectedWorkspaceIndex > 0 { selectedWorkspaceIndex -= 1 }
-            return true
-        case 124: // Right arrow
-            if selectedWorkspaceIndex < preloadedData.count - 1 { selectedWorkspaceIndex += 1 }
-            return true
-        case 36: // Return
-            if let ws = preloadedData[safe: selectedWorkspaceIndex] {
-                switchToWorkspace(ws)
-            }
-            return true
-        default:
-            return false
+            case 53: // Escape
+                Task { @MainActor in dismissMissionControl() }
+                return true
+            case 123: // Left arrow
+                if selectedWorkspaceIndex > 0 { selectedWorkspaceIndex -= 1 }
+                return true
+            case 124: // Right arrow
+                if selectedWorkspaceIndex < preloadedData.count - 1 { selectedWorkspaceIndex += 1 }
+                return true
+            case 36: // Return
+                if let ws = preloadedData[safe: selectedWorkspaceIndex] {
+                    switchToWorkspace(ws)
+                }
+                return true
+            default:
+                return false
         }
     }
 
@@ -179,10 +180,10 @@ struct MissionControlContent: View {
             let ai = persistentOrder.firstIndex(of: a.name)
             let bi = persistentOrder.firstIndex(of: b.name)
             switch (ai, bi) {
-            case (.some(let ai), .some(let bi)): return ai < bi
-            case (.some, .none): return true
-            case (.none, .some): return false
-            case (.none, .none): return a < b
+                case (.some(let ai), .some(let bi)): return ai < bi
+                case (.some, .none): return true
+                case (.none, .some): return false
+                case (.none, .none): return a < b
             }
         }
 
@@ -202,14 +203,14 @@ struct MissionControlContent: View {
                     id: window.windowId,
                     appName: window.app.name ?? "Unknown",
                     thumbnail: thumbnail,
-                    windowId: window.windowId
+                    windowId: window.windowId,
                 ))
             }
 
             let windowIds = Set(leafWindows.map { CGWindowID($0.windowId) })
             let compositeThumbnail = captureWorkspaceComposite(
                 windowIds: windowIds,
-                windowInfoList: windowInfoList
+                windowInfoList: windowInfoList,
             )
 
             result.append(WorkspaceInfo(
@@ -217,7 +218,7 @@ struct MissionControlContent: View {
                 name: ws.name,
                 isFocused: isFocused,
                 windows: windowInfos,
-                compositeThumbnail: compositeThumbnail
+                compositeThumbnail: compositeThumbnail,
             ))
         }
 
@@ -229,7 +230,7 @@ struct MissionControlContent: View {
             .null,
             .optionIncludingWindow,
             wid,
-            [.boundsIgnoreFraming, .bestResolution]
+            [.boundsIgnoreFraming, .bestResolution],
         ) else { return nil }
 
         let srcWidth = CGFloat(cgImage.width)
@@ -248,7 +249,7 @@ struct MissionControlContent: View {
 
     private static func captureWorkspaceComposite(
         windowIds: Set<CGWindowID>,
-        windowInfoList: [[CFString: Any]]
+        windowInfoList: [[CFString: Any]],
     ) -> NSImage? {
         if windowIds.isEmpty { return nil }
 
@@ -289,20 +290,20 @@ struct MissionControlContent: View {
                 .null,
                 .optionIncludingWindow,
                 wid,
-                [.boundsIgnoreFraming, .bestResolution]
+                [.boundsIgnoreFraming, .bestResolution],
             ) {
                 if let info = windowInfoList.first(where: {
                     ($0[kCGWindowNumber] as? NSNumber)?.uint32Value == wid
                 }),
-                   let boundsDict = info[kCGWindowBounds] as? [String: CGFloat],
-                   let x = boundsDict["X"], let y = boundsDict["Y"],
-                   let w = boundsDict["Width"], let h = boundsDict["Height"]
+                    let boundsDict = info[kCGWindowBounds] as? [String: CGFloat],
+                    let x = boundsDict["X"], let y = boundsDict["Y"],
+                    let w = boundsDict["Width"], let h = boundsDict["Height"]
                 {
                     let destRect = NSRect(
                         x: (x - minX) * scale,
                         y: (captureRect.height - (y - minY) - h) * scale,
                         width: w * scale,
-                        height: h * scale
+                        height: h * scale,
                     )
                     let nsImage = NSImage(cgImage: cgImage, size: NSSize(width: w, height: h))
                     nsImage.draw(in: destRect)
@@ -359,7 +360,7 @@ private struct WorkspaceCard: View {
                     .overlay(
                         Text("Empty")
                             .font(.caption)
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(.tertiary),
                     )
             }
 
@@ -371,11 +372,11 @@ private struct WorkspaceCard: View {
         .padding(10)
         .background(
             RoundedRectangle(cornerRadius: 10)
-                .fill(isSelected ? Color.accentColor.opacity(0.2) : Color.primary.opacity(0.05))
+                .fill(isSelected ? Color.accentColor.opacity(0.2) : Color.primary.opacity(0.05)),
         )
         .overlay(
             RoundedRectangle(cornerRadius: 10)
-                .stroke(workspace.isFocused ? Color.accentColor : Color.clear, lineWidth: 2)
+                .stroke(workspace.isFocused ? Color.accentColor : Color.clear, lineWidth: 2),
         )
     }
 }
@@ -406,7 +407,7 @@ private struct WindowThumbnail: View {
         .padding(8)
         .background(
             RoundedRectangle(cornerRadius: 8)
-                .fill(Color.primary.opacity(0.05))
+                .fill(Color.primary.opacity(0.05)),
         )
     }
 }
