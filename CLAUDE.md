@@ -14,6 +14,7 @@
 - Only deploy (`./deploy.sh`) when the user explicitly asks.
 - Always create a PR for any code changes. PR against `main`.
 - When addressing PR review comments that require code changes, create a new PR with the fixes (don't push to the existing branch). Let PRs cascade. Link the parent PR at the top of the new PR description: `Parent PR: #<number>`.
+- When checking PR comments, always use `gh api repos/jss367/Airlock/pulls/<N>/comments` to fetch line-level review comments, not just `gh pr view --json comments`.
 
 ## Build & Deploy
 
