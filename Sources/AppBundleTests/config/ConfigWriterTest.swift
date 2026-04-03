@@ -8,15 +8,13 @@ import XCTest
 final class ConfigWriterTest: XCTestCase {
     private var tempDir: URL!
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
         tempDir = FileManager.default.temporaryDirectory.appending(component: UUID().uuidString)
-        try! FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         try? FileManager.default.removeItem(at: tempDir)
-        super.tearDown()
     }
 
     // MARK: - addBindingToLines / removeMatchingBindingLines

@@ -5,8 +5,7 @@ import XCTest
 
 @MainActor
 final class BindingAnalyzerTest: XCTestCase {
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
         setUpWorkspacesForTests()
     }
 
