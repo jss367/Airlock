@@ -19,7 +19,7 @@ done
 ./build-docs.sh
 ./build-shell-completion.sh
 
-./generate.sh
+./generate.sh --ignore-xcodeproj
 ./script/check-uncommitted-files.sh
 ./generate.sh --build-version "$build_version" --codesign-identity "$codesign_identity" --generate-git-hash
 
