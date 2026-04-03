@@ -4,14 +4,14 @@ import CoreGraphics
 import HotKey
 import os
 
-/// Maintains a CGEventTap that suppresses keyboard events matching registered hotkeys,
-/// preventing them from leaking through to focused applications (e.g. Chrome interpreting
-/// Option+Shift+I from a Hyper+I combo as "Report an Issue").
+/// Placeholder for future keyboard event suppression.
 ///
-/// The tap is placed at `.tailAppendEventTap` so it runs AFTER Carbon event handling.
-/// This is critical: the HotKey library uses Carbon's `RegisterEventHotKey`, which
-/// processes events via a head-insert tap. If our suppressor also used head-insert,
-/// it would kill the event before Carbon could see it, breaking all hotkeys.
+/// Previously this used a CGEventTap with `.defaultTap` to suppress hotkey events
+/// and prevent them from leaking through to focused apps. However, CGEventTap
+/// suppression (returning nil) kills events before Carbon's `RegisterEventHotKey`
+/// can process them — regardless of head-insert vs tail-append placement — which
+/// breaks all hotkeys. The tap is now listen-only until a suppression approach
+/// that doesn't interfere with Carbon hotkeys is found.
 final class HotKeySuppressor: @unchecked Sendable {
     static let shared = HotKeySuppressor()
 
@@ -50,7 +50,7 @@ final class HotKeySuppressor: @unchecked Sendable {
         eventTap = CGEvent.tapCreate(
             tap: .cgSessionEventTap,
             place: .tailAppendEventTap,
-            options: .defaultTap,
+            options: .listenOnly,
             eventsOfInterest: eventMask,
             callback: hotKeySuppressorCallback,
             userInfo: nil
