@@ -10,6 +10,17 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "if": "Bash(git commit *)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd $(git rev-parse --show-toplevel 2>/dev/null) && ./format.sh 2>/dev/null; git add -u; exit 0",
+            "timeout": 120
+          }
+        ]
       }
     ],
     "PostToolUse": [
