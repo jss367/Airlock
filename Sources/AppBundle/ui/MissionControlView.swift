@@ -26,7 +26,10 @@ func dismissMissionControl() {
 }
 
 private final class MissionControlPanel: NSPanelHud {
+<<<<<<< HEAD
     // periphery:ignore
+=======
+>>>>>>> 72d66068 (Add visual Cmd+Tab app switcher panel for workspace-scoped app cycling)
     private var hostingView: NSHostingView<MissionControlContent>?
 
     init(preloadedData: [MissionControlContent.WorkspaceInfo]) {
