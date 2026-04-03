@@ -14,7 +14,7 @@ expected_version="$(cat VERSION) SNAPSHOT"
 ./.debug/airlock --version | grep -qF "$expected_version"
 
 ./lint.sh --check-uncommitted-files
-./generate.sh
+./generate.sh --ignore-xcodeproj
 ./script/check-uncommitted-files.sh
 
 echo
