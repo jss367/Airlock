@@ -18,6 +18,14 @@ enum ConfigWriterError: LocalizedError {
 
 func addBinding(key: String, appName: String, modifierPrefix: NSEvent.ModifierFlags) throws {
     let (url, lines) = try loadOrCreateConfig()
+    let content = addBindingToLines(lines, key: key, appName: appName, modifierPrefix: modifierPrefix)
+    let output = content.joined(separator: "\n")
+    try output.write(to: url, atomically: true, encoding: .utf8)
+}
+
+/// Pure function that adds a binding to config lines without file I/O.
+/// Visible to tests via @testable import.
+func addBindingToLines(_ lines: [String], key: String, appName: String, modifierPrefix: NSEvent.ModifierFlags) -> [String] {
     var content = lines
 
     let modStr = modifierPrefix.toString()
@@ -59,8 +67,7 @@ func addBinding(key: String, appName: String, modifierPrefix: NSEvent.ModifierFl
         content.append(bindingLine)
     }
 
-    let output = content.joined(separator: "\n")
-    try output.write(to: url, atomically: true, encoding: .utf8)
+    return content
 }
 
 func removeBinding(key: String, modifierPrefix: NSEvent.ModifierFlags) throws {
