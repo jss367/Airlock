@@ -42,12 +42,12 @@ final class SummonAppCommandTest: XCTestCase {
     func testParseCommandReturnsSummonAppCommand() {
         let parsed = parseCommand("summon-app Finder")
         switch parsed {
-        case .cmd(let command):
-            XCTAssertTrue(command is SummonAppCommand)
-        case .help:
-            XCTFail("Expected command, got help")
-        case .failure(let msg):
-            XCTFail("Expected command, got failure: \(msg)")
+            case .cmd(let command):
+                XCTAssertTrue(command is SummonAppCommand)
+            case .help:
+                XCTFail("Expected command, got help")
+            case .failure(let msg):
+                XCTFail("Expected command, got failure: \(msg)")
         }
     }
 }

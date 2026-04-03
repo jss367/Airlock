@@ -9,13 +9,13 @@ func showKeybindingsHelp() {
     window.window?.makeKeyAndOrderFront(nil)
 }
 
-private class KeybindingsWindowController: NSWindowController {
+private final class KeybindingsWindowController: NSWindowController {
     @MainActor static let shared: KeybindingsWindowController = {
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 500, height: 400),
             styleMask: [.titled, .closable, .resizable],
             backing: .buffered,
-            defer: false
+            defer: false,
         )
         window.title = "Airlock Keybindings"
         window.center()

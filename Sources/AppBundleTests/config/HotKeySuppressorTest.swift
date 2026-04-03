@@ -97,14 +97,14 @@ final class HotKeySuppressorTest: XCTestCase {
         let rawModsWithExtra = NSEvent.ModifierFlags.option.carbonFlags | 0x800000
         let maskedEntry = HotKeySuppressor.KeyEntry(
             keyCode: Key.s.carbonKeyCode,
-            modifiers: rawModsWithExtra & canonicalMask
+            modifiers: rawModsWithExtra & canonicalMask,
         )
         assertTrue(registered.contains(maskedEntry))
 
         // Without masking, the lookup should fail (demonstrating why masking matters)
         let unmaskedEntry = HotKeySuppressor.KeyEntry(
             keyCode: Key.s.carbonKeyCode,
-            modifiers: rawModsWithExtra
+            modifiers: rawModsWithExtra,
         )
         XCTAssertFalse(registered.contains(unmaskedEntry))
     }

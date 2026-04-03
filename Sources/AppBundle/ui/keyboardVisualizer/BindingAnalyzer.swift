@@ -29,7 +29,8 @@ private func classifyBinding(_ binding: HotkeyBinding) -> KeyBindingInfo {
     // Check for summon-app command
     if binding.commands.count == 1,
        let cmd = binding.commands.first,
-       let summonArgs = cmd.args as? SummonAppCmdArgs {
+       let summonArgs = cmd.args as? SummonAppCmdArgs
+    {
         let appName = summonArgs.appName.val
         let appPath = findAppPath(named: appName) ?? ""
         return .appLauncher(appName: appName, appPath: appPath)
@@ -37,7 +38,8 @@ private func classifyBinding(_ binding: HotkeyBinding) -> KeyBindingInfo {
 
     guard binding.commands.count == 1,
           let cmd = binding.commands.first,
-          let execArgs = cmd.args as? ExecAndForgetCmdArgs else {
+          let execArgs = cmd.args as? ExecAndForgetCmdArgs
+    else {
         let desc = binding.commands.map { $0.args.description }.joined(separator: ", ")
         return .otherCommand(description: desc)
     }
@@ -50,11 +52,11 @@ private func classifyBinding(_ binding: HotkeyBinding) -> KeyBindingInfo {
 
     if let osascriptResult = extractOsascriptDescription(from: script) {
         switch osascriptResult {
-        case .launcher(let appName):
-            let appPath = findAppPath(named: appName) ?? ""
-            return .appLauncher(appName: appName, appPath: appPath)
-        case .keystroke(let description):
-            return .otherCommand(description: description)
+            case .launcher(let appName):
+                let appPath = findAppPath(named: appName) ?? ""
+                return .appLauncher(appName: appName, appPath: appPath)
+            case .keystroke(let description):
+                return .otherCommand(description: description)
         }
     }
 
@@ -63,7 +65,7 @@ private func classifyBinding(_ binding: HotkeyBinding) -> KeyBindingInfo {
 
 private let openAppRegex = try! NSRegularExpression(
     pattern: #"^open\s+-a\s+"([^"]+)"|^open\s+-a\s+'([^']+)'|^open\s+-a\s+(\S+)"#,
-    options: []
+    options: [],
 )
 
 private func extractAppName(from script: String) -> String? {
@@ -71,7 +73,7 @@ private func extractAppName(from script: String) -> String? {
     guard let match = openAppRegex.firstMatch(in: script, range: range) else { return nil }
 
     // Group 1: double-quoted name, Group 2: single-quoted name, Group 3: unquoted name
-    for groupIdx in 1...3 {
+    for groupIdx in 1 ... 3 {
         let groupRange = match.range(at: groupIdx)
         if groupRange.location != NSNotFound, let swiftRange = Range(groupRange, in: script) {
             var name = String(script[swiftRange])
@@ -90,12 +92,12 @@ private enum OsascriptResult {
 
 private let osascriptAppRegex = try! NSRegularExpression(
     pattern: #"tell application "([^"]+)""#,
-    options: []
+    options: [],
 )
 
 private let osascriptKeystrokeRegex = try! NSRegularExpression(
     pattern: #"keystroke "([^"]+)"(?:\s+using\s+\{([^}]+)\})?"#,
-    options: []
+    options: [],
 )
 
 private func extractOsascriptDescription(from script: String) -> OsascriptResult? {
@@ -107,14 +109,16 @@ private func extractOsascriptDescription(from script: String) -> OsascriptResult
 
     // Extract the target app name
     guard let appMatch = osascriptAppRegex.firstMatch(in: script, range: range),
-          let appRange = Range(appMatch.range(at: 1), in: script) else {
+          let appRange = Range(appMatch.range(at: 1), in: script)
+    else {
         return nil
     }
     let appName = String(script[appRange])
 
     // Check for keystroke
     guard let keystrokeMatch = osascriptKeystrokeRegex.firstMatch(in: script, range: range),
-          let keyRange = Range(keystrokeMatch.range(at: 1), in: script) else {
+          let keyRange = Range(keystrokeMatch.range(at: 1), in: script)
+    else {
         // No keystroke — just an app activation
         return .launcher(appName: appName)
     }

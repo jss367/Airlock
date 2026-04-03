@@ -32,7 +32,7 @@ final class HotKeySuppressor: @unchecked Sendable {
     func register(key: Key, modifiers: NSEvent.ModifierFlags) {
         lock.withLock { _ = $0.insert(KeyEntry(
             keyCode: key.carbonKeyCode,
-            modifiers: modifiers.carbonFlags
+            modifiers: modifiers.carbonFlags,
         )) }
         if eventHandlerRef == nil { install() }
     }
@@ -58,15 +58,16 @@ final class HotKeySuppressor: @unchecked Sendable {
             3,
             &eventSpec,
             nil,
-            &eventHandlerRef
+            &eventHandlerRef,
         )
     }
 }
 
+// periphery:ignore
 private func carbonSuppressorCallback(
     nextHandler: EventHandlerCallRef?,
     event: EventRef?,
-    userData: UnsafeMutableRawPointer?
+    userData: UnsafeMutableRawPointer?,
 ) -> OSStatus {
     guard let event else { return OSStatus(eventNotHandledErr) }
 
@@ -78,7 +79,7 @@ private func carbonSuppressorCallback(
         nil,
         MemoryLayout<UInt32>.size,
         nil,
-        &keyCode
+        &keyCode,
     )
 
     var carbonMods: UInt32 = 0
@@ -89,7 +90,7 @@ private func carbonSuppressorCallback(
         nil,
         MemoryLayout<UInt32>.size,
         nil,
-        &carbonMods
+        &carbonMods,
     )
 
     // Mask to only the modifier bits we track (cmd/shift/option/control) so that
