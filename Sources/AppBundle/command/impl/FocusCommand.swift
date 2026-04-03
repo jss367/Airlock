@@ -68,24 +68,12 @@ struct FocusCommand: Command {
 
     switch direction {
         case .appNext, .appPrev:
-            // Group windows by app (pid), preserving encounter order
-            var seenPids: [Int32] = []
-            var windowsByPid: [Int32: Window] = [:] // most recent (first encountered) window per app
-            for w in allWindows {
-                let pid = w.app.pid
-                if windowsByPid[pid] == nil {
-                    seenPids.append(pid)
-                    windowsByPid[pid] = w
-                }
+            if isAppSwitcherVisible {
+                cycleAppSwitcher(direction: direction)
+            } else {
+                showAppSwitcher(direction: direction)
             }
-            guard seenPids.count > 1 else { return true } // only one app, nothing to cycle to
-            guard let currentPidIndex = seenPids.firstIndex(of: currentPid) else { return false }
-
-            let offset = direction == .appNext ? 1 : -1
-            let nextPidIndex = (currentPidIndex + offset + seenPids.count) % seenPids.count
-            let nextPid = seenPids[nextPidIndex]
-            guard let windowToFocus = windowsByPid[nextPid] else { return false }
-            return windowToFocus.focusWindow()
+            return true
 
         case .sameAppNext, .sameAppPrev:
             let sameAppWindows = allWindows.filter { $0.app.pid == currentPid }
