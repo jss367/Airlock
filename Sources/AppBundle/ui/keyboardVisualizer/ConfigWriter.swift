@@ -22,7 +22,7 @@ func addBinding(key: String, appName: String, modifierPrefix: NSEvent.ModifierFl
 
     let modStr = modifierPrefix.toString()
     let escapedAppName = appName.replacingOccurrences(of: "'", with: "'\\''")
-    let bindingLine = "    \(modStr)-\(key) = 'exec-and-forget open -a \"\(escapedAppName)\"'"
+    let bindingLine = "    \(modStr)-\(key) = 'summon-app \"\(escapedAppName)\"'"
 
     // Find [mode.main.binding] section
     if let sectionIndex = content.firstIndex(where: { $0.trimmingCharacters(in: CharacterSet.whitespaces) == "[mode.main.binding]" }) {
