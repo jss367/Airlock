@@ -497,4 +497,91 @@ final class ConfigTest: XCTestCase {
         assertEquals(errors, [])
         XCTAssertNotNil(config.modes["service"])
     }
+
+    func testUserBindingOverridesDefault() {
+        // option-h is 'focus left' in the default config. Override it with 'focus right'.
+        let (config, errors) = parseConfig(
+            """
+            [mode.main.binding]
+                option-h = 'focus right'
+            """,
+        )
+        assertEquals(errors, [])
+        let binding = HotkeyBinding(.option, .h, [FocusCommand.new(direction: .right)])
+        assertEquals(
+            config.modes[mainModeId]?.bindings[binding.descriptionWithKeyCode],
+            binding,
+        )
+        // Verify this is NOT the default 'focus left' command
+        let defaultBinding = HotkeyBinding(.option, .h, [FocusCommand.new(direction: .left)])
+        assertNotEquals(
+            config.modes[mainModeId]?.bindings[binding.descriptionWithKeyCode],
+            defaultBinding,
+        )
+    }
+
+    func testMultipleDisabledBindings() {
+        let defaultBindings = defaultConfig.modes[mainModeId]!.bindings
+        // Disable option-h, option-j, option-k (all 'focus' bindings)
+        let (config, errors) = parseConfig(
+            """
+            [mode.main.binding]
+                option-h = 'disabled'
+                option-j = 'disabled'
+                option-k = 'disabled'
+            """,
+        )
+        assertEquals(errors, [])
+        let hBinding = HotkeyBinding(.option, .h, [FocusCommand.new(direction: .left)])
+        let jBinding = HotkeyBinding(.option, .j, [FocusCommand.new(direction: .down)])
+        let kBinding = HotkeyBinding(.option, .k, [FocusCommand.new(direction: .up)])
+        // All three should be removed
+        XCTAssertNil(config.modes[mainModeId]?.bindings[hBinding.descriptionWithKeyCode])
+        XCTAssertNil(config.modes[mainModeId]?.bindings[jBinding.descriptionWithKeyCode])
+        XCTAssertNil(config.modes[mainModeId]?.bindings[kBinding.descriptionWithKeyCode])
+        // Remaining count should be exactly 3 less than default
+        assertEquals(config.modes[mainModeId]!.bindings.count, defaultBindings.count - 3)
+    }
+
+    func testUserModeOverridesDefaultMode() {
+        // Default service mode has 'esc = ['reload-config', 'mode main']' (two commands).
+        // Override it with a single command.
+        let defaultServiceBindings = defaultConfig.modes["service"]!.bindings
+        let escKeyCode = HotkeyBinding([], .escape, []).descriptionWithKeyCode
+        let defaultEscBinding = defaultServiceBindings[escKeyCode]!
+        // Default esc binding should have 2 commands
+        assertEquals(defaultEscBinding.commands.count, 2)
+
+        let (config, errors) = parseConfig(
+            """
+            [mode.service.binding]
+                esc = 'mode main'
+            """,
+        )
+        assertEquals(errors, [])
+        // User override should have only 1 command
+        let overriddenBinding = config.modes["service"]?.bindings[escKeyCode]
+        assertNotNil(overriddenBinding)
+        assertEquals(overriddenBinding!.commands.count, 1)
+    }
+
+    func testPartialUserModePreservesOtherDefaultBindings() {
+        // User defines only one binding in main mode. All other defaults remain.
+        let defaultBindings = defaultConfig.modes[mainModeId]!.bindings
+        let (config, errors) = parseConfig(
+            """
+            [mode.main.binding]
+                option-h = 'focus right'
+            """,
+        )
+        assertEquals(errors, [])
+        // Total binding count should be the same as defaults (one overridden, none removed)
+        assertEquals(config.modes[mainModeId]!.bindings.count, defaultBindings.count)
+        // Verify option-l default binding still exists (not overridden)
+        let lBinding = HotkeyBinding(.option, .l, [FocusCommand.new(direction: .right)])
+        assertEquals(
+            config.modes[mainModeId]?.bindings[lBinding.descriptionWithKeyCode],
+            lBinding,
+        )
+    }
 }
