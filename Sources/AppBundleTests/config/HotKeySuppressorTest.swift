@@ -5,14 +5,12 @@ import XCTest
 
 @MainActor
 final class HotKeySuppressorTest: XCTestCase {
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
         HotKeySuppressor.shared.unregisterAll()
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         HotKeySuppressor.shared.unregisterAll()
-        super.tearDown()
     }
 
     // MARK: - Key Registration
