@@ -129,6 +129,11 @@ extension Workspace {
 @MainActor private var _prevFocus: FrozenFocus? = nil
 @MainActor var prevFocus: LiveFocus? { _prevFocus?.live.takeIf { $0 != focus } }
 
+@MainActor func resetFocusStateForTests() {
+    _prevFocus = nil
+    _lastKnownFocus = _focus
+}
+
 @MainActor private var onFocusChangedRecursionGuard = false
 // Should be called in refreshSession
 @MainActor func checkOnFocusChangedCallbacks() {
