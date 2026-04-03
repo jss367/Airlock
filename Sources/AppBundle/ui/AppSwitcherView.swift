@@ -33,6 +33,15 @@ func showAppSwitcher(direction: AppCycleDirection) {
     appSwitcherPanel = panel
     panel.show()
 
+    // If Cmd is not currently held (e.g. CLI-triggered `focus app-next`),
+    // commit immediately so the panel doesn't stay open indefinitely.
+    if !NSEvent.modifierFlags.contains(.command) {
+        Task { @MainActor in
+            dismissAppSwitcher(commit: true)
+        }
+        return
+    }
+
     Task {
         await panel.contentState.refreshWindowTitles()
     }

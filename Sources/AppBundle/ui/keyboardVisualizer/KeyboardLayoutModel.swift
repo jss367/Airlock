@@ -103,9 +103,6 @@ enum KeyboardLayout {
 
     /// Keys that are bindable (have entries in keyNotationToKeyCode).
     /// Modifier-only keys (prefixed with _) are excluded.
-<<<<<<< HEAD
     // periphery:ignore
-=======
->>>>>>> 72d66068 (Add visual Cmd+Tab app switcher panel for workspace-scoped app cycling)
     static let bindableKeyNotations: Set<String> = Set(qwerty.flatMap(\.keys).map(\.id).filter { !$0.hasPrefix("_") })
 }

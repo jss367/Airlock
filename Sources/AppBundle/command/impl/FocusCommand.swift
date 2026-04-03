@@ -68,32 +68,6 @@ struct FocusCommand: Command {
 
     switch direction {
         case .appNext, .appPrev:
-<<<<<<< HEAD
-            // Group windows by app (pid), preserving encounter order
-            var seenPids: [Int32] = []
-            var windowsByPid: [Int32: Window] = [:] // most recent (first encountered) window per app
-            for w in allWindows {
-                let pid = w.app.pid
-                if windowsByPid[pid] == nil {
-                    seenPids.append(pid)
-                    windowsByPid[pid] = w
-                }
-            }
-            guard seenPids.count > 1 else { return true } // only one app, nothing to cycle to
-            guard let currentPidIndex = seenPids.firstIndex(of: currentPid) else { return false }
-
-            let offset = direction == .appNext ? 1 : -1
-            let nextPidIndex = (currentPidIndex + offset + seenPids.count) % seenPids.count
-            let nextPid = seenPids[nextPidIndex]
-            guard let windowToFocus = windowsByPid[nextPid] else { return false }
-            return windowToFocus.focusWindow()
-
-        case .sameAppNext, .sameAppPrev:
-            let sameAppWindows = allWindows.filter { $0.app.pid == currentPid }
-            guard sameAppWindows.count > 1 else { return true } // only one window, nothing to cycle
-            guard let currentIndex = sameAppWindows.firstIndex(where: { $0.windowId == currentWindow.windowId }) else { return false }
-
-=======
             if isAppSwitcherVisible {
                 cycleAppSwitcher(direction: direction)
             } else {
@@ -106,7 +80,6 @@ struct FocusCommand: Command {
             guard sameAppWindows.count > 1 else { return true } // only one window, nothing to cycle
             guard let currentIndex = sameAppWindows.firstIndex(where: { $0.windowId == currentWindow.windowId }) else { return false }
 
->>>>>>> 72d66068 (Add visual Cmd+Tab app switcher panel for workspace-scoped app cycling)
             let offset = direction == .sameAppNext ? 1 : -1
             let nextIndex = (currentIndex + offset + sameAppWindows.count) % sameAppWindows.count
             return sameAppWindows[nextIndex].focusWindow()
