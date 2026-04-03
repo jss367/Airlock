@@ -1,0 +1,37 @@
+= airlock-summon-app(1)
+include::util/man-attributes.adoc[]
+:manname: airlock-summon-app
+// tag::purpose[]
+:manpurpose: Summon an application to the focused workspace
+// end::purpose[]
+
+// =========================================================== Synopsis
+== Synopsis
+[verse]
+// tag::synopsis[]
+airlock summon-app [-h|--help] [--new-window] <app-name>
+
+// end::synopsis[]
+
+// =========================================================== Description
+== Description
+
+// tag::body[]
+{manpurpose}
+
+// =========================================================== Options
+include::./util/conditional-options-header.adoc[]
+
+-h, --help:: Print help
+
+--new-window:: Open a new window of the application instead of summoning existing one
+
+// =========================================================== Arguments
+include::./util/conditional-arguments-header.adoc[]
+
+<app-name>:: Name of the application to summon
+
+// end::body[]
+
+// =========================================================== Footer
+include::util/man-footer.adoc[]
