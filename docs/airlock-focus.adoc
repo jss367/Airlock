@@ -79,8 +79,8 @@ In this mode, `--boundaries` must be `workspace` (the default) and `--boundaries
 
 (app-next|app-prev|same-app-next|same-app-prev)::
 Cycle focus through windows of applications.
-`app-next` and `app-prev` cycle through all app windows across workspaces.
-`same-app-next` and `same-app-prev` cycle through windows of the same app.
+`app-next` and `app-prev` cycle focus between different applications within the current workspace.
+`same-app-next` and `same-app-prev` cycle through windows of the same application within the current workspace.
 This mode is incompatible with `--wrap-around`, `--boundaries`, and `--boundaries-action`.
 
 // end::body[]
