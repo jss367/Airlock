@@ -1,0 +1,26 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Xcode project
+        run: |
+          xcodebuild -project Airlock.xcodeproj -scheme Airlock -configuration Release build \
+            CODE_SIGN_IDENTITY="-" CODE_SIGNING_REQUIRED=NO \
+            -derivedDataPath .xcode-build \
+            -quiet
+
+      - name: Run tests
+        run: swift test
+
+      - name: Build CLI
+        run: swift build --product airlock -c release
