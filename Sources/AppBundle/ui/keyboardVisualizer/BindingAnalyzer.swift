@@ -26,6 +26,15 @@ func analyzeBindings(modifierPrefix: NSEvent.ModifierFlags) -> [String: KeyBindi
 }
 
 private func classifyBinding(_ binding: HotkeyBinding) -> KeyBindingInfo {
+    // Check for summon-app command
+    if binding.commands.count == 1,
+       let cmd = binding.commands.first,
+       let summonArgs = cmd.args as? SummonAppCmdArgs {
+        let appName = summonArgs.appName.val
+        let appPath = findAppPath(named: appName) ?? ""
+        return .appLauncher(appName: appName, appPath: appPath)
+    }
+
     guard binding.commands.count == 1,
           let cmd = binding.commands.first,
           let execArgs = cmd.args as? ExecAndForgetCmdArgs else {

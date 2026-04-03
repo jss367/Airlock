@@ -1,23 +1,23 @@
 import AppKit
 import Carbon
-import CoreGraphics
 import HotKey
 import os
 
-/// Placeholder for future keyboard event suppression.
+/// Suppresses raw keyboard events that match registered hotkeys, preventing them
+/// from leaking through to focused applications (e.g. Chrome interpreting
+/// Option+Shift+I from a Hyper+I combo as "Report an Issue").
 ///
-/// Previously this used a CGEventTap with `.defaultTap` to suppress hotkey events
-/// and prevent them from leaking through to focused apps. However, CGEventTap
-/// suppression (returning nil) kills events before Carbon's `RegisterEventHotKey`
-/// can process them — regardless of head-insert vs tail-append placement — which
-/// breaks all hotkeys. The tap is now listen-only until a suppression approach
-/// that doesn't interfere with Carbon hotkeys is found.
+/// Uses a Carbon event handler for `kEventRawKeyDown` / `kEventRawKeyUp`.
+/// When a Carbon hotkey fires, two events are dispatched:
+///   1. `kEventHotKeyPressed` — intercepted by the HotKey library
+///   2. `kEventRawKeyDown` — would leak through to the focused app
+/// By consuming the raw key events here we prevent the leak without
+/// interfering with `kEventHotKeyPressed`.
 final class HotKeySuppressor: @unchecked Sendable {
     static let shared = HotKeySuppressor()
 
     private let lock = OSAllocatedUnfairLock<Set<KeyEntry>>(initialState: [])
-    var eventTap: CFMachPort?
-    private var runLoopSource: CFRunLoopSource?
+    private var eventHandlerRef: EventHandlerRef?
 
     struct KeyEntry: Hashable, Sendable {
         let keyCode: UInt32
@@ -34,7 +34,7 @@ final class HotKeySuppressor: @unchecked Sendable {
             keyCode: key.carbonKeyCode,
             modifiers: modifiers.carbonFlags
         )) }
-        if eventTap == nil { install() }
+        if eventHandlerRef == nil { install() }
     }
 
     @MainActor
@@ -44,53 +44,56 @@ final class HotKeySuppressor: @unchecked Sendable {
 
     @MainActor
     private func install() {
-        guard eventTap == nil else { return }
-        let eventMask: CGEventMask = (1 << CGEventType.keyDown.rawValue) | (1 << CGEventType.keyUp.rawValue)
+        guard eventHandlerRef == nil else { return }
 
-        eventTap = CGEvent.tapCreate(
-            tap: .cgSessionEventTap,
-            place: .tailAppendEventTap,
-            options: .listenOnly,
-            eventsOfInterest: eventMask,
-            callback: hotKeySuppressorCallback,
-            userInfo: nil
+        var eventSpec = [
+            EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventRawKeyDown)),
+            EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventRawKeyUp)),
+        ]
+
+        InstallEventHandler(
+            GetEventDispatcherTarget(),
+            carbonSuppressorCallback,
+            eventSpec.count,
+            &eventSpec,
+            nil,
+            &eventHandlerRef
         )
-        guard let eventTap else { return }
-        runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, eventTap, 0)
-        CFRunLoopAddSource(CFRunLoopGetCurrent(), runLoopSource, .commonModes)
-        CGEvent.tapEnable(tap: eventTap, enable: true)
     }
 }
 
-/// Convert CGEventFlags to Carbon modifier flags for comparison with registered hotkeys.
-private func cgFlagsToCarbonModifiers(_ flags: CGEventFlags) -> UInt32 {
-    var carbon: UInt32 = 0
-    if flags.contains(.maskCommand)   { carbon |= UInt32(cmdKey) }
-    if flags.contains(.maskShift)     { carbon |= UInt32(shiftKey) }
-    if flags.contains(.maskAlternate) { carbon |= UInt32(optionKey) }
-    if flags.contains(.maskControl)   { carbon |= UInt32(controlKey) }
-    return carbon
-}
+private func carbonSuppressorCallback(
+    nextHandler: EventHandlerCallRef?,
+    event: EventRef?,
+    userData: UnsafeMutableRawPointer?
+) -> OSStatus {
+    guard let event else { return OSStatus(eventNotHandledErr) }
 
-private func hotKeySuppressorCallback(
-    proxy: CGEventTapProxy,
-    type: CGEventType,
-    event: CGEvent,
-    refcon: UnsafeMutableRawPointer?
-) -> Unmanaged<CGEvent>? {
-    if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
-        if let tap = HotKeySuppressor.shared.eventTap {
-            CGEvent.tapEnable(tap: tap, enable: true)
-        }
-        return Unmanaged.passUnretained(event)
-    }
+    var keyCode: UInt32 = 0
+    GetEventParameter(
+        event,
+        EventParamName(kEventParamKeyCode),
+        EventParamType(typeUInt32),
+        nil,
+        MemoryLayout<UInt32>.size,
+        nil,
+        &keyCode
+    )
 
-    let keyCode = UInt32(event.getIntegerValueField(.keyboardEventKeycode))
-    let carbonMods = cgFlagsToCarbonModifiers(event.flags)
+    var carbonMods: UInt32 = 0
+    GetEventParameter(
+        event,
+        EventParamName(kEventParamKeyModifiers),
+        EventParamType(typeUInt32),
+        nil,
+        MemoryLayout<UInt32>.size,
+        nil,
+        &carbonMods
+    )
 
     let entry = HotKeySuppressor.KeyEntry(keyCode: keyCode, modifiers: carbonMods)
     if HotKeySuppressor.shared.registeredKeys.contains(entry) {
-        return nil // suppress — the Carbon hotkey handler will still fire
+        return noErr // consume the event
     }
-    return Unmanaged.passUnretained(event)
+    return OSStatus(eventNotHandledErr) // let it propagate
 }
