@@ -1,6 +1,6 @@
 # Airlock Beta [![Build](https://github.com/jss367/Airlock/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/jss367/Airlock/actions/workflows/build.yml)
 
-Airlock is an i3-like tiling window manager for macOS
+Airlock is a workspace and tiling window manager for macOS
 
 Docs:
 - [Airlock Guide](https://github.com/jss367/Airlock)
