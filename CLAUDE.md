@@ -1,24 +1,20 @@
-# Claude Code Instructions
+# Airlock - Claude Code Guide
 
-## Design Principles
+## What is Airlock
 
-- **Workspace isolation is inviolable.** The user should never leave their current workspace unless they explicitly ask to (e.g. via a workspace-switch keybinding). Cmd+Tab cycles between apps within the same workspace. Cmd+` cycles between windows of the same app within the same workspace. Focus stealing from other workspaces is blocked by default.
+macOS window manager that enforces workspace isolation. Cmd+Tab cycles apps within the same workspace. Cmd+` cycles windows of the same app within the same workspace. Focus stealing from other workspaces is blocked by default.
 
-## Workflow
+## Build & Test
 
-- **Never modify `main` directly.** No commits, no edits on the main branch.
-- Always work in a **git worktree** (`isolation: "worktree"` for agents). This keeps the main checkout clean.
-- Create a new branch from `main` for each piece of work. Use the naming convention `claude/<short-description>`.
-- After making code changes, run `./build.sh` to build and run tests. This verifies the code compiles without disrupting the running app.
-- If the build or tests fail, fix the issue before creating the PR.
-- Only deploy (`./deploy.sh`) when the user explicitly asks.
-- Always create a PR for any code changes. PR against `main`.
-- When addressing PR review comments that require code changes, create a new PR that targets the parent PR's branch (stacked PR), not `main`. Don't push to the existing branch. Link the parent PR at the top of the new PR description: `Parent PR: #<number>`. After the child PR merges into the parent branch, rebase the parent on `main` if needed before merging.
-- When checking PR comments, always use `gh api repos/jss367/Airlock/pulls/<N>/comments` to fetch line-level review comments, not just `gh pr view --json comments`.
+```bash
+./build.sh        # Build and run tests (does not disrupt running app)
+./deploy.sh       # Release build → /Applications/Airlock.app → launch (only when asked)
+```
 
-## Build & Deploy
-
-- This is a Swift project built with Xcode (`Airlock.xcodeproj`).
-- `./deploy.sh` builds a Release build, copies it to `/Applications/Airlock.app`, and launches it.
+- Swift project built with Xcode (`Airlock.xcodeproj`).
 - Use `-derivedDataPath .xcode-build` to keep build artifacts local to the repo.
-- Use `CODE_SIGN_IDENTITY="-" CODE_SIGNING_REQUIRED=NO` since we don't have signing set up.
+- Use `CODE_SIGN_IDENTITY="-" CODE_SIGNING_REQUIRED=NO` since signing is not set up.
+
+## Project-specific PR notes
+
+Always use `--repo jss367/Airlock` with `gh pr create`.
