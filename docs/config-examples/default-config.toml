@@ -51,6 +51,14 @@ persistent-workspaces = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "A", "B",
 # A callback that runs every time binding mode changes
 on-mode-changed = []
 
+# Built-in quick switcher panel (shows windows in the current workspace).
+# Set 'enabled = false' to disable the hotkey entirely (e.g., to free up
+# 'option-space' for tools like Raycast or Alfred).
+# 'binding' uses the same syntax as [mode.main.binding] keys.
+[quick-switcher]
+    enabled = true
+    binding = 'option-space'
+
 # Possible values: (qwerty|dvorak|colemak)
 [key-mapping]
     preset = 'qwerty'

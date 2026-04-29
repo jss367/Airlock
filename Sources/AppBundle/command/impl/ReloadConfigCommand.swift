@@ -33,6 +33,7 @@ struct ReloadConfigCommand: Command {
                 config = parsedConfig
                 configUrl = url
                 try await activateMode(activeMode)
+                registerQuickSwitcherHotkey()
                 syncStartAtLogin()
                 MessageModel.shared.message = nil
             }

@@ -8,7 +8,15 @@ import SwiftUI
 
 @MainActor
 func registerQuickSwitcherHotkey() {
-    quickSwitcherHotkey = HotKey(key: .space, modifiers: [.option], keyDownHandler: {
+    quickSwitcherHotkey?.isEnabled = false
+    quickSwitcherHotkey = nil
+
+    guard config.quickSwitcher.enabled else { return }
+
+    let parsed = parseBinding(config.quickSwitcher.binding, .emptyRoot, config.keyMapping.resolve())
+    guard case .success(let (modifiers, key)) = parsed else { return }
+
+    quickSwitcherHotkey = HotKey(key: key, modifiers: modifiers, keyDownHandler: {
         Task { @MainActor in
             toggleQuickSwitcher()
         }
