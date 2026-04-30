@@ -119,6 +119,8 @@ private let configParser: [String: any ParserProtocol<Config>] = [
 
     "exec": Parser(\.execConfig, parseExecConfig),
 
+    "quick-switcher": Parser(\.quickSwitcher, parseQuickSwitcher),
+
     keyMappingConfigRootKey: Parser(\.keyMapping, skipParsing(Config().keyMapping)), // Parsed manually
     modeConfigRootKey: Parser(\.modes, skipParsing(Config().modes)), // Parsed manually
     workspacesShorthandKey: Parser(\.persistentWorkspaces, skipParsing(Config().persistentWorkspaces)), // Parsed manually
@@ -192,6 +194,13 @@ func parseCommandOrCommands(_ raw: TOMLValueConvertible) -> Parsed<[any Command]
 
     if let mapping = rawTable[keyMappingConfigRootKey].flatMap({ parseKeyMapping($0, .rootKey(keyMappingConfigRootKey), &errors) }) {
         config.keyMapping = mapping
+    }
+
+    if config.quickSwitcher.enabled {
+        let backtrace: TomlBacktrace = .rootKey("quick-switcher") + .key("binding")
+        if case .failure(let error) = parseBinding(config.quickSwitcher.binding, backtrace, config.keyMapping.resolve()) {
+            errors.append(error)
+        }
     }
 
     // Expand [workspaces] shorthand into persistent-workspaces and mode bindings
