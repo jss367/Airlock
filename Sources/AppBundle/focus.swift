@@ -162,6 +162,7 @@ extension Workspace {
     onFocusChangedRecursionGuard = true
     defer { onFocusChangedRecursionGuard = false }
     if hasFocusChanged {
+        maybeAutoFlash(prev: _prevFocus, curr: focus)
         onFocusChanged(focus)
     }
     if let _prevFocusedWorkspaceName, hasFocusedWorkspaceChanged {
@@ -204,4 +205,40 @@ extension Workspace {
         workspace: newWorkspace,
         prevWorkspace: oldWorkspace,
     ))
+}
+
+/// "Time since previous focus event" tracker used by the `idle` mode of
+/// `[focus-flash]`. Updated unconditionally on every focus-change event (not
+/// gated on whether a flash actually fired) — the semantic is "user has been
+/// quiet for N seconds", not "we haven't flashed for N seconds".
+@MainActor private var _lastFocusChangeAt: Date = .distantPast
+
+@MainActor private func maybeAutoFlash(prev: FrozenFocus?, curr: LiveFocus) {
+    let cfg = config.focusFlash
+    let now = Date()
+    let secondsSincePrev: Double = prev == nil ? .infinity : now.timeIntervalSince(_lastFocusChangeAt)
+    _lastFocusChangeAt = now
+
+    guard cfg.enabled else { return }
+
+    let prevWs = prev?.workspaceName
+    let currWs = curr.workspace.name
+    // FrozenFocus only stores the windowId; resolve the live Window to read its
+    // app bundle id. If the previous window has been closed since, we get nil,
+    // which compares unequal to the current bundle id — treated as "different
+    // app" by `cross-app` mode (acceptable: a window vanished, focus moved).
+    let prevApp = prev?.windowId.flatMap { Window.get(byId: $0) }?.app.rawAppBundleId
+    let currApp = curr.windowOrNil?.app.rawAppBundleId
+
+    if shouldAutoFlash(
+        mode: cfg.mode,
+        prevWorkspace: prevWs,
+        currWorkspace: currWs,
+        prevAppId: prevApp,
+        currAppId: currApp,
+        secondsSincePrev: secondsSincePrev,
+        idleThreshold: cfg.idleThresholdSeconds,
+    ) {
+        FocusFlashController.shared.flash(window: curr.windowOrNil)
+    }
 }
