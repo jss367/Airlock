@@ -1,0 +1,32 @@
+= airlock-flash-focus(1)
+include::util/man-attributes.adoc[]
+// tag::purpose[]
+:manpurpose: Flash an outline around the currently focused window
+// end::purpose[]
+:manname: airlock-flash-focus
+
+// =========================================================== Synopsis
+== Synopsis
+[verse]
+// tag::synopsis[]
+airlock flash-focus [-h|--help]
+
+// end::synopsis[]
+
+// =========================================================== Description
+== Description
+
+// tag::body[]
+{manpurpose}.
+
+Useful as a "where is my focus?" hotkey, complementing the auto-flash
+behavior triggered by the `[focus-flash]` configuration table.
+// end::body[]
+
+// =========================================================== Options
+include::util/conditional-options-header.adoc[]
+
+-h, --help:: Print help
+
+// =========================================================== Footer
+include::util/man-footer.adoc[]

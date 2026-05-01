@@ -20,6 +20,8 @@ extension CmdArgs {
                 command = EnableCommand(args: self as! EnableCmdArgs)
             case .execAndForget:
                 die("exec-and-forget is parsed separately")
+            case .flashFocus:
+                command = FlashFocusCommand(args: self as! FlashFocusCmdArgs)
             case .flattenWorkspaceTree:
                 command = FlattenWorkspaceTreeCommand(args: self as! FlattenWorkspaceTreeCmdArgs)
             case .focus:

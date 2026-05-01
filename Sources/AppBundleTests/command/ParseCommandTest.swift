@@ -116,4 +116,23 @@ final class ParseCommandTest: XCTestCase {
             case .help: XCTFail("Unexpected help")
         }
     }
+
+    func testParseFlashFocus() {
+        let parsed = parseCommand("flash-focus")
+        switch parsed {
+            case .cmd(let command):
+                assertTrue(command is FlashFocusCommand)
+            case .failure(let msg): XCTFail(msg)
+            case .help: XCTFail("Unexpected help")
+        }
+    }
+
+    func testParseFlashFocusRejectsArgs() {
+        let parsed = parseCommand("flash-focus extra")
+        switch parsed {
+            case .cmd: XCTFail("flash-focus should not accept positional args")
+            case .failure: break // expected
+            case .help: XCTFail("Unexpected help")
+        }
+    }
 }
