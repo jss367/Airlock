@@ -68,7 +68,12 @@ final class FocusFlashOverlay {
         outlineLayer.path = CGPath(rect: tightLocal, transform: nil)
         outlineLayer.opacity = 1.0
 
-        panel.orderFront(nil)
+        // orderFrontRegardless (not orderFront) — Airlock runs as a background
+        // utility and is rarely the active app when focus changes happen.
+        // orderFront(nil) silently fails to show the panel when the app is
+        // inactive; orderFrontRegardless does what it says. Matches the pattern
+        // used by VolumeView and SecureInputView.
+        panel.orderFrontRegardless()
 
         // Animate path expansion + opacity fade together.
         CATransaction.begin()
