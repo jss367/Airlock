@@ -20,6 +20,8 @@ final class FocusFlashControllerTest: XCTestCase {
         let srgb = c!.usingColorSpace(NSColorSpace.sRGB)!
         XCTAssertEqual(srgb.alphaComponent, 128.0 / 255.0, accuracy: 0.001)
         assertEquals(srgb.redComponent, 1.0)
+        assertEquals(srgb.greenComponent, 0.0)
+        assertEquals(srgb.blueComponent, 0.0)
     }
 
     func testParseAARRGGBB_rejectsShortString() {
