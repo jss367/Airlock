@@ -120,6 +120,7 @@ private let configParser: [String: any ParserProtocol<Config>] = [
     "exec": Parser(\.execConfig, parseExecConfig),
 
     "quick-switcher": Parser(\.quickSwitcher, parseQuickSwitcher),
+    "focus-flash": Parser(\.focusFlash, parseFocusFlash),
 
     keyMappingConfigRootKey: Parser(\.keyMapping, skipParsing(Config().keyMapping)), // Parsed manually
     modeConfigRootKey: Parser(\.modes, skipParsing(Config().modes)), // Parsed manually

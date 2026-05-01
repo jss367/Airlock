@@ -162,6 +162,7 @@ extension Workspace {
     onFocusChangedRecursionGuard = true
     defer { onFocusChangedRecursionGuard = false }
     if hasFocusChanged {
+        maybeAutoFlash(prev: _prevFocus, curr: focus)
         onFocusChanged(focus)
     }
     if let _prevFocusedWorkspaceName, hasFocusedWorkspaceChanged {
@@ -204,4 +205,48 @@ extension Workspace {
         workspace: newWorkspace,
         prevWorkspace: oldWorkspace,
     ))
+}
+
+/// "Time since previous focus event" tracker used by the `idle` mode of
+/// `[focus-flash]`. Updated unconditionally on every focus-change event (not
+/// gated on whether a flash actually fired) — the semantic is "user has been
+/// quiet for N seconds", not "we haven't flashed for N seconds".
+///
+/// Nil before the first focus event after launch. The first event treats
+/// `secondsSincePrev` as 0 — Airlock just started, the user isn't "returning
+/// from being idle", so `idle` mode shouldn't fire on the first event.
+@MainActor private var _lastFocusChangeAt: Date? = nil
+
+@MainActor private func maybeAutoFlash(prev: FrozenFocus?, curr: LiveFocus) {
+    let cfg = config.focusFlash
+    let now = Date()
+    let secondsSincePrev: Double = _lastFocusChangeAt.map { now.timeIntervalSince($0) } ?? 0
+    _lastFocusChangeAt = now
+
+    guard cfg.enabled else { return }
+
+    let prevWs = prev?.workspaceName
+    let currWs = curr.workspace.name
+    // FrozenFocus only stores the windowId; resolve the live Window to read its
+    // app bundle id. If the previous window has been closed since the focus
+    // event was captured, the lookup fails — we don't know what the previous
+    // app was, so we treat it as "same as current". Trade-off: suppresses
+    // false-positive cross-app flashes (close one Chrome window, land on the
+    // next Chrome window) at the cost of also suppressing the legitimate
+    // case (close the last Slack window, focus jumps to Chrome). False
+    // positives are more annoying than missed flashes, so we accept the loss.
+    let currApp = curr.windowOrNil?.app.rawAppBundleId
+    let prevApp = prev?.windowId.flatMap { Window.get(byId: $0) }?.app.rawAppBundleId ?? currApp
+
+    if shouldAutoFlash(
+        mode: cfg.mode,
+        prevWorkspace: prevWs,
+        currWorkspace: currWs,
+        prevAppId: prevApp,
+        currAppId: currApp,
+        secondsSincePrev: secondsSincePrev,
+        idleThreshold: cfg.idleThresholdSeconds,
+    ) {
+        FocusFlashController.shared.flash(window: curr.windowOrNil)
+    }
 }
