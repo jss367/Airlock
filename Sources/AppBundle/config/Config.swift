@@ -53,6 +53,7 @@ struct Config: ConvenienceCopyable {
     var keyMapping = KeyMapping()
     var execConfig: ExecConfig = ExecConfig()
     var quickSwitcher: QuickSwitcherSettings = .default
+    var focusFlash: FocusFlashSettings = .default
 
     var onFocusChanged: [any Command] = []
     // var onFocusedWorkspaceChanged: [any Command] = []
