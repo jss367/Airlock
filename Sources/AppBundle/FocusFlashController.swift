@@ -7,10 +7,21 @@ final class FocusFlashController {
 
     private lazy var overlay = FocusFlashOverlay()
 
+    /// Tracks the in-flight async AX-rect query so a newer flash can cancel
+    /// it. Without this, a slow `getAxRect()` from an earlier focus event
+    /// could resolve after a newer flash has already drawn, and overwrite
+    /// the newer flash with a stale outline on the wrong window.
+    private var pendingAxFlashTask: Task<Void, Never>?
+
     /// Public entry point — fire a flash on the given window if it's eligible.
     /// Caller is responsible for the `enabled`/`mode` predicate; this method only
     /// handles "is this window flashable?" edge cases.
     func flash(window: Window?) {
+        // Any new flash request supersedes a pending async one — even if this
+        // call ends up bailing on eligibility, the pending one is now stale.
+        pendingAxFlashTask?.cancel()
+        pendingAxFlashTask = nil
+
         guard let window else { return }
 
         let cfg = config.focusFlash
@@ -43,12 +54,14 @@ final class FocusFlashController {
         // accessibility API directly. AX queries are async; spin a Task
         // rather than blocking the focus-change callback. The flash will
         // arrive ~10-20ms later than for tiling windows.
-        Task { @MainActor [weak self] in
+        pendingAxFlashTask = Task { @MainActor [weak self] in
             do {
                 guard let axRect = try await window.getAxRect() else { return }
-                let nsRect = self?.airlockRectToNSRect(axRect)
-                guard let nsRect, nsRect.width > 0, nsRect.height > 0 else { return }
-                self?.flashAt(nsRect: nsRect, cfg: cfg)
+                if Task.isCancelled { return }
+                guard let self else { return }
+                let nsRect = self.airlockRectToNSRect(axRect)
+                guard nsRect.width > 0, nsRect.height > 0 else { return }
+                self.flashAt(nsRect: nsRect, cfg: cfg)
             } catch {
                 // Window vanished or AX call failed — silently no-op.
             }
