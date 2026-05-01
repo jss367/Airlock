@@ -211,12 +211,16 @@ extension Workspace {
 /// `[focus-flash]`. Updated unconditionally on every focus-change event (not
 /// gated on whether a flash actually fired) — the semantic is "user has been
 /// quiet for N seconds", not "we haven't flashed for N seconds".
-@MainActor private var _lastFocusChangeAt: Date = .distantPast
+///
+/// Nil before the first focus event after launch. The first event treats
+/// `secondsSincePrev` as 0 — Airlock just started, the user isn't "returning
+/// from being idle", so `idle` mode shouldn't fire on the first event.
+@MainActor private var _lastFocusChangeAt: Date? = nil
 
 @MainActor private func maybeAutoFlash(prev: FrozenFocus?, curr: LiveFocus) {
     let cfg = config.focusFlash
     let now = Date()
-    let secondsSincePrev: Double = prev == nil ? .infinity : now.timeIntervalSince(_lastFocusChangeAt)
+    let secondsSincePrev: Double = _lastFocusChangeAt.map { now.timeIntervalSince($0) } ?? 0
     _lastFocusChangeAt = now
 
     guard cfg.enabled else { return }

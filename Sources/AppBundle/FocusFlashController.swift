@@ -32,12 +32,30 @@ final class FocusFlashController {
                 break
         }
 
-        // Resolve frame; bail if unavailable (window may have closed/minimized
-        // before any layout pass).
-        guard let nsRect = currentScreenFrame(of: window), nsRect.width > 0, nsRect.height > 0 else {
+        // Try the sync layout rect first — populated for tiling windows.
+        if let nsRect = syncScreenFrame(of: window), nsRect.width > 0, nsRect.height > 0 {
+            flashAt(nsRect: nsRect, cfg: cfg)
             return
         }
 
+        // Floating windows have `lastAppliedLayoutPhysicalRect` cleared in
+        // `layoutRecursive` and never repopulated, so we have to ask the
+        // accessibility API directly. AX queries are async; spin a Task
+        // rather than blocking the focus-change callback. The flash will
+        // arrive ~10-20ms later than for tiling windows.
+        Task { @MainActor [weak self] in
+            do {
+                guard let axRect = try await window.getAxRect() else { return }
+                let nsRect = self?.airlockRectToNSRect(axRect)
+                guard let nsRect, nsRect.width > 0, nsRect.height > 0 else { return }
+                self?.flashAt(nsRect: nsRect, cfg: cfg)
+            } catch {
+                // Window vanished or AX call failed — silently no-op.
+            }
+        }
+    }
+
+    private func flashAt(nsRect: NSRect, cfg: FocusFlashSettings) {
         let nsColor = parseAARRGGBB(cfg.color) ?? .green
         overlay.flash(
             targetFrame: nsRect,
@@ -50,19 +68,18 @@ final class FocusFlashController {
 
     // MARK: - Helpers
 
-    /// Convert the window's last-applied layout rect (Airlock's top-left-origin
-    /// `Rect`, measured from the top of the main monitor) into an `NSRect` in
-    /// NSScreen coordinates (bottom-left origin, Y up). This is the inverse of
-    /// `CGRect.monitorFrameNormalized()` in `Rect.swift`.
-    ///
-    /// We use the sync `lastAppliedLayoutPhysicalRect` rather than the async
-    /// `getAxRect()` because the controller runs on `@MainActor` and the
-    /// caller is a focus-change callback / hotkey command — both want an
-    /// immediate flash without spinning a `Task`. If the window has never
-    /// been laid out (e.g. brand-new, not yet bound), we get `nil` and skip
-    /// the flash, which is the correct behavior anyway.
-    private func currentScreenFrame(of window: Window) -> NSRect? {
+    /// Sync frame source — populated by `layoutRecursive` for tiling windows
+    /// and the workspace itself, but cleared for floating and Airlock-fullscreen
+    /// windows. Caller must fall back to async `getAxRect()` when this returns nil.
+    private func syncScreenFrame(of window: Window) -> NSRect? {
         guard let rect = window.lastAppliedLayoutPhysicalRect else { return nil }
+        return airlockRectToNSRect(rect)
+    }
+
+    /// Convert Airlock's top-left-origin `Rect` (measured from the top of the
+    /// main monitor) to an `NSRect` in NSScreen coordinates (bottom-left
+    /// origin, Y up). Inverse of `CGRect.monitorFrameNormalized()` in `Rect.swift`.
+    private func airlockRectToNSRect(_ rect: Rect) -> NSRect {
         let mainHeight = mainMonitor.height
         return NSRect(
             x: rect.topLeftX,
