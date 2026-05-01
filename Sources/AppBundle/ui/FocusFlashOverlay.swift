@@ -40,6 +40,9 @@ final class FocusFlashOverlay {
     /// Cancel any in-flight animation and start a new pulse on `targetFrame`.
     /// `targetFrame` is in screen coordinates (bottom-left origin, like NSScreen).
     func flash(targetFrame: NSRect, color: NSColor, width: CGFloat, popDistance: CGFloat, duration: TimeInterval) {
+        // Order is load-bearing: cancel() must run before the path/opacity
+        // reassignments below, so that those reassignments happen outside an
+        // active animation transaction and apply instantly without a flicker.
         cancel()
 
         // Panel must contain both the tight rect and the popped-out rect, so size it
