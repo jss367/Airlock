@@ -67,6 +67,16 @@ final class FocusFlashPredicateTest: XCTestCase {
         ))
     }
 
+    func testIdle_firesAtExactlyThreshold() {
+        // Locks the >= boundary; a regression to > would fail this test.
+        XCTAssertTrue(shouldAutoFlash(
+            mode: .idle,
+            prevWorkspace: "A", currWorkspace: "A",
+            prevAppId: "com.foo", currAppId: "com.foo",
+            secondsSincePrev: 10, idleThreshold: 10,
+        ))
+    }
+
     func testIdle_skipsBeforeThreshold() {
         XCTAssertFalse(shouldAutoFlash(
             mode: .idle,
