@@ -40,6 +40,14 @@ include::airlock-exec-and-forget.adoc[tags=synopsis]
 include::airlock-exec-and-forget.adoc[tags=purpose]
 include::airlock-exec-and-forget.adoc[tags=body]
 
+[#flash-focus]
+== flash-focus
+----
+include::airlock-flash-focus.adoc[tags=synopsis]
+----
+include::airlock-flash-focus.adoc[tags=purpose]
+include::airlock-flash-focus.adoc[tags=body]
+
 == flatten-workspace-tree
 ----
 include::airlock-flatten-workspace-tree.adoc[tags=synopsis]

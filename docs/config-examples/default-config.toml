@@ -59,6 +59,26 @@ on-mode-changed = []
     enabled = true
     binding = 'option-space'
 
+# Pulsing-outline overlay drawn around the focused window so you can see
+# where focus just landed. Useful after workspace switches and other
+# cross-context jumps. The 'flash-focus' command triggers a flash on demand
+# regardless of 'mode' (as long as 'enabled = true').
+# Set 'enabled = false' to turn it off entirely.
+[focus-flash]
+    enabled = true
+    # When auto-flash fires. One of:
+    #   every            - on every focus change
+    #   cross-workspace  - only when the focused workspace changes (default)
+    #   cross-app        - only when the focused app changes
+    #   idle             - only after 'idle-threshold-seconds' of no focus change
+    #   off              - never auto-flash (the 'flash-focus' command still works)
+    mode = 'cross-workspace'
+    idle-threshold-seconds = 10
+    color = '0xff00ff00'        # AARRGGBB hex (alpha, red, green, blue)
+    width = 6.0                 # outline thickness, in points
+    pop-distance = 10.0         # how far the outline expands during the pulse, in points
+    duration-ms = 400           # total animation length
+
 # Possible values: (qwerty|dvorak|colemak)
 [key-mapping]
     preset = 'qwerty'

@@ -563,6 +563,43 @@ You shouldn't rely on the order callbacks are called, since it's an implementati
 The callbacks are "recursion resistant", which means that any focus change within the callback won't retrigger the callback.
 Changing the focus within these callbacks is a bad idea anyway, and the way it's handled will probably change in future versions.
 
+[#focus-flash]
+== Focus flash
+
+After a workspace switch or other cross-context jump it can be hard to
+spot where focus just landed. Airlock can briefly draw a pulsing outline
+around the focused window to make this obvious.
+
+It is enabled by default with `mode = 'cross-workspace'`, which means it
+fires on workspace switches but stays quiet during normal in-workspace
+navigation. To turn it off entirely:
+
+[source,toml]
+----
+[focus-flash]
+    enabled = false
+----
+
+The `mode` key controls when the auto-flash fires. Available modes:
+
+* `every` -- on every focus change
+* `cross-workspace` -- only when the focused workspace changes (default)
+* `cross-app` -- only when the focused app changes
+* `idle` -- only after `idle-threshold-seconds` of no focus change
+* `off` -- never auto-flash (the xref:commands.adoc#flash-focus[flash-focus] command still works)
+
+Color, line width, pop distance, and animation duration are all
+configurable -- see the `[focus-flash]` table in the <<default-config>>.
+
+You can also flash on demand by binding the
+xref:commands.adoc#flash-focus[flash-focus] command to a hotkey:
+
+[source,toml]
+----
+[mode.main.binding]
+    alt-shift-f = 'flash-focus'
+----
+
 [#multiple-monitors]
 == Multiple monitors
 
