@@ -225,10 +225,12 @@ extension Workspace {
     let currWs = curr.workspace.name
     // FrozenFocus only stores the windowId; resolve the live Window to read its
     // app bundle id. If the previous window has been closed since the focus
-    // event was captured, the lookup fails — in that case we don't know what
-    // the previous app was, so we treat it as "same as current" to suppress a
-    // spurious cross-app flash (closing a Chrome window and focus moving to
-    // the next Chrome window should not flash in cross-app mode).
+    // event was captured, the lookup fails — we don't know what the previous
+    // app was, so we treat it as "same as current". Trade-off: suppresses
+    // false-positive cross-app flashes (close one Chrome window, land on the
+    // next Chrome window) at the cost of also suppressing the legitimate
+    // case (close the last Slack window, focus jumps to Chrome). False
+    // positives are more annoying than missed flashes, so we accept the loss.
     let currApp = curr.windowOrNil?.app.rawAppBundleId
     let prevApp = prev?.windowId.flatMap { Window.get(byId: $0) }?.app.rawAppBundleId ?? currApp
 
