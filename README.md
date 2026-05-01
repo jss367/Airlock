@@ -2,11 +2,6 @@
 
 Airlock is a workspace and tiling window manager for macOS
 
-Docs:
-- [Airlock Guide](https://github.com/jss367/Airlock)
-- [Airlock Commands](https://github.com/jss367/Airlock)
-- [Airlock Goodies](https://github.com/jss367/Airlock)
-
 ## Key features
 
 - Tiling window manager based on a [tree paradigm](https://github.com/jss367/Airlock)
