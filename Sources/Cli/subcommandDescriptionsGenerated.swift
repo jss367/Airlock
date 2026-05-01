@@ -9,6 +9,7 @@ let subcommandDescriptions = [
     ["  config", "Query Airlock config options"],
     ["  debug-windows", "Interactive command to record Accessibility API debug information to create bug reports"],
     ["  enable", "Temporarily disable window management"],
+    ["  flash-focus", "Flash an outline around the currently focused window"],
     ["  flatten-workspace-tree", "Flatten the tree of the focused workspace"],
     ["  focus-back-and-forth", "Switch between the current and previously focused elements back and forth"],
     ["  focus-monitor", "Focus monitor by relative direction, by order, or by pattern"],
