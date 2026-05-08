@@ -20,17 +20,6 @@ Download the latest release from the [releases page](https://github.com/jss367/A
 
 In multi-monitor setup please make sure that monitors [are properly arranged](https://github.com/jss367/Airlock).
 
-> [!NOTE]
-> By using Airlock, you acknowledge that it's not [notarized](https://developer.apple.com/documentation/security/notarizing_macos_software_before_distribution).
->
-> Notarization is a "security" feature by Apple.
-> You send binaries to Apple, and they either approve them or not.
-> In reality, notarization is about building binaries the way Apple likes it.
->
-> I don't have anything against notarization as a concept.
-> I specifically don't like the way Apple does notarization.
-> I don't have time to deal with Apple.
-
 ## Project status
 
 Very rough
@@ -67,17 +56,6 @@ A notes on how to setup the project, build it, how to run the tests, etc. can be
   The current maintainer doesn't care about ricing.
   Ricing issues are not a priority, and they are mostly ignored.
   The ricing stance can change only with the appearance of more maintainers.
-
-
-## Tip of the day
-
-```bash
-defaults write -g NSWindowShouldDragOnGesture -bool true
-```
-
-Now, you can move windows by holding `ctrl`+`cmd` and dragging any part of the window (not necessarily the window title)
-
-Source: [reddit](https://www.reddit.com/r/MacOS/comments/k6hiwk/keyboard_modifier_to_simplify_click_drag_of/)
 
 ## Related projects
 
