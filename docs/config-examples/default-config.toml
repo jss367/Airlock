@@ -36,6 +36,10 @@ default-root-container-orientation = 'auto'
 # Fallback value (if you omit the key): on-focused-monitor-changed = []
 on-focused-monitor-changed = ['move-mouse monitor-lazy-center']
 
+# Focus the active workspace of another monitor when it is clicked.
+# Disable this if the first click on a control only focuses its window.
+focus-workspace-on-mouse-click = true
+
 # You can effectively turn off macOS "Hide application" (cmd-h) feature by toggling this flag
 # Useful if you don't use this macOS feature, but accidentally hit cmd-h or cmd-option-h key
 automatically-unhide-macos-hidden-apps = false

@@ -28,6 +28,16 @@ final class ConfigTest: XCTestCase {
         assertEquals(errors.descriptions, ["config-version: Must be in [1, 2] range"])
     }
 
+    func testParseFocusWorkspaceOnMouseClick() {
+        let (config, errors) = parseConfig(
+            """
+            focus-workspace-on-mouse-click = false
+            """,
+        )
+        assertEquals(errors, [])
+        assertEquals(config.focusWorkspaceOnMouseClick, false)
+    }
+
     func testDuplicatedPersistentWorkspaces() {
         let (_, errors) = parseConfig(
             """
