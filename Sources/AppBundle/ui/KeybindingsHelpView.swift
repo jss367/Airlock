@@ -35,6 +35,9 @@ private final class KeybindingsWindowController: NSWindowController {
 private struct Shortcut {
     let tokens: [KeyToken]
     let action: String
+    /// Lowercased raw key notation (e.g. "option-shift-h") plus the action, so the filter
+    /// can match by key names ("shift", "cmd", "backspace") even though we render symbols.
+    let searchText: String
 }
 
 private struct KeyToken: Identifiable {
@@ -61,7 +64,7 @@ private struct KeybindingsHelpContent: View {
         guard !query.isEmpty else { return sections }
         return sections.compactMap { section in
             let matches = section.shortcuts.filter { shortcut in
-                shortcut.action.lowercased().contains(query) ||
+                shortcut.searchText.contains(query) ||
                     shortcut.tokens.contains { $0.label.lowercased().contains(query) }
             }
             guard !matches.isEmpty else { return nil }
@@ -251,7 +254,8 @@ private struct KeybindingsHelpContent: View {
                 let binding = entry.value
                 let action = binding.commands.map { $0.args.description }.joined(separator: ", ")
                 let tokens = keyTokens(from: binding.descriptionWithKeyNotation)
-                shortcuts.append(Shortcut(tokens: tokens, action: action))
+                let searchText = "\(binding.descriptionWithKeyNotation) \(action)".lowercased()
+                shortcuts.append(Shortcut(tokens: tokens, action: action, searchText: searchText))
             }
             let title = modeName == mainModeId ? "Global" : modeName
             let accent = modeName == mainModeId ? Color.accentColor : palette[sectionIndex % palette.count]
