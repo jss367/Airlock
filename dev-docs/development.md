@@ -59,7 +59,26 @@ Generated command help comes from `docs/airlock-*.adoc`. Update those sources ra
 
 `./build-release.sh --codesign-identity -` creates a locally signed release archive in `.release/`, including the app, command-line tool, manpages, and shell completions. It requires the documentation and completion dependencies above; `xcbeautify` is optional. Without the signing flag, it expects a certificate named `airlock-codesign-certificate`.
 
-Run release packaging from a clean checkout: it regenerates files and restores tracked files with `git checkout .`. Packaging an archive does not publish a GitHub release. Airlock currently has no published releases or maintained public Homebrew tap.
+Run release packaging from a clean checkout: it regenerates files and restores tracked files with `git checkout .`. Packaging an archive does not publish a GitHub release. Published archives are available on [GitHub Releases](https://github.com/jss367/Airlock/releases). Airlock has no maintained public Homebrew tap.
+
+To publish a release:
+
+1. Fetch the latest `origin/main`. Update `VERSION`, run `./generate.sh`, and commit the version and generated files through a pull request to `main`.
+2. From the clean release commit on `main`, run `./run-tests.sh` and `./build-release.sh --codesign-identity -`. The archive contains universal Apple Silicon/Intel binaries with the release version and Git commit embedded. Ad-hoc signing does not provide Apple notarization; mention this in the release notes.
+3. Create a checksum and publish the archive with the GitHub CLI:
+
+   ```sh
+   release_version="$(cat VERSION)"
+   (cd .release && shasum -a 256 "Airlock-v$release_version.zip" > SHA256SUMS)
+   git tag -a "v$release_version" -m "Airlock $release_version"
+   git push origin "v$release_version"
+   gh release create "v$release_version" \
+       ".release/Airlock-v$release_version.zip" .release/SHA256SUMS \
+       --repo jss367/Airlock --verify-tag --latest \
+       --title "Airlock $release_version" --notes-file /path/to/release-notes.md
+   ```
+
+4. Install the packaged `Airlock.app` and `bin/airlock` together. After launching the app, verify that `airlock --version` reports the release version and the same commit for both client and server. Local `deploy.sh` builds do not regenerate version or commit information, so use the packaged files to install an exact release.
 
 ## Useful tools
 

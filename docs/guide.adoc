@@ -10,7 +10,9 @@ You can skip parts that are obvious.
 [#installation]
 == Installation
 
-Airlock is in early development and currently has no published releases. Build it from a checkout of https://github.com/jss367/Airlock[the repository] using Xcode with Swift 6.2 or later:
+Airlock is in early development. Download the release ZIP from https://github.com/jss367/Airlock/releases/latest[GitHub Releases] for Apple Silicon or Intel Macs running macOS 13 or later. Extract it, move `Airlock.app` to `/Applications`, and copy `bin/airlock` to a directory on your `PATH`, such as `~/.local/bin`. Releases are ad-hoc signed and are not notarized by Apple; macOS may require you to explicitly allow the app before opening it.
+
+Alternatively, build it from a checkout of https://github.com/jss367/Airlock[the repository] using Xcode with Swift 6.2 or later:
 
 [source,sh]
 ----
