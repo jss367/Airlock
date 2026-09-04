@@ -84,6 +84,13 @@ feedback loop.
 
 The field is absent on the initial state sent on connect, since nothing triggered it.
 
+One limitation is worth knowing when you read a trace closely. Airlock coalesces bursts of
+notifications by cancelling the refresh in flight and starting a new one, so a focus change made
+just before a cancellation is reported by the session that follows, under that session's trigger.
+Attribution is therefore approximate within a burst of notifications arriving milliseconds apart.
+It is exact everywhere else, which is what matters for telling apart "an app took the focus" from
+"a callback of mine took it back".
+
 // end::body[]
 
 // =========================================================== Footer
