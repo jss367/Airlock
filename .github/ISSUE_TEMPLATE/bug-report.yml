@@ -1,0 +1,39 @@
+name: Bug report
+description: Report a problem with Airlock.
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened?
+      description: Describe the actual behavior and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Include a minimal configuration if it helps reproduce the problem.
+      placeholder: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+  - type: input
+    id: airlock-version
+    attributes:
+      label: Airlock version or commit
+      description: Run airlock --version, or provide the source commit you built.
+    validations:
+      required: true
+  - type: input
+    id: macos-version
+    attributes:
+      label: macOS version
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: Additional context
+      description: Include relevant configuration, screenshots, or airlock debug-windows output. Remove private information before posting.

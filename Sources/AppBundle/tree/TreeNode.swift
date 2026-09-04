@@ -88,7 +88,7 @@ open class TreeNode: Equatable, AeroAny {
         _parent = newParent
         unboundStacktrace = nil
         if updateMru {
-            // Note: misbehaved apps that abuse real windows as popups (https://github.com/nikitabobko/Airlock/issues/106)
+            // Note: misbehaved apps that abuse real windows as popups (https://github.com/nikitabobko/AeroSpace/issues/106)
             // may still cause issues since the last appeared window is not necessarily the focused one
             markAsMostRecentChild()
         } else {

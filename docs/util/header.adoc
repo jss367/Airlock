@@ -1,5 +1,5 @@
 ====
-Airlock is an i3-like tiling window manager for macOS
+Airlock is a workspace and tiling window manager for macOS with workspace isolation
 
 *Project homepage*: https://github.com/jss367/Airlock
 
@@ -7,5 +7,5 @@ image:assets/icon.png[300,300,float="right"]
 
 * xref:guide.adoc[Airlock Guide]
 * xref:commands.adoc[Airlock Commands]
-* xref:goodies.adoc[Airlock Goodies]
+* xref:goodies.adoc[Airlock Workflow Examples]
 ====

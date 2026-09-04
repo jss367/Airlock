@@ -10,32 +10,30 @@ You can skip parts that are obvious.
 [#installation]
 == Installation
 
-[#manual-installation]
-=== Manual installation
+Airlock is in early development and currently has no published releases. Build it from a checkout of https://github.com/jss367/Airlock[the repository] using Xcode with Swift 6.2 or later:
 
-. Download the latest available zip from https://github.com/jss367/Airlock/releases[releases page]
-. Unpack zip
-. Put unpacked `Airlock-v$VERSION/Airlock.app` to `/Applications`
-. Put unpacked `Airlock-v$VERSION/bin/airlock` anywhere to `$PATH`
-(The step is optional. It is only needed if you want to be able to interact with Airlock from CLI)
-
-If you see this message
-
+[source,sh]
 ----
-"Airlock.app" can't be opened because Apple cannot check it for malicious software.
+./build.sh
 ----
 
-**Option 1** to resolve the problem
+To install and launch the app, run `./deploy.sh`. This stops any running Airlock instance, rebuilds and tests, replaces `/Applications/Airlock.app`, installs `~/.local/bin/airlock`, and launches the app. Add `~/.local/bin` to your `PATH` to use the command-line tool.
 
-```
-xattr -d com.apple.quarantine /Applications/Airlock.app
-```
+Grant Airlock access in *System Settings → Privacy & Security → Accessibility* when prompted. See https://github.com/jss367/Airlock/blob/main/dev-docs/development.md[development instructions] for setup and build options.
 
-**Option 2** to resolve the problem
+[#workspace-isolation]
+== Workspace isolation and navigation
 
-. navigate in Finder to `/Applications/Airlock.app`
-. Right mouse click
-. Open (yes, it's that stupid)
+Airlock keeps app and window switching within the focused workspace. With the default configuration:
+
+* `cmd-tab` and `shift-cmd-tab` cycle applications in the current workspace.
+* `cmd-backtick` and `shift-cmd-backtick` cycle windows of the same app in that workspace.
+* `option-space` opens the quick switcher for the current workspace.
+* `option-1` through `option-9` switch to the corresponding workspace.
+
+Airlock also blocks attempts by apps on other workspaces to steal focus. Use an explicit workspace command or the workspace overview to move between workspaces.
+
+The menu bar provides *Mission Control*, *Show Keybindings*, and *Keyboard Visualizer*. The keyboard visualizer can edit bindings in your configuration. For app launching and summoning, see xref:commands.adoc#app-launcher[app-launcher] and xref:commands.adoc#summon-app[summon-app].
 
 [#configuring-airlock]
 == Configuring Airlock
@@ -341,17 +339,9 @@ This technique eliminates the need for an additional binding for focusing floati
 [#emulation-of-virtual-workspaces]
 == Emulation of virtual workspaces
 
-Native macOS Spaces have a lot of problems
-
-* The animation for Spaces switching is slow
-** You can’t disable animation for Spaces switching (you can only make it slightly faster by turning on `Reduce motion` setting, but it’s suboptimal)
-* You have a limit of Spaces (up to 16 Spaces with one monitor)
-* You can’t create/delete/reorder Space and move windows between Spaces with hotkeys (you can only switch between Spaces with hotkeys)
-* Apple doesn't provide public API to communicate with Spaces (create/delete/reorder/switch Space and move windows between Spaces)
-
-Since Spaces are so hard to deal with, Airlock reimplements Spaces and calls them "Workspaces".
+Airlock manages its own workspaces rather than using native macOS Spaces. This lets it control window placement and switch layouts directly.
 The idea is that if the workspace isn’t active then all of its windows are placed outside the visible area of the screen, in the bottom right or left corner.
-Once you switch back to the workspace, (e.g. by the means of xref:commands.adoc#workspace[workspace] command, or `cmd + tab`) windows are placed back to the visible area of the screen.
+Once you switch back to the workspace, (for example, with the xref:commands.adoc#workspace[workspace] command) windows are placed back to the visible area of the screen.
 
 When you quit the Airlock or when the Airlock detects that it's about to crash, Airlock will place all windows back to the visible area of the screen.
 
@@ -403,48 +393,9 @@ defaults write com.apple.dock expose-group-apps -bool true && killall Dock
 [#a-note-on-displays-have-separate-spaces]
 === A note on '`Displays have separate Spaces`'
 
-There is an observation that macOS works better and more stable if you disable `Displays have separate Spaces`. (It's enabled by default)
-People report all sorts of weird issues related to focus and performance when this setting is enabled:
+Airlock workspaces are separate from native macOS Spaces. When troubleshooting focus or window placement across monitors, include the value of *Displays have separate Spaces* in your bug report, along with your monitor arrangement and macOS version.
 
-* Wrong window may receive focus in multi-monitor setup: https://github.com/jss367/Airlock/issues/101[#101] (Bug in Apple API)
-* Wrong borderless Alacritty window may receive focus in *single monitor* setup: https://github.com/jss367/Airlock/issues/247[#247] (Bug in Apple API)
-* Performance issues: https://github.com/jss367/Airlock/issues/333[#333]
-* macOS randomly switches focus back: https://github.com/jss367/Airlock/issues/289[#289]
-
-When `Displays have separate Spaces` is enabled,
-moving windows between monitors causes windows to move between different Spaces which is not correctly handled by the public APIs Airlock uses,
-apparently, these APIs are not aware about Spaces existence.
-Spaces are just cursed in macOS. The less Spaces you have, the better macOS behaves.
-
-|===
-|    |'`Displays have separate Spaces`' is enabled |'`Displays have separate Spaces`' is disabled
-
-|Is it possible for window to span across several monitors?
-|❌ No. macOS limitation
-|👍 Yes
-
-|Overall stability and performance
-|❌ Weird focus and performance issues may happen (see the list above)
-|👍 Public Apple API are more stable (which in turn affects Airlock stability)
-
-|When the first monitor is in fullscreen
-|👍 Second monitor operates independently
-|❌ Second monitor is unusable black screen
-
-|macOS status bar ...
-|... is displayed on both monitors
-|... is displayed only on main monitor
-|===
-
-If you don't care about macOS native fullscreen in multi-monitor setup (which is itself clunky anyway, since it creates a separate Space instance),
-I recommend disabling `Displays have separate Spaces`.
-
-You can disable the setting by running:
-[source,bash]
-----
-defaults write com.apple.spaces spans-displays -bool true && killall SystemUIServer
-----
-(or in System Settings: `System Settings -> Desktop & Dock -> Displays have separate Spaces`). Logout is required for the setting to take effect.
+Airlock also checks the macOS setting *When switching to an application, switch to a Space that has open windows for the application* at startup. If it is enabled, the app offers to disable it because automatic native Space switching can interfere with Airlock's workspace management. Accepting that prompt restarts the Dock.
 
 == Callbacks
 

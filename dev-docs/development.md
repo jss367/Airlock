@@ -1,86 +1,66 @@
-# Development Notes
+# Developing Airlock
 
-To build/install from sources do the following:
-1. Install dependencies
-2. Create codesign certificate in `Keychain Access.app`
-3. Run one of the entry point scripts to build/install from sources
+## Requirements
 
-If you struggle to build Airlock locally, you can also refer to [builds in GitHub Actions](https://github.com/jss367/Airlock/actions?query=branch%3Amain)
+- macOS 13 or later.
+- Xcode with Swift 6.2 or later. Select the Xcode installation with `xcode-select` if needed; command-line tools alone do not build the app bundle.
+- The repository pins Swift 6.2.4 in [`.swift-version`](../.swift-version) for scripts that use [Swiftly](https://github.com/swiftlang/swiftly). `build.sh` and `deploy.sh` use the selected Xcode for the app and `swift` from your shell for tests and the command-line tool.
 
-## Definitions
+## Build and test
 
-**SPM.** Swift package manager and Swift build tool. In other words, `swift` CLI tool
+From the repository root:
 
-## 1. Install dependencies
+```sh
+./build.sh
+```
 
-1.  Install Xcode from App Store https://apps.apple.com/us/app/xcode/id497799835
-2.  Install [swiftly](https://github.com/swiftlang/swiftly).
-    Swiftly is a Swift toolchain manager that will make sure that you use the same swift version as written in `.swift-version` file.
-    `brew install swiftly`
-3.  If you want to build shell completion, install rust, bash and fish
-    -   Install Rust using rustup. https://www.rust-lang.org/tools/install
-    -   `brew install bash fish`
-4.  If you want to build man pages, install Ruby >= 3.0. I recommend using [rbenv](https://github.com/rbenv/rbenv).
-    -   `rbenv install 3.3.4` (or whatever 3.x version)
-    -   Install asciidoctor using Ruby `bundler`. `cd Airlock && bundler install`
-5.  Install optional `xcbeautify` to make Xcode build logs readable. `brew install xcbeautify`
+This builds `Airlock.xcodeproj` in Release configuration with local ad-hoc signing, runs `swift test`, and builds the `airlock` command-line tool. It does not stop or replace the running app. App build products are in `.xcode-build/Build/Products/Release/`; use `swift build --product airlock -c release --show-bin-path` to find the command-line binary.
 
-## 2. Create codesign certificate
+To run the Swift tests alone:
 
-If you want to run Airlock as App Bundle (Airlock.app) you need to create self-signed certificate that will be used to codesign Airlock.
-Release artifact is built as App Bundle.
-If you only plan to build the debug version of Airlock, you can run it from the terminal and custom certificate is not required.
+```sh
+swift test
+```
 
-1.  Open `Keychain Access.app`
-2.  Menu -> `Keychain Access` -> `Certificate Assistance` -> `Create a Certificate...`
-    -   Name: `airlock-codesign-certificate`
-    -   Identity Type: `Self-Signed Root`
-    -   Certificate Type: `Code Signing`
+## Install and run locally
 
-## 3. Entry point scripts
+```sh
+./deploy.sh
+```
 
-**Debug build**
--   `build-debug.sh` - Build debug build to `.debug` dir by using SPM. (Xcode is not involved)
--   `run-tests.sh` - Run tests.
--   `swiftformat.sh` - Format the code.
--   `run-debug.sh` - Run Airlock.app debug build.
--   `run-cli.sh` - Run `airlock` in CLI. Arguments are forwarded to `airlock` binary.
--   `build-docs.sh` - Build the site and man pages to `.site` and `.man` dirs respectively.
--   `build-shell-completion.sh` - Build shell completion to `.shell-completion`.
-    You can test that the completion works properly by sourcing the file `source ./.shell-completion/zsh/_airlock`
--   `generate.sh` - Regenerate generated project files. `Airlock.xcodeproj` is generated, and some of the source files
-    (the source files have `Generated` suffix in their names).
+This stops the running Airlock app, builds and tests, replaces `/Applications/Airlock.app`, copies the command-line tool to `~/.local/bin/airlock`, and launches the app. Add `~/.local/bin` to your `PATH`. Grant Accessibility access to Airlock when prompted.
 
-**Release build**
--   `build-release.sh` - Build release build to `.release` dir by using Xcode.
--   `install-from-sources.sh` - Build release build from sources and install it as `airlock-dev` brew cask.
-    This script is "work in progress".
-    Use it on your own risk.
+No custom signing certificate is required for `build.sh` or `deploy.sh`.
 
-## IDE
+## Debugging
 
--   You can obviously [open the project in Xcode](#xcode).
--   You can use your editor of choice (Neovim, Vim, Emacs, Sublime, VS Code) by using [sourcekit-lsp LSP](https://github.com/apple/sourcekit-lsp).
-    I only tested it in Neovim
--   AppCode. The initial codebase was written in AppCode and the IDE was pretty solid.
-    But AppCode was unfortunately sunsetted, and it started falling apart.
-    Last time I checked it, it didn't support Swift 5.9 features, and I couldn't make it reliably import the project.
-    RIP
+Open `Airlock.xcodeproj` in Xcode to build or debug the app bundle. Open `Package.swift` to work with the Swift package and its tests.
 
-## Xcode
+The package-based debug scripts are also available:
 
-Even if you use LSP and another text editor, Xcode is still useful to attach debugger (though you can use `lldb` in CLI).
+- `./build-debug.sh`: builds the package and creates `.debug/Airlock-Debug.app` and `.debug/airlock`.
+- `./run-debug.sh`: builds and launches the debug app.
+- `./run-cli.sh <arguments>`: builds and runs the debug command-line tool.
 
-1.  To open the project in Xcode: File -> Open -> Choose `Package.swift` file instead of `Airlock.xcodeproj`.
-    It's better to open `Package.swift`, because SPM project is more lightweight.
-    `Airlock.xcodeproj` is only used in `*release*.sh` build scripts.
-2.  After you opened the project in Xcode.
-    Edit Scheme... -> Options -> Console -> Choose `Terminal`.
-    This way Accessibility permission will be requested from Terminal.
-    If you don't change Console to `Terminal`, Accessibility permission will be requested on every rebuild, because the debug binary is unsigned.
+The debug app uses its own bundle identifier, `dev.airlock.debug`, and needs its own Accessibility permission. Avoid running the debug app and installed app at the same time when testing window management.
 
-## Tips
+## Documentation and generated files
 
-- Use built-in "Accessibility Inspector.app" to inspect accessibility properties of windows
-- Use [DeskPad](https://github.com/Stengo/DeskPad) or [BetterDisplay 2](https://github.com/waydabber/BetterDisplay) to emulate several monitors
-- You can use `script/clean-project.sh` to clean the project when something goes wrong.
+- `./build-docs.sh`: renders the AsciiDoc sources into `.site/` HTML and `.man/` manpages. Requires Ruby 3 or later and Bundler; dependencies are in [`Gemfile`](../Gemfile).
+- `./build-shell-completion.sh`: generates shell completions in `.shell-completion/`. Requires Rust/Cargo, a modern Bash, and Fish.
+- `./generate.sh`: regenerates the Xcode project, command help, version information, and shell parser. Use the flags in the script to limit regeneration when appropriate.
+- `./format.sh`: formats Swift source.
+
+Generated command help comes from `docs/airlock-*.adoc`. Update those sources rather than editing generated Swift help directly.
+
+## Continuous integration and release packaging
+
+[GitHub Actions](https://github.com/jss367/Airlock/actions/workflows/build.yml) runs debug and release builds. The full `./run-tests.sh` also checks formatting, generated files, command-line smoke tests, and a clean Git working tree. Commit your changes before running it; it is stricter than `./build.sh`.
+
+`./build-release.sh --codesign-identity -` creates a locally signed release archive in `.release/`, including the app, command-line tool, manpages, and shell completions. It requires the documentation and completion dependencies above; `xcbeautify` is optional. Without the signing flag, it expects a certificate named `airlock-codesign-certificate`.
+
+Run release packaging from a clean checkout: it regenerates files and restores tracked files with `git checkout .`. Packaging an archive does not publish a GitHub release. Airlock currently has no published releases or maintained public Homebrew tap.
+
+## Useful tools
+
+Use Xcode's Accessibility Inspector to inspect window accessibility properties. See [architecture notes](architecture.md) for the source layout and command implementation checklist.

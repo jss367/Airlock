@@ -5,6 +5,13 @@ include::util/header.adoc[]
 
 Commands documentation is also available as manpages.
 
+== app-launcher
+----
+include::airlock-app-launcher.adoc[tags=synopsis]
+----
+include::airlock-app-launcher.adoc[tags=purpose]
+include::airlock-app-launcher.adoc[tags=body]
+
 == balance-sizes
 ----
 include::airlock-balance-sizes.adoc[tags=synopsis]
@@ -112,6 +119,13 @@ include::airlock-macos-native-minimize.adoc[tags=synopsis]
 include::airlock-macos-native-minimize.adoc[tags=purpose]
 include::airlock-macos-native-minimize.adoc[tags=body]
 
+== mission-control
+----
+include::airlock-mission-control.adoc[tags=synopsis]
+----
+include::airlock-mission-control.adoc[tags=purpose]
+include::airlock-mission-control.adoc[tags=body]
+
 == mode
 ----
 include::airlock-mode.adoc[tags=synopsis]
@@ -182,6 +196,13 @@ include::airlock-swap.adoc[tags=synopsis]
 ----
 include::airlock-swap.adoc[tags=purpose]
 include::airlock-swap.adoc[tags=body]
+
+== summon-app
+----
+include::airlock-summon-app.adoc[tags=synopsis]
+----
+include::airlock-summon-app.adoc[tags=purpose]
+include::airlock-summon-app.adoc[tags=body]
 
 == summon-workspace
 ----

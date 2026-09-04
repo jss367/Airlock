@@ -1,0 +1,21 @@
+name: Feature request
+description: Suggest a feature or improvement for Airlock.
+body:
+  - type: textarea
+    id: workflow
+    attributes:
+      label: What workflow would this improve?
+      description: Describe the problem and how you handle it today.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Describe what you would like Airlock to do. Include configuration or command examples if useful.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered

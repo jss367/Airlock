@@ -160,7 +160,7 @@ func parseAfterLoginCommand(_ raw: TOMLValueConvertible, _ backtrace: TomlBacktr
     if let array = raw.array, array.count == 0 {
         return .success([])
     }
-    let msg = "after-login-command is deprecated since Airlock 0.19.0. https://github.com/nikitabobko/Airlock/issues/1482"
+    let msg = "after-login-command is not supported. Use after-startup-command instead. Upstream rationale: https://github.com/nikitabobko/AeroSpace/issues/1482"
     return .failure(.semantic(backtrace, msg))
 }
 
@@ -269,7 +269,7 @@ func parseIndentForNestedContainersWithTheSameOrientation(
     _ _: TOMLValueConvertible,
     _ backtrace: TomlBacktrace,
 ) -> ParsedToml<Void> {
-    let msg = "Deprecated. Please drop it from the config. See https://github.com/nikitabobko/Airlock/issues/96"
+    let msg = "Deprecated. Please drop it from the config. Upstream rationale: https://github.com/nikitabobko/AeroSpace/issues/96"
     return .failure(.semantic(backtrace, msg))
 }
 

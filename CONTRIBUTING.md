@@ -1,119 +1,31 @@
-# Contributing
+# Contributing to Airlock
 
-## Users cannot create GitHub Issues directly
+## Report bugs and suggest features
 
-Airlock project doesn't accept Issues directly - we ask you to create a [Discussion](https://github.com/jss367/Airlock/discussions) first.
+Open an [issue](https://github.com/jss367/Airlock/issues/new/choose). Search [existing issues](https://github.com/jss367/Airlock/issues) first, and add relevant details to an existing report when possible.
 
-The submitted Issues are often either obvious duplicates, environmental problems, or configuration errors by the users themselves.
-For a hobby project, I don't have enough time and energy to process every such submitted Issue.
+For bugs, include:
 
-As an alternative, you can start a Discussion on [GitHub discussions](https://github.com/jss367/Airlock/discussions) forum.
-Any Discussion which clearly identifies a problem and can be confirmed or reproduced will be converted to an Issue by maintainers.
+- What you expected and what actually happened.
+- Steps to reproduce, ideally with a minimal configuration.
+- Your Airlock version (`airlock --version`) or source commit, and macOS version.
+- Relevant configuration, screenshots, or a short recording.
+- `airlock debug-windows` output when the problem concerns a particular window.
 
-It's users' responsibility to minimize their bugs as much as possible.
-All users play a part in bugs reproduction.
+Check diagnostic output and configuration for private information before posting them.
 
-In general the flow is the following:
-- Discussions are here to kick-off the discussion and identify what the actionable item exactly is
-- Issues are created later. Issues are well-formed, clear and actionable tasks
+For feature requests, describe the workflow you want to support, how you handle it now, and the behavior you would like Airlock to provide.
 
-This pattern makes it easier for maintainers or contributors to find issues to work on since _almost every_ Issue is ready to be worked on.
+## Submit pull requests
 
-## Submit bugs and feature ideas
+Small fixes and documentation improvements can go straight to a pull request. For larger changes, start with an issue describing the problem, proposed behavior, and any configuration or command changes so the design can be discussed before implementation.
 
-Submit bugs to https://github.com/jss367/Airlock/discussions/categories/potential-bugs
-Submit feature ideas to https://github.com/jss367/Airlock/discussions/categories/feature-ideas
+- Keep changes focused and explain the problem and resulting behavior in the pull request description.
+- Link related issues. Use `Fixes #<number>` when the change resolves an issue.
+- Include validation results. Run `./build.sh` for code changes; check links and render documentation for documentation changes. The fuller continuous integration checks are described in the [development instructions](dev-docs/development.md).
+- Update documentation and examples when behavior changes.
+- Open pull requests ready for review unless you want early feedback on unfinished work.
 
-Rules:
-* Search for duplicates (in GitHub Issues and Discussions) before creating a new discussion
-* Upvote for issues/discussions that you find useful
+See the [development instructions](dev-docs/development.md) for building and testing, and the [architecture notes](dev-docs/architecture.md) for a codebase overview.
 
-**Consider including in bug reports**
-
-* `airlock debug-windows` output, if the problem is about handling some windows
-* Screenshots of problematic windows
-* Videos of problematic windows
-* What did you try to resolve the issue?
-* Your config
-* Airlock version
-* macOS version
-
-**Consider including in feature request**
-
-* Use cases!
-* Did I mention use cases?
-* Alternative approaches
-* Links to docs of similar features in other window managers that you know
-* Synopsis, if you suggest a new command
-* Mental model description
-
-## Discuss issues/discussions
-
-One of the most useful thing you can do is to discuss issues/discussions.
-
-Imagine that you were assigned to fix the issue.
-Try to suggest the best approach and design on how to fix the issue.
-Suggest the synopsis/config format, reason in written form what is good about it, what is bad about it, what are the alternatives, etc.
-Basically, see the "Prior discussion" section in [Submit Pull Requests](#submit-pull-requests).
-
-If you have something to contribute to the conversation. Do it!
-
-Please keep the conversation to the point. Discuss one issue at a time, crossreference other issues
-
-You can take a look at the following issues:
-
-* Most voted issues: https://github.com/jss367/Airlock/issues?q=is%3Aissue+is%3Aopen+sort%3Areactions-%2B1-desc
-* Sometimes conversations happen on old issues that aren’t yet closed. See https://github.com/jss367/Airlock/issues?q=is%3Aissue+is%3Aopen+sort%3Aupdated-desc
-* Issues that are unclear on how to fix, or issues that require design of the interface (CLI or config interface) are tagged with `design-needed` tag https://github.com/jss367/Airlock/issues?q=is%3Aissue+is%3Aopen+label%3Adesign-needed
-
-## Submit Pull Requests
-
-Small and trivial improvements can be submitted without any discussion.
-
-**Prior discussion**. For non-trivial changes (such as user visible changes), it's always better to ask for prior approval and discuss what you want to do before doing it.
-
-Please create a new discussion and describe you want to do.
-
-Consider including
-
-* What users will observe after your change?
-* Feature interaction with existing features or potential future features
-* What use cases does it cover
-* What is the proposed syntax for the config
-* What is the proposed synopsis of CLI command
-* How you think it should be implemented (if you can describe it)
-* etc.
-
-Discussing that you want to do something doesn't put any obligations on you. If you don't want to start the discussion just because you're afraid that you won't do it. Don't be afraid!
-
-**Commit hygiene**. Each submitted commit must be atomic change (a Pull Request may contain several commits). Don't introduce new functional changes together with refactorings in the same commit.
-
-Similarly, when implementing features and bug fixes, please stick to the structure of the codebase as much as possible and do not take this as an opportunity to do some "refactoring along the way".
-
-A good commit message also mentions the motivation of the change (the commit describes what, why and how)
-
-**License Agreement**. By contributing changes to this repository, you agree to license your contributions under the MIT license.
-
-Maintainers can merge your pull request with arbitrary modifications.
-
-**Pull request merge**. It cannot be guaranteed that your pull request will be merged even after the discussion.
-Be ready that your pull request might be rejected because the implementation isn't good, or the approach is incorrect.
-
-The prior discussion is here for you to minimize the risk of rejection.
-
-## Spread the word
-
-Do you like the project? Does Airlock finally fix your problems with windows management on macOS? Good to hear it!
-
-* Spread the word in social networks! (Don't forget to share the link :) )
-* Talk about Airlock to your colleagues and friends
-* Write a blogpost about your workflows
-* Record a YouTube video
-
-## Share your workflow and tips
-
-Submit your tips to the Goodies page. The source code of the page can be found in `./docs` directory
-
-## Support the project financially
-
-Supporting the project financially counts as a contribution.
+By contributing, you agree to license your contributions under the repository's [MIT License](LICENSE.txt).
