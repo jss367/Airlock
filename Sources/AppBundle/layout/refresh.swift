@@ -36,16 +36,17 @@ func runRefreshSessionBlocking(
             refreshModel(focusSyncedFromMacOs: focusSyncedFromMacOs)
             try await refresh()
             gcMonitors()
-            // Both steps above can move focus themselves: refresh() garbage-collects the focused
-            // window and picks a replacement, gcMonitors() rearranges workspaces across monitors.
-            // Report that here, while this session is still the honest cause, rather than leaving
-            // it for whichever session runs next to claim.
-            refreshModel()
 
             updateTrayText()
             SecureInputPanel.shared.refresh()
             try await normalizeLayoutReason()
             if shouldLayoutWorkspaces { try await layoutWorkspaces() }
+            // Everything above can move focus on its own: refresh() garbage-collects the focused
+            // window and picks a replacement, gcMonitors() rearranges workspaces across monitors,
+            // normalizeLayoutReason() binds a minimized window to a container with no workspace.
+            // One check here reports all of it while this session is still the honest cause,
+            // instead of leaving it for whichever session runs next to claim.
+            refreshModel()
         }
     }
 }
