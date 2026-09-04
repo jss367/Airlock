@@ -136,10 +136,11 @@ extension Workspace {
 
 @MainActor private var onFocusChangedRecursionGuard = false
 // Should be called in refreshSession
-@MainActor func checkOnFocusChangedCallbacks() {
-    // Consume unconditionally: the flag belongs to the focus change that updateFocusCache just
-    // applied, and must not leak into a later change made by whatever this session goes on to run.
-    let trigger = consumeFocusChangeTrigger()
+@MainActor func checkOnFocusChangedCallbacks(focusSyncedFromMacOs: Bool) {
+    let trigger = focusChangeTrigger(
+        sessionTrigger: refreshSessionEvent?.trigger,
+        syncedFromMacOs: focusSyncedFromMacOs,
+    )
     if refreshSessionEvent?.isStartup == true {
         return
     }

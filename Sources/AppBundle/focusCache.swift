@@ -2,18 +2,6 @@ import Common
 
 @MainActor private var lastKnownNativeFocusedWindowId: UInt32? = nil
 
-/// Set when the focus change about to be reported came from macOS (an app activated itself, the user
-/// clicked something) rather than from anything Airlock ran. Consumed by `checkOnFocusChangedCallbacks`,
-/// which always runs immediately after `updateFocusCache` in the same refresh session.
-@MainActor private var focusSyncedFromMacOs = false
-
-/// Reads and clears `focusSyncedFromMacOs`, returning the `trigger` to report for this focus change.
-@MainActor func consumeFocusChangeTrigger() -> String? {
-    let syncedFromMacOs = focusSyncedFromMacOs
-    focusSyncedFromMacOs = false
-    return focusChangeTrigger(sessionTrigger: refreshSessionEvent?.trigger, syncedFromMacOs: syncedFromMacOs)
-}
-
 /// A refresh session syncs focus from macOS before it runs anything, so the session's own trigger
 /// would blame whatever woke Airlock up — including a query command that cannot move focus at all.
 /// Say plainly that macOS moved the focus, and keep the session as the "noticed during" qualifier.
@@ -25,13 +13,18 @@ func focusChangeTrigger(sessionTrigger: String?, syncedFromMacOs: Bool) -> Strin
 /// The data should flow (from nativeFocused to focused) and
 ///                      (from nativeFocused to lastKnownNativeFocusedWindowId)
 /// Alternative names: takeFocusFromMacOs, syncFocusFromMacOs
-@MainActor func updateFocusCache(_ nativeFocused: Window?) {
+/// Returns whether it took a focus change from macOS, which the caller passes to `refreshModel` so
+/// the change is reported as macOS's rather than the session's. Deliberately a return value and not
+/// stored state: an optimistic refresh can be cancelled between here and the report, and a stored
+/// marker would survive the cancellation to mislabel whatever the next session reports.
+@MainActor func updateFocusCache(_ nativeFocused: Window?) -> Bool {
     if nativeFocused?.parent is MacosPopupWindowsContainer {
-        return
+        return false
     }
+    var syncedFromMacOs = false
     if nativeFocused?.windowId != lastKnownNativeFocusedWindowId {
         if shouldAllowFocusChange(to: nativeFocused) {
-            focusSyncedFromMacOs = true
+            syncedFromMacOs = true
             _ = nativeFocused?.focusWindow()
             lastKnownNativeFocusedWindowId = nativeFocused?.windowId
         } else {
@@ -39,8 +32,9 @@ func focusChangeTrigger(sessionTrigger: String?, syncedFromMacOs: Bool) -> Strin
             if let currentWindow = focus.windowOrNil {
                 currentWindow.nativeFocus()
             }
-            return
+            return false
         }
     }
     nativeFocused?.macAppUnsafe.lastNativeFocusedWindowId = nativeFocused?.windowId
+    return syncedFromMacOs
 }

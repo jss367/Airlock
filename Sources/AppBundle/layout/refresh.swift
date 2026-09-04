@@ -29,11 +29,11 @@ func runRefreshSessionBlocking(
         try await $_isStartup.withValue(event.isStartup) {
             let nativeFocused = try await getNativeFocusedWindow()
             if let nativeFocused { try await debugWindowsIfRecording(nativeFocused) }
-            updateFocusCache(nativeFocused)
+            let focusSyncedFromMacOs = updateFocusCache(nativeFocused)
 
             if shouldLayoutWorkspaces && optimisticallyPreLayoutWorkspaces { try await layoutWorkspaces() }
 
-            refreshModel()
+            refreshModel(focusSyncedFromMacOs: focusSyncedFromMacOs)
             try await refresh()
             gcMonitors()
 
@@ -59,10 +59,10 @@ func runLightSession<T>(
         try await $_isStartup.withValue(event.isStartup) {
             let nativeFocused = try await getNativeFocusedWindow()
             if let nativeFocused { try await debugWindowsIfRecording(nativeFocused) }
-            updateFocusCache(nativeFocused)
+            let focusSyncedFromMacOs = updateFocusCache(nativeFocused)
             let focusBefore = focus.windowOrNil
 
-            refreshModel()
+            refreshModel(focusSyncedFromMacOs: focusSyncedFromMacOs)
             let result = try await body()
             refreshModel()
 
@@ -101,9 +101,9 @@ struct RunSessionGuard: Sendable {
 }
 
 @MainActor
-func refreshModel() {
+func refreshModel(focusSyncedFromMacOs: Bool = false) {
     Workspace.garbageCollectUnusedWorkspaces()
-    checkOnFocusChangedCallbacks()
+    checkOnFocusChangedCallbacks(focusSyncedFromMacOs: focusSyncedFromMacOs)
     normalizeContainers()
 }
 
