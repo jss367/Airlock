@@ -137,6 +137,9 @@ extension Workspace {
 @MainActor private var onFocusChangedRecursionGuard = false
 // Should be called in refreshSession
 @MainActor func checkOnFocusChangedCallbacks() {
+    // Consume unconditionally: the flag belongs to the focus change that updateFocusCache just
+    // applied, and must not leak into a later change made by whatever this session goes on to run.
+    let trigger = consumeFocusChangeTrigger()
     if refreshSessionEvent?.isStartup == true {
         return
     }
@@ -163,21 +166,21 @@ extension Workspace {
     defer { onFocusChangedRecursionGuard = false }
     if hasFocusChanged {
         maybeAutoFlash(prev: _prevFocus, curr: focus)
-        onFocusChanged(focus)
+        onFocusChanged(focus, trigger)
     }
     if let _prevFocusedWorkspaceName, hasFocusedWorkspaceChanged {
-        onWorkspaceChanged(_prevFocusedWorkspaceName, frozenFocus.workspaceName)
+        onWorkspaceChanged(_prevFocusedWorkspaceName, frozenFocus.workspaceName, trigger)
     }
     if hasFocusedMonitorChanged {
-        onFocusedMonitorChanged(focus)
+        onFocusedMonitorChanged(focus, trigger)
     }
 }
 
-@MainActor private func onFocusedMonitorChanged(_ focus: LiveFocus) {
+@MainActor private func onFocusedMonitorChanged(_ focus: LiveFocus, _ trigger: String?) {
     broadcastEvent(.focusedMonitorChanged(
         workspace: focus.workspace.name,
         monitorId_oneBased: focus.workspace.workspaceMonitor.monitorId_oneBased ?? 0,
-        trigger: refreshSessionEvent?.trigger,
+        trigger: trigger,
     ))
     if config.onFocusedMonitorChanged.isEmpty { return }
     guard let token: RunSessionGuard = .isServerEnabled else { return }
@@ -187,11 +190,11 @@ extension Workspace {
         }
     }
 }
-@MainActor private func onFocusChanged(_ focus: LiveFocus) {
+@MainActor private func onFocusChanged(_ focus: LiveFocus, _ trigger: String?) {
     broadcastEvent(.focusChanged(
         windowId: focus.windowOrNil?.windowId,
         workspace: focus.workspace.name,
-        trigger: refreshSessionEvent?.trigger,
+        trigger: trigger,
     ))
     if config.onFocusChanged.isEmpty { return }
     guard let token: RunSessionGuard = .isServerEnabled else { return }
@@ -202,11 +205,11 @@ extension Workspace {
     }
 }
 
-@MainActor private func onWorkspaceChanged(_ oldWorkspace: String, _ newWorkspace: String) {
+@MainActor private func onWorkspaceChanged(_ oldWorkspace: String, _ newWorkspace: String, _ trigger: String?) {
     broadcastEvent(.workspaceChanged(
         workspace: newWorkspace,
         prevWorkspace: oldWorkspace,
-        trigger: refreshSessionEvent?.trigger,
+        trigger: trigger,
     ))
 }
 

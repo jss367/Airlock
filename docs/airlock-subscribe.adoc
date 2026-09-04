@@ -60,7 +60,7 @@ Events are output as JSON lines (one JSON object per line):
 {"_event":"focused-workspace-changed","prevWorkspace":"M","workspace":"M"}
 {"_event":"mode-changed","mode":"main"}
 {"_event":"focus-changed","windowId":28218,"workspace":"M"}
-{"_event":"focus-changed","trigger":"ax(kAXFocusedWindowChangedNotification)","windowId":31904,"workspace":"1"}
+{"_event":"focus-changed","trigger":"macos-focus-sync via ax(kAXFocusedWindowChangedNotification)","windowId":31904,"workspace":"1"}
 ----
 
 === The trigger field
@@ -69,6 +69,9 @@ The three focus events carry a `trigger`: what made Airlock re-evaluate focus. I
 stream into a causal trace, which is what you want when focus moves on its own and you need to know
 who moved it. Values look like:
 
+`macos-focus-sync via <trigger>`:: macOS moved the focus and Airlock synced it in — an app activated
+itself, or the user clicked. The qualifier after `via` is only which session noticed. This is what
+focus stealing looks like from the outside.
 `hotkey-binding`:: A keybinding from the config.
 `socket-server(focus)`:: A CLI command; the name in parentheses is the command.
 `global-observer(NSWorkspaceDidActivateApplicationNotification)`:: A macOS notification; the name in parentheses is the notification.

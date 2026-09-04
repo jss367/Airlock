@@ -59,4 +59,23 @@ final class RefreshSessionEventTriggerTest: XCTestCase {
             #"{"_event":"focus-changed","windowId":42,"workspace":"1"}"#,
         )
     }
+
+    /// A refresh session syncs focus from macOS before it runs anything, so a focus change that
+    /// arrived on its own must not be blamed on the session — least of all a query command.
+    func testMacOsFocusSyncIsNotAttributedToTheSession() {
+        guard case .cmd(let command) = parseCommand("list-windows --all") else {
+            XCTFail("failed to parse the command"); return
+        }
+        let session = RefreshSessionEvent.socketServer(command.args).trigger
+        XCTAssertEqual(
+            focusChangeTrigger(sessionTrigger: session, syncedFromMacOs: true),
+            "macos-focus-sync via socket-server(list-windows)",
+        )
+        XCTAssertEqual(
+            focusChangeTrigger(sessionTrigger: session, syncedFromMacOs: false),
+            "socket-server(list-windows)",
+        )
+        XCTAssertEqual(focusChangeTrigger(sessionTrigger: nil, syncedFromMacOs: true), "macos-focus-sync")
+        XCTAssertNil(focusChangeTrigger(sessionTrigger: nil, syncedFromMacOs: false))
+    }
 }
