@@ -5,6 +5,7 @@ import Foundation
 enum ConfigWriterError: LocalizedError {
     case ambiguousConfig([URL])
     case writeError(String)
+    case unrepresentableAppName(String)
 
     var errorDescription: String? {
         switch self {
@@ -12,11 +13,14 @@ enum ConfigWriterError: LocalizedError {
                 return "Multiple config files found: \(urls.map(\.path).joined(separator: ", "))"
             case .writeError(let msg):
                 return "Failed to write config: \(msg)"
+            case .unrepresentableAppName(let name):
+                return "Cannot bind '\(name)': app names containing both ' and \" are not supported"
         }
     }
 }
 
 func addBinding(key: String, appName: String, modifierPrefix: NSEvent.ModifierFlags) throws {
+    guard canRepresentAppName(appName) else { throw ConfigWriterError.unrepresentableAppName(appName) }
     let (url, lines) = try loadOrCreateConfig()
     let content = addBindingToLines(lines, key: key, appName: appName, modifierPrefix: modifierPrefix)
     let output = content.joined(separator: "\n")
@@ -28,8 +32,7 @@ func addBindingToLines(_ lines: [String], key: String, appName: String, modifier
     var content = lines
 
     let modStr = modifierPrefix.toString()
-    let escapedAppName = appName.replacingOccurrences(of: "'", with: "'\\''")
-    let bindingLine = "    \(modStr)-\(key) = 'summon-app \"\(escapedAppName)\"'"
+    let bindingLine = "    \(modStr)-\(key) = \(summonAppTomlValue(appName: appName))"
 
     // Find [mode.main.binding] section
     if let sectionIndex = content.firstIndex(where: { $0.trimmingCharacters(in: CharacterSet.whitespaces) == "[mode.main.binding]" }) {
@@ -99,6 +102,34 @@ func removeBinding(key: String, modifierPrefix: NSEvent.ModifierFlags) throws {
 
     let output = lines.joined(separator: "\n")
     try output.write(to: url, atomically: true, encoding: .utf8)
+}
+
+/// `splitArgs()` has no escape sequences, so an app name containing both quote characters
+/// cannot be written as a single argument.
+func canRepresentAppName(_ appName: String) -> Bool {
+    !(appName.contains("'") && appName.contains("\""))
+}
+
+/// Renders `summon-app <appName>` as a TOML string value that survives both the TOML
+/// parser and `splitArgs()`.
+///
+/// Neither layer supports escaping inside single quotes: a TOML literal string
+/// (`'...'`) cannot contain `'` at all, and `splitArgs()` treats the first matching
+/// quote as the end of the argument. So each layer picks the quote character its
+/// content does not use.
+///
+/// Requires `canRepresentAppName(appName)`.
+func summonAppTomlValue(appName: String) -> String {
+    let argQuote = appName.contains("\"") ? "'" : "\""
+    let command = "summon-app \(argQuote)\(appName)\(argQuote)"
+    if !command.contains("'") {
+        return "'\(command)'" // TOML literal string, no escaping needed
+    }
+    // TOML basic string
+    let escaped = command
+        .replacingOccurrences(of: "\\", with: "\\\\")
+        .replacingOccurrences(of: "\"", with: "\\\"")
+    return "\"\(escaped)\""
 }
 
 // MARK: - Binding Matching
