@@ -103,19 +103,40 @@ final class ConfigWriterTest: XCTestCase {
         assertEquals((binding?.commands.first?.args as? SummonAppCmdArgs)?.appName.val, "Spotify")
     }
 
-    func testBindingLineWithQuoteInAppName() {
-        // Exercise addBindingToLines with a single-quote in the app name
-        let lines = [
-            "[mode.main.binding]",
-        ]
+    func testBindingLineWithApostropheInAppName() {
+        assertBindingRoundTrips(appName: "Test's App")
+    }
 
-        let result = addBindingToLines(lines, key: "t", appName: "Test's App", modifierPrefix: .option)
+    func testBindingLineWithDoubleQuoteInAppName() {
+        assertBindingRoundTrips(appName: "Say \"Hi\"")
+    }
 
-        // The output line should contain the escaped app name
-        let bindingLine = result.first { $0.contains("option-t") }
-        assertNotNil(bindingLine)
-        // The single quote should be escaped for shell: ' becomes '\''
-        XCTAssertTrue(bindingLine!.contains("Test'\\''s App"), "Expected escaped quote in: \(bindingLine!)")
+    func testBindingLineWithBackslashInAppName() {
+        assertBindingRoundTrips(appName: "Back\\slash's App")
+    }
+
+    func testBindingLineWithPlainAppName() {
+        assertBindingRoundTrips(appName: "Google Chrome")
+    }
+
+    func testAppNameWithBothQuoteCharactersIsRejected() {
+        // splitArgs() has no escape sequences, so such a name cannot be written at all.
+        XCTAssertFalse(canRepresentAppName("It's a \"Test\""))
+        XCTAssertTrue(canRepresentAppName("Test's App"))
+        XCTAssertTrue(canRepresentAppName("Say \"Hi\""))
+    }
+
+    /// Writes a binding for `appName`, then parses the resulting config and checks that
+    /// the config is valid and the app name survived unchanged.
+    private func assertBindingRoundTrips(appName: String) {
+        let result = addBindingToLines(["[mode.main.binding]"], key: "t", appName: appName, modifierPrefix: .option)
+
+        let (config, errors) = parseConfig(result.joined(separator: "\n"))
+        assertEquals(errors, [], additionalMsg: "Config with app name \(appName) failed to parse:\n\(result.joined(separator: "\n"))")
+
+        let binding = config.modes[mainModeId]?.bindings[HotkeyBinding(.option, .t, []).descriptionWithKeyCode]
+        assertNotNil(binding)
+        assertEquals((binding?.commands.first?.args as? SummonAppCmdArgs)?.appName.val, appName)
     }
 
     // MARK: - Config parsing round-trip with summon-app
