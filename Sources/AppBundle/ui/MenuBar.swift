@@ -6,6 +6,14 @@ import SwiftUI
 @MainActor
 public func menuBar(viewModel: TrayMenuModel) -> some Scene {
     MenuBarExtra {
+        Button("About \(airlockAppName)") {
+            NSApp.activate(ignoringOtherApps: true)
+            NSApp.orderFrontStandardAboutPanel(options: [
+                .applicationName: airlockAppName,
+                .applicationVersion: airlockAppVersion,
+                .version: gitShortHash,
+            ])
+        }
         let shortIdentification = "\(airlockAppName) v\(airlockAppVersion) \(gitShortHash)"
         let identification      = "\(airlockAppName) v\(airlockAppVersion) \(gitHash)"
         Text(shortIdentification)
