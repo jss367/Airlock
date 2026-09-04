@@ -78,7 +78,7 @@ focus stealing looks like from the outside.
 `ax(kAXFocusedWindowChangedNotification)`:: An accessibility notification from an app.
 `global-observer-left-mouse-up`:: A mouse click.
 `startup`, `config-auto-reload`, `menu-bar-button`, `reset-manipulated-with-mouse`:: Self-explanatory.
-`on-focus-changed`, `on-focused-monitor-changed`, `on-mode-changed`:: A callback from the config, which
+`on-window-detected`, `on-focus-changed`, `on-focused-monitor-changed`, `on-mode-changed`:: A callback from the config, which
 means the change was caused by an earlier change. Repeating pairs of these are the signature of a
 feedback loop.
 

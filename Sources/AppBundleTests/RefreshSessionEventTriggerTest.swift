@@ -31,6 +31,7 @@ final class RefreshSessionEventTriggerTest: XCTestCase {
         let triggers: [RefreshSessionEvent] = [
             .configAutoReload, .globalObserverLeftMouseUp, .menuBarButton, .hotkeyBinding, .startup,
             .resetManipulatedWithMouse, .onFocusedMonitorChanged, .onFocusChanged, .onModeChanged,
+            .onWindowDetected,
         ]
         for event in triggers {
             let trigger = event.trigger
