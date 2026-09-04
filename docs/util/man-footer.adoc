@@ -1,20 +1,19 @@
 == Resources
 
 *Project homepage:* https://github.com/jss367/Airlock +
-*Guide:* https://github.com/jss367/Airlock +
+*Guide:* https://github.com/jss367/Airlock/blob/main/docs/guide.adoc +
 
-== BUGS
+== Bugs
 
-Bugs can be reported to https://github.com/jss367/Airlock/discussions/categories/potential-bugs
-
-Maintainers will move verified bugs to https://github.com/jss367/Airlock/issues
+Report bugs and request features at https://github.com/jss367/Airlock/issues.
+Include your Airlock version or source commit, macOS version, and steps to reproduce.
 
 == License
 
-Copyright (C) 2023 Nikita Bobko +
-Free use of this software is granted under the terms of the MIT License +
-You can find the full text of Airlock license and its dependencies in the 'legal' directory of the distributed zip archive.
+Airlock is distributed under the MIT License. +
+Copyright (C) 2023 Nikita Bobko (original AeroSpace code). +
+See https://github.com/jss367/Airlock/blob/main/LICENSE.txt for the full license and https://github.com/jss367/Airlock/tree/main/legal for dependency licenses.
 
-== AUTHOR
+== Authors
 
-Nikita Bobko and contributors
+Airlock contributors, building on AeroSpace by Nikita Bobko and contributors.

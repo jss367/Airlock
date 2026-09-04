@@ -1,11 +1,10 @@
-= Airlock Goodies
+= Airlock Workflow Examples
 include::util/site-attributes.adoc[]
 
 include::util/header.adoc[]
 
-Do you have a cool automatization, Airlock integration, or workflow?
-Feel free to open an issue or pull request to add it to this list!
-The source code of the page can be found in the `./docs` directory.
+These examples use Airlock commands and macOS tools. Adapt app names, paths, and shortcuts to your setup.
+Share improvements through https://github.com/jss367/Airlock/issues[issues] or pull requests.
 
 [#move-by-dragging-any-part-of-the-window]
 == Move windows by dragging any part of the window
@@ -49,13 +48,6 @@ after-startup-command = [
 ]
 ----
 
-[#raycast-extension]
-== Airlock Raycast extension
-
-There is a third party Raycast extension for Airlock. https://www.raycast.com/limonkufu/airlock
-
-If you struggle remembering shortcuts, it's useful to search for commands until they become muscle memory.
-
 [#disable-open-animations]
 == Disable windows opening animations
 
@@ -78,89 +70,12 @@ airlock workspace "$(airlock list-workspaces --monitor mouse --visible)" && airl
 airlock workspace "$(airlock list-workspaces --monitor mouse --visible)" && airlock workspace prev
 ----
 
-Use the software of your choice to assign trackpad gestures to the respective commands.
-Here are a few third party options in alphabetical order:
-
-* https://github.com/acsandmann/airlock-swipe
-* link:https://folivora.ai/[BetterTouchTool] can assign arbitrary commands to trackpad gestures.
-Beware that you might need to specify full path to airlock executable https://community.folivora.ai/t/how-to-execute-terminal-command-to-switch-workspaces-with-airlock/35914
-* https://github.com/MediosZ/SwipeAirlock
-
-CAUTION: Make sure that you trust project authors before running the distributed binaries.
-Alternatively, inspect the source code, and build it yourself.
-
-[#show-airlock-workspaces-in-sketchybar]
-== Show Airlock workspaces in Sketchybar
-
-You can integrate Airlock workspace indicators with link:https://github.com/FelixKratz/SketchyBar[Sketchybar].
-Use these snippets as a starting point.
-
-.~/.airlock.toml
-[source,toml]
-----
-# Run Sketchybar together with Airlock
-# sketchybar has a built-in detection of already running process,
-# so it won't be run twice on Airlock restart
-after-startup-command = ['exec-and-forget sketchybar']
-
-----
-
-.~/.config/sketchybar/sketchybarrc
-[source,bash]
-----
-sketchybar --add event airlock_workspace_change
-
-for sid in $(airlock list-workspaces --all); do
-    sketchybar --add item space.$sid left \
-        --subscribe space.$sid airlock_workspace_change \
-        --set space.$sid \
-        background.color=0x44ffffff \
-        background.corner_radius=5 \
-        background.height=20 \
-        background.drawing=off \
-        label="$sid" \
-        click_script="airlock workspace $sid" \
-        script="$CONFIG_DIR/plugins/airlock.sh $sid"
-done
-----
-
-.~/.config/sketchybar/plugins/airlock.sh
-[source,bash]
-----
-#!/usr/bin/env bash
-
-# make sure it's executable with:
-# chmod +x ~/.config/sketchybar/plugins/airlock.sh
-
-if [ "$1" = "$FOCUSED_WORKSPACE" ]; then
-    sketchybar --set $NAME background.drawing=on
-else
-    sketchybar --set $NAME background.drawing=off
-fi
-----
-
-[#show-airlock-workspaces-in-simple-bar]
-== Show Airlock workspaces in simple-bar
-
-link:https://github.com/Jean-Tinland/simple-bar[simple-bar] can be used to display Airlock workspaces.
-
-In order to sync simple-bar with Airlock, add these lines to your Airlock config file:
-
-.~/.airlock.toml
-[source,toml]
-----
-# Notify simple-bar about window focus change
-on-focus-changed = [
-  "exec-and-forget osascript -e 'tell application id \"tracesOf.Uebersicht\" to refresh widget id \"simple-bar-index-jsx\"'",
-]
-
-----
+Assign these commands in a gesture tool that can run shell commands. Use the full path to the `airlock` executable if the tool does not inherit your terminal's `PATH`.
 
 [#open-a-new-window-with-applescript]
 == Open a new window with AppleScript
 
-Invoking Safari/Terminal with a command the obvious way (`exec-and-forget open -a Safari`) results in an outcome that is probably not the intended one.
-Namely, that any workspace already containing an instance of Safari/Terminal is brought in focus.
+Use xref:commands.adoc#summon-app[summon-app] to bring an app to the current workspace. When you specifically need a new Safari or Terminal window, you can use AppleScript:
 
 Opening *a new window* of a program that can support multiple windows (such as Safari or Terminal.app) can be accomplished with an AppleScript inlined in `airlock.toml` as follows:
 
@@ -188,7 +103,7 @@ end tell'
 ----
 
 [#disable-hide-app]
-== Disable annoying and useless "hide application" shortcut
+== Disable the hide-application shortcut
 
 If `automatically-unhide-macos-hidden-apps` isn't enough, you can disable `cmd-h` altogether (which will make this hotkey unavailable for apps that might use it for other purposes)
 
@@ -221,11 +136,6 @@ link:config-examples/i3-like-config-example.toml[Download i3-like-config.toml]
 ----
 include::config-examples/i3-like-config-example.toml[]
 ----
-
-[#spacelist]
-== Spacelist
-
-link:https://github.com/magicmark/spacelist[Spacelist] is a terminal UI application that provides a searchable interface to view all open windows organized by workspace. You can hit enter on a selected application to switch to that workspace.
 
 [#popular-apps-ids]
 == List of Apple application IDs

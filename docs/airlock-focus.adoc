@@ -34,8 +34,7 @@ The floating window parent container is determined as the smallest tiling contai
 The technique eliminates the need for an additional binding for floating windows.
 This behavior can be disabled with `--ignore-floating` flag.
 
-`focus child|parent` isn't supported because the necessity of this operation is under the question.
-https://github.com/jss367/Airlock/issues/5
+`focus child|parent` is not supported.
 
 // =========================================================== Options
 include::util/conditional-options-header.adoc[]

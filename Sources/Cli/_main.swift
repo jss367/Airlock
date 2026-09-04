@@ -77,10 +77,10 @@ struct Main {
                 exit(
                     1,
                     err: """
-                        ERROR: Implicit stdin is detected (stdin is not TTY). Implicit stdin was forbidden in Airlock v0.20.0.
-                        1. Please supply '--stdin' flag to make stdin explicit and preserve old Airlock behavior
+                        ERROR: Implicit stdin is detected (stdin is not TTY). Airlock requires an explicit stdin flag.
+                        1. Please supply '--stdin' flag to make stdin explicit and read workspace input from stdin
                         2. You can also use '--no-stdin' flag to behave as if no stdin was supplied
-                        Breaking change issue: https://github.com/nikitabobko/Airlock/issues/1683
+                        Upstream rationale (AeroSpace): https://github.com/nikitabobko/AeroSpace/issues/1683
                         """,
                 )
             }

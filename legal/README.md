@@ -1,6 +1,6 @@
 # LICENSE
 
-The Airlock itself is licensed under MIT. See [LICENSE](./LICENSE.txt) for the full license text.
+Airlock is derived from AeroSpace and is licensed under MIT. See [LICENSE](../LICENSE.txt) for the full license text.
 
 ## Bundled dependencies and materials
 
