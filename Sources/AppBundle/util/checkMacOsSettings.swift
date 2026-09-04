@@ -6,8 +6,11 @@ func checkMacOsSettings() {
     checkAutoSwoosh()
 }
 
+private let ignoreAutoSwooshKey = "airlock-ignore-auto-swoosh"
+
 @MainActor
 private func checkAutoSwoosh() {
+    if UserDefaults.standard.bool(forKey: ignoreAutoSwooshKey) { return }
     guard let dockDefaults = UserDefaults(suiteName: "com.apple.dock") else { return }
     // workspaces-auto-swoosh defaults to true when unset
     let autoSwoosh = dockDefaults.object(forKey: "workspaces-auto-swoosh") as? Bool ?? true
@@ -32,7 +35,7 @@ private func checkAutoSwoosh() {
             case .alertFirstButtonReturn:
                 disableAutoSwoosh()
             case .alertThirdButtonReturn:
-                UserDefaults.standard.set(true, forKey: "airlock-ignore-auto-swoosh")
+                UserDefaults.standard.set(true, forKey: ignoreAutoSwooshKey)
             default:
                 break
         }
