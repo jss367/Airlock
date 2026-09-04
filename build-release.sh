@@ -110,6 +110,7 @@ codesign -v .release/airlock
 
 mkdir -p ".release/Airlock-v$build_version/manpage" && cp .man/*.1 ".release/Airlock-v$build_version/manpage"
 cp -r ./legal ".release/Airlock-v$build_version/legal"
+cp LICENSE.txt ".release/Airlock-v$build_version/LICENSE.txt"
 cp -r .shell-completion ".release/Airlock-v$build_version/shell-completion"
 cd .release
     mkdir -p "Airlock-v$build_version/bin" && cp -r airlock "Airlock-v$build_version/bin"
