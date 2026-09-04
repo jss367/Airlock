@@ -94,7 +94,9 @@ private func newConnection(_ connection: NWConnection) async {
             continue
         }
         if let command {
-            await MainActor.run { markUserInitiatedFocusChange() }
+            if command.info.kind.mayChangeFocus {
+                await MainActor.run { markUserInitiatedFocusChange() }
+            }
             let _answer: Result<ServerAnswer, Error> = await Result {
                 try await runLightSession(.socketServer(command.args), token) { () throws in
                     let env = CmdEnv.init(
