@@ -142,3 +142,60 @@ func initSubcommands() -> [String: any SubCommandParserProtocol] {
     }
     return result
 }
+
+extension CmdKind {
+    /// Whether running this command can legitimately move focus.
+    ///
+    /// The socket server opens a "user initiated focus change" grace window before running a
+    /// command so that the resulting macOS notifications aren't mistaken for focus stealing.
+    /// Pure queries must not open that window: tools like status bars poll them once a second,
+    /// which would keep the grace window open forever and disable `prevent-focus-stealing`.
+    public var mayChangeFocus: Bool {
+        switch self {
+            case .config,
+                 .debugWindows,
+                 .listApps,
+                 .listExecEnvVars,
+                 .listModes,
+                 .listMonitors,
+                 .listWindows,
+                 .listWorkspaces,
+                 .subscribe:
+                false
+            case .appLauncher,
+                 .balanceSizes,
+                 .close,
+                 .closeAllWindowsButCurrent,
+                 .enable,
+                 .execAndForget,
+                 .flashFocus,
+                 .flattenWorkspaceTree,
+                 .focus,
+                 .focusBackAndForth,
+                 .focusMonitor,
+                 .fullscreen,
+                 .joinWith,
+                 .layout,
+                 .macosNativeFullscreen,
+                 .macosNativeMinimize,
+                 .missionControl,
+                 .mode,
+                 .move,
+                 .moveMouse,
+                 .moveNodeToMonitor,
+                 .moveNodeToWorkspace,
+                 .moveWorkspaceToMonitor,
+                 .reloadConfig,
+                 .resize,
+                 .split,
+                 .summonApp,
+                 .summonWorkspace,
+                 .swap,
+                 .triggerBinding,
+                 .volume,
+                 .workspace,
+                 .workspaceBackAndForth:
+                true
+        }
+    }
+}
