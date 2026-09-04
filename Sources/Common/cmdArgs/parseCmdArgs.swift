@@ -26,6 +26,8 @@ public struct CmdArgsCommonState: ConvenienceCopyable, Equatable, Sendable {
 extension CmdArgs {
     public static var info: CmdStaticInfo { Self.parser.info }
 
+    public var kind: CmdKind { Self.info.kind }
+
     public var windowId: UInt32? {
         get { commonState.windowId }
         set(value) { commonState.windowId = value }

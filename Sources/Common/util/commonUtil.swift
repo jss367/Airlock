@@ -80,9 +80,30 @@ public enum RefreshSessionEvent: Sendable, CustomStringConvertible {
     case onFocusedMonitorChanged
     case onFocusChanged
     case onModeChanged
+    case onWindowDetected
 
     public var isStartup: Bool {
         if case .startup = self { return true } else { return false }
+    }
+
+    /// Compact identifier of what triggered the refresh session. Suitable for the event stream:
+    /// unlike `description`, it never embeds command arguments, which can be arbitrarily long.
+    public var trigger: String {
+        switch self {
+            case .ax(let notif): "ax(\(notif))"
+            case .configAutoReload: "config-auto-reload"
+            case .globalObserver(let notif): "global-observer(\(notif))"
+            case .globalObserverLeftMouseUp: "global-observer-left-mouse-up"
+            case .hotkeyBinding: "hotkey-binding"
+            case .menuBarButton: "menu-bar-button"
+            case .resetManipulatedWithMouse: "reset-manipulated-with-mouse"
+            case .socketServer(let args): "socket-server(\(args.kind.rawValue))"
+            case .startup: "startup"
+            case .onFocusedMonitorChanged: "on-focused-monitor-changed"
+            case .onFocusChanged: "on-focus-changed"
+            case .onModeChanged: "on-mode-changed"
+            case .onWindowDetected: "on-window-detected"
+        }
     }
 
     public var description: String {
@@ -99,6 +120,7 @@ public enum RefreshSessionEvent: Sendable, CustomStringConvertible {
             case .onFocusedMonitorChanged: "onFocusedMonitorChanged"
             case .onFocusChanged: "onFocusChanged"
             case .onModeChanged: "onModeChanged"
+            case .onWindowDetected: "onWindowDetected"
         }
     }
 }

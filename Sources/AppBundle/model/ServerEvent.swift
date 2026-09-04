@@ -19,19 +19,23 @@ public struct ServerEvent: Codable, Sendable {
     private var mode: String?
     // periphery:ignore - false positive unused warning. The var properties are serialized to JSON
     private var binding: String?
+    /// What made focus move: the refresh session event that produced this change. Absent for the
+    /// initial state sent on connect, and for events fired outside a refresh session.
+    // periphery:ignore - false positive unused warning. The var properties are serialized to JSON
+    private var trigger: String?
 
     public var eventType: ServerEventType { _event }
 
-    public static func focusChanged(windowId: UInt32?, workspace: String) -> ServerEvent {
-        ServerEvent(_event: .focusChanged, windowId: windowId, workspace: workspace)
+    public static func focusChanged(windowId: UInt32?, workspace: String, trigger: String? = nil) -> ServerEvent {
+        ServerEvent(_event: .focusChanged, windowId: windowId, workspace: workspace, trigger: trigger)
     }
 
-    public static func focusedMonitorChanged(workspace: String, monitorId_oneBased: Int) -> ServerEvent {
-        ServerEvent(_event: .focusedMonitorChanged, workspace: workspace, monitorId: monitorId_oneBased)
+    public static func focusedMonitorChanged(workspace: String, monitorId_oneBased: Int, trigger: String? = nil) -> ServerEvent {
+        ServerEvent(_event: .focusedMonitorChanged, workspace: workspace, monitorId: monitorId_oneBased, trigger: trigger)
     }
 
-    public static func workspaceChanged(workspace: String, prevWorkspace: String) -> ServerEvent {
-        ServerEvent(_event: .workspaceChanged, workspace: workspace, prevWorkspace: prevWorkspace)
+    public static func workspaceChanged(workspace: String, prevWorkspace: String, trigger: String? = nil) -> ServerEvent {
+        ServerEvent(_event: .workspaceChanged, workspace: workspace, prevWorkspace: prevWorkspace, trigger: trigger)
     }
 
     public static func modeChanged(mode: String?) -> ServerEvent {

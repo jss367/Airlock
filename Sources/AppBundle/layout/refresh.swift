@@ -29,11 +29,11 @@ func runRefreshSessionBlocking(
         try await $_isStartup.withValue(event.isStartup) {
             let nativeFocused = try await getNativeFocusedWindow()
             if let nativeFocused { try await debugWindowsIfRecording(nativeFocused) }
-            updateFocusCache(nativeFocused)
+            let focusSyncedFromMacOs = updateFocusCache(nativeFocused)
 
             if shouldLayoutWorkspaces && optimisticallyPreLayoutWorkspaces { try await layoutWorkspaces() }
 
-            refreshModel()
+            refreshModel(focusSyncedFromMacOs: focusSyncedFromMacOs)
             try await refresh()
             gcMonitors()
 
@@ -41,6 +41,12 @@ func runRefreshSessionBlocking(
             SecureInputPanel.shared.refresh()
             try await normalizeLayoutReason()
             if shouldLayoutWorkspaces { try await layoutWorkspaces() }
+            // Everything above can move focus on its own: refresh() garbage-collects the focused
+            // window and picks a replacement, gcMonitors() rearranges workspaces across monitors,
+            // normalizeLayoutReason() binds a minimized window to a container with no workspace.
+            // One check here reports all of it while this session is still the honest cause,
+            // instead of leaving it for whichever session runs next to claim.
+            refreshModel()
         }
     }
 }
@@ -59,10 +65,10 @@ func runLightSession<T>(
         try await $_isStartup.withValue(event.isStartup) {
             let nativeFocused = try await getNativeFocusedWindow()
             if let nativeFocused { try await debugWindowsIfRecording(nativeFocused) }
-            updateFocusCache(nativeFocused)
+            let focusSyncedFromMacOs = updateFocusCache(nativeFocused)
             let focusBefore = focus.windowOrNil
 
-            refreshModel()
+            refreshModel(focusSyncedFromMacOs: focusSyncedFromMacOs)
             let result = try await body()
             refreshModel()
 
@@ -101,9 +107,9 @@ struct RunSessionGuard: Sendable {
 }
 
 @MainActor
-func refreshModel() {
+func refreshModel(focusSyncedFromMacOs: Bool = false) {
     Workspace.garbageCollectUnusedWorkspaces()
-    checkOnFocusChangedCallbacks()
+    checkOnFocusChangedCallbacks(focusSyncedFromMacOs: focusSyncedFromMacOs)
     normalizeContainers()
 }
 

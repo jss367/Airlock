@@ -256,7 +256,13 @@ private func onWindowDetected(_ window: Window) async throws {
         appName: window.app.name,
     ))
     for callback in config.onWindowDetected where try await callback.matches(window) {
-        _ = try await callback.run.runCmdSeq(.defaultEnv.copy(\.windowId, window.windowId), .emptyStdin)
+        // The callback runs inside whichever session detected the window, so a focus-changing command
+        // here would report that session (an ax notification, say) as what moved the focus. Name the
+        // callback instead — but keep startup's session, which suppresses focus callbacks entirely.
+        let event: RefreshSessionEvent = isStartup ? .startup : .onWindowDetected
+        _ = try await $refreshSessionEvent.withValue(event) {
+            try await callback.run.runCmdSeq(.defaultEnv.copy(\.windowId, window.windowId), .emptyStdin)
+        }
         if !callback.checkFurtherCallbacks {
             return
         }
