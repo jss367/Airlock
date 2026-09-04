@@ -38,11 +38,11 @@ include::./util/conditional-arguments-header.adoc[]
 
 The following events can be subscribed to:
 
-focus-changed:: Fired when window focus changes. Includes `windowId`, `workspace`.
+focus-changed:: Fired when window focus changes. Includes `windowId`, `workspace`, `trigger`.
 
-focused-monitor-changed:: Fired when the focused monitor changes. Includes `workspace`, `monitorId`.
+focused-monitor-changed:: Fired when the focused monitor changes. Includes `workspace`, `monitorId`, `trigger`.
 
-focused-workspace-changed:: Fired when the focused workspace changes. Includes `workspace`, `prevWorkspace`.
+focused-workspace-changed:: Fired when the focused workspace changes. Includes `workspace`, `prevWorkspace`, `trigger`.
 
 mode-changed:: Fired when the binding mode changes. Includes `mode`.
 
@@ -60,7 +60,26 @@ Events are output as JSON lines (one JSON object per line):
 {"_event":"focused-workspace-changed","prevWorkspace":"M","workspace":"M"}
 {"_event":"mode-changed","mode":"main"}
 {"_event":"focus-changed","windowId":28218,"workspace":"M"}
+{"_event":"focus-changed","trigger":"ax(kAXFocusedWindowChangedNotification)","windowId":31904,"workspace":"1"}
 ----
+
+=== The trigger field
+
+The three focus events carry a `trigger`: what made Airlock re-evaluate focus. It turns the event
+stream into a causal trace, which is what you want when focus moves on its own and you need to know
+who moved it. Values look like:
+
+`hotkey-binding`:: A keybinding from the config.
+`socket-server(focus)`:: A CLI command; the name in parentheses is the command.
+`global-observer(NSWorkspaceDidActivateApplicationNotification)`:: A macOS notification; the name in parentheses is the notification.
+`ax(kAXFocusedWindowChangedNotification)`:: An accessibility notification from an app.
+`global-observer-left-mouse-up`:: A mouse click.
+`startup`, `config-auto-reload`, `menu-bar-button`, `reset-manipulated-with-mouse`:: Self-explanatory.
+`on-focus-changed`, `on-focused-monitor-changed`, `on-mode-changed`:: A callback from the config, which
+means the change was caused by an earlier change. Repeating pairs of these are the signature of a
+feedback loop.
+
+The field is absent on the initial state sent on connect, since nothing triggered it.
 
 // end::body[]
 

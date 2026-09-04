@@ -177,6 +177,7 @@ extension Workspace {
     broadcastEvent(.focusedMonitorChanged(
         workspace: focus.workspace.name,
         monitorId_oneBased: focus.workspace.workspaceMonitor.monitorId_oneBased ?? 0,
+        trigger: refreshSessionEvent?.trigger,
     ))
     if config.onFocusedMonitorChanged.isEmpty { return }
     guard let token: RunSessionGuard = .isServerEnabled else { return }
@@ -190,6 +191,7 @@ extension Workspace {
     broadcastEvent(.focusChanged(
         windowId: focus.windowOrNil?.windowId,
         workspace: focus.workspace.name,
+        trigger: refreshSessionEvent?.trigger,
     ))
     if config.onFocusChanged.isEmpty { return }
     guard let token: RunSessionGuard = .isServerEnabled else { return }
@@ -204,6 +206,7 @@ extension Workspace {
     broadcastEvent(.workspaceChanged(
         workspace: newWorkspace,
         prevWorkspace: oldWorkspace,
+        trigger: refreshSessionEvent?.trigger,
     ))
 }
 
