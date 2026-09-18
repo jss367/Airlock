@@ -29,7 +29,10 @@ func runRefreshSessionBlocking(
         try await $_isStartup.withValue(event.isStartup) {
             let nativeFocused = try await getNativeFocusedWindow()
             if let nativeFocused { try await debugWindowsIfRecording(nativeFocused) }
-            let focusSyncedFromMacOs = updateFocusCache(nativeFocused)
+            // Sessions woken by a window move or resize must not take focus from macOS: the move is
+            // usually Airlock's own layout, and following the focus it reports feeds straight back
+            // into another layout. See RefreshSessionEvent.mayHaveChangedFocus.
+            let focusSyncedFromMacOs = event.mayHaveChangedFocus ? updateFocusCache(nativeFocused) : false
 
             if shouldLayoutWorkspaces && optimisticallyPreLayoutWorkspaces { try await layoutWorkspaces() }
 
