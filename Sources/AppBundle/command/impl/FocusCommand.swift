@@ -148,6 +148,9 @@ struct FocusCommand: Command {
     for window in workspace.floatingWindows {
         let center = try await window.getCenter()
         guard let center else { continue }
+        // getCenter suspends, which lets other main actor work mutate the tree. The window
+        // may have been closed or moved to another parent by now, so re-check before unbinding
+        guard window.parent === workspace else { continue }
 
         let tilingParent: TilingContainer
         let index: Int
@@ -155,6 +158,7 @@ struct FocusCommand: Command {
             .findIn(tree: workspace.rootTilingContainer, virtual: true)
         {
             guard let targetCenter = try await target.getCenter() else { continue }
+            guard window.parent === workspace else { continue }
             guard let _tilingParent = target.parent as? TilingContainer else { continue }
             tilingParent = _tilingParent
             index = center.getProjection(tilingParent.orientation) >= targetCenter.getProjection(tilingParent.orientation)
