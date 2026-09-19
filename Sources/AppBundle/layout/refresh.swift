@@ -32,6 +32,11 @@ func runRefreshSessionBlocking(
         try await $_isStartup.withValue(event.isStartup) {
             let nativeFocused = try await getNativeFocusedWindow()
             if let nativeFocused { try await debugWindowsIfRecording(nativeFocused) }
+            // A cancelled session can still resume here, because an AX query already running on the
+            // app thread resumes with a value rather than throwing. Its nativeFocused is stale by
+            // then, and consuming the evidence would hand that stale answer to the cache and leave
+            // the replacement session with nothing to sync.
+            try checkCancellation()
             // A window move or resize must not take focus from macOS on its own: the move is usually
             // Airlock's own layout, and following the focus it reports feeds straight back into
             // another layout. It still answers focus evidence left behind by a session it cancelled.
@@ -72,6 +77,7 @@ func runLightSession<T>(
         try await $_isStartup.withValue(event.isStartup) {
             let nativeFocused = try await getNativeFocusedWindow()
             if let nativeFocused { try await debugWindowsIfRecording(nativeFocused) }
+            try checkCancellation() // Same reason as in runRefreshSessionBlocking
             _ = consumeFocusEvidence() // A light session always syncs, so it always spends the evidence
             let focusSyncedFromMacOs = updateFocusCache(nativeFocused)
             let focusBefore = focus.windowOrNil
