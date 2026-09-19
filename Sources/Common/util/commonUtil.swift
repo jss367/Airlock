@@ -86,6 +86,23 @@ public enum RefreshSessionEvent: Sendable, CustomStringConvertible {
         if case .startup = self { return true } else { return false }
     }
 
+    /// Whether the event is evidence that focus moved, and so whether the session it starts should
+    /// sync focus from macOS.
+    ///
+    /// A window that moved or resized says nothing about which window has focus, and Airlock moves
+    /// windows constantly: every workspace switch parks the outgoing workspace's windows in a
+    /// corner. Adopting macOS's focused window during one of those moves reads whatever transient
+    /// state the app is in mid-move, and an app with windows on two workspaces will report the
+    /// window Airlock just parked. Following it switches workspaces, which parks the other
+    /// workspace's windows, which fires another move: the two workspaces then flip back and forth
+    /// until something else takes focus. Real focus changes arrive on their own notifications.
+    public var mayHaveChangedFocus: Bool {
+        if case .ax(let notif) = self {
+            return notif != kAXMovedNotification as String && notif != kAXResizedNotification as String
+        }
+        return true
+    }
+
     /// Compact identifier of what triggered the refresh session. Suitable for the event stream:
     /// unlike `description`, it never embeds command arguments, which can be arbitrarily long.
     public var trigger: String {

@@ -2,6 +2,31 @@ import Common
 
 @MainActor private var lastKnownNativeFocusedWindowId: UInt32? = nil
 
+/// Whether some event that could have moved focus is still waiting to be answered by a focus sync.
+///
+/// Sessions coalesce: `scheduleRefreshSession` cancels the session in flight, and the session it
+/// cancels may be one that had a focus change to pick up and had not reached `updateFocusCache`
+/// yet. When the event doing the cancelling is a window move or resize, which carries no focus
+/// evidence of its own, the focus change would otherwise be dropped rather than merely
+/// re-attributed — and nothing guarantees a later event comes along to repair it. So the evidence
+/// outlives the session that carried it and is answered by whichever session gets there first.
+@MainActor private var pendingFocusEvidence = false
+
+@MainActor func noteFocusEvidence(of event: RefreshSessionEvent) {
+    if event.mayHaveChangedFocus { pendingFocusEvidence = true }
+}
+
+/// Reads the evidence and clears it in one step. Call it immediately before `updateFocusCache` with
+/// no suspension point in between, so a cancellation can't land between the two and lose it.
+@MainActor func consumeFocusEvidence() -> Bool {
+    defer { pendingFocusEvidence = false }
+    return pendingFocusEvidence
+}
+
+@MainActor func resetFocusEvidenceForTests() {
+    pendingFocusEvidence = false
+}
+
 /// A refresh session syncs focus from macOS before it runs anything, so the session's own trigger
 /// would blame whatever woke Airlock up — including a query command that cannot move focus at all.
 /// Say plainly that macOS moved the focus, and keep the session as the "noticed during" qualifier.
