@@ -57,6 +57,15 @@ final class FocusSyncOnGeometryEventsTest: XCTestCase {
         XCTAssertTrue(consumeFocusEvidence(), "the cancelled focus change must survive the move")
     }
 
+    /// Only a session that answers the evidence may spend it. A light session syncs focus on its own
+    /// and cannot be cancelled by a refresh scheduled behind it, so if it consumed, it would consume
+    /// on a stale snapshot and starve the refresh that recorded the evidence.
+    func testEvidenceOutlivesSessionsThatDontAnswerIt() {
+        noteFocusEvidence(of: .hotkeyBinding)
+        noteFocusEvidence(of: .ax(kAXFocusedWindowChangedNotification as String))
+        XCTAssertTrue(consumeFocusEvidence(), "the newer focus change must still be there to sync")
+    }
+
     func testEvidenceIsSpentOnce() {
         noteFocusEvidence(of: .ax(kAXFocusedWindowChangedNotification as String))
         XCTAssertTrue(consumeFocusEvidence())

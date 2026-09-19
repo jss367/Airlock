@@ -77,8 +77,11 @@ func runLightSession<T>(
         try await $_isStartup.withValue(event.isStartup) {
             let nativeFocused = try await getNativeFocusedWindow()
             if let nativeFocused { try await debugWindowsIfRecording(nativeFocused) }
-            try checkCancellation() // Same reason as in runRefreshSessionBlocking
-            _ = consumeFocusEvidence() // A light session always syncs, so it always spends the evidence
+            // A light session syncs unconditionally and never consumes the shared evidence. It clears
+            // activeRefreshTask, so a refresh scheduled while it awaits its focus query can't cancel
+            // it; if it spent the evidence it would spend it on this stale nativeFocused and leave
+            // that newer refresh nothing to sync. Not consuming costs at most one redundant sync,
+            // which no-ops when macOS still reports the window the cache already knows about.
             let focusSyncedFromMacOs = updateFocusCache(nativeFocused)
             let focusBefore = focus.windowOrNil
 
