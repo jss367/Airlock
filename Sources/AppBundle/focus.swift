@@ -132,6 +132,7 @@ extension Workspace {
 @MainActor func resetFocusStateForTests() {
     _prevFocus = nil
     _lastKnownFocus = _focus
+    resetFocusEvidenceForTests()
 }
 
 @MainActor private var onFocusChangedRecursionGuard = false

@@ -9,6 +9,8 @@ func scheduleRefreshSession(
     _ event: RefreshSessionEvent,
     optimisticallyPreLayoutWorkspaces: Bool = false,
 ) {
+    // Before the cancellation, so evidence carried by the session being cancelled isn't lost with it
+    noteFocusEvidence(of: event)
     activeRefreshTask?.cancel()
     activeRefreshTask = Task { @MainActor in
         try checkCancellation()
@@ -25,14 +27,16 @@ func runRefreshSessionBlocking(
     let state = signposter.beginInterval(#function, "event: \(event) axTaskLocalAppThreadToken: \(axTaskLocalAppThreadToken?.idForDebug)")
     defer { signposter.endInterval(#function, state) }
     if !TrayMenuModel.shared.isEnabled { return }
+    noteFocusEvidence(of: event)
     try await $refreshSessionEvent.withValue(event) {
         try await $_isStartup.withValue(event.isStartup) {
             let nativeFocused = try await getNativeFocusedWindow()
             if let nativeFocused { try await debugWindowsIfRecording(nativeFocused) }
-            // Sessions woken by a window move or resize must not take focus from macOS: the move is
-            // usually Airlock's own layout, and following the focus it reports feeds straight back
-            // into another layout. See RefreshSessionEvent.mayHaveChangedFocus.
-            let focusSyncedFromMacOs = event.mayHaveChangedFocus ? updateFocusCache(nativeFocused) : false
+            // A window move or resize must not take focus from macOS on its own: the move is usually
+            // Airlock's own layout, and following the focus it reports feeds straight back into
+            // another layout. It still answers focus evidence left behind by a session it cancelled.
+            // See RefreshSessionEvent.mayHaveChangedFocus and pendingFocusEvidence.
+            let focusSyncedFromMacOs = consumeFocusEvidence() ? updateFocusCache(nativeFocused) : false
 
             if shouldLayoutWorkspaces && optimisticallyPreLayoutWorkspaces { try await layoutWorkspaces() }
 
@@ -68,6 +72,7 @@ func runLightSession<T>(
         try await $_isStartup.withValue(event.isStartup) {
             let nativeFocused = try await getNativeFocusedWindow()
             if let nativeFocused { try await debugWindowsIfRecording(nativeFocused) }
+            _ = consumeFocusEvidence() // A light session always syncs, so it always spends the evidence
             let focusSyncedFromMacOs = updateFocusCache(nativeFocused)
             let focusBefore = focus.windowOrNil
 
