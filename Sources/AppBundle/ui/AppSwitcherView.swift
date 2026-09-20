@@ -80,7 +80,7 @@ func dismissAppSwitcher(commit: Bool) {
     if commit, let group = selectedGroup {
         guard let token: RunSessionGuard = .isServerEnabled else { return }
         Task {
-            try await runLightSession(.menuBarButton, token) {
+            try? await runLightSession(.menuBarButton, token) {
                 let windowId = group.windows[safe: selectedWindowIndex]?.windowId ?? group.windows.first?.windowId
                 if let windowId, let window = Window.get(byId: windowId) {
                     _ = window.focusWindow()

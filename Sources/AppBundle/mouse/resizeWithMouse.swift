@@ -9,16 +9,20 @@ func resizedObs(_: AXObserver, ax: AXUIElement, notif: CFString, _: UnsafeMutabl
     let windowId = ax.containingWindowId()
     Task { @MainActor in
         guard let token: RunSessionGuard = .isServerEnabled else { return }
-        guard let windowId, let window = Window.get(byId: windowId), try await isManipulatedWithMouse(window) else {
-            scheduleRefreshSession(.ax(notif))
-            return
-        }
-        resizeWithMouseTask?.cancel()
-        resizeWithMouseTask = Task {
-            try checkCancellation()
-            try await runLightSession(.ax(notif), token) {
-                try await resizeWithMouse(window)
+        do {
+            guard let windowId, let window = Window.get(byId: windowId), try await isManipulatedWithMouse(window) else {
+                scheduleRefreshSession(.ax(notif))
+                return
             }
+            resizeWithMouseTask?.cancel()
+            resizeWithMouseTask = Task {
+                try checkCancellation()
+                try await runLightSession(.ax(notif), token) {
+                    try await resizeWithMouse(window)
+                }
+            }
+        } catch {
+            // Cancellation or a failed AX call. Nothing to recover here.
         }
     }
 }

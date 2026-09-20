@@ -4,39 +4,47 @@ import Foundation
 
 @MainActor public func initAppBundle() {
     Task {
-        initTerminationHandler()
-        isCli = false
-        initServerArgs()
-        if isDebug {
-            await toggleReleaseServerIfDebug(.off)
-            interceptTermination(SIGINT)
-            interceptTermination(SIGKILL)
+        do {
+            try await initAppBundleImpl()
+        } catch {
+            // Cancellation or a failed AX call during startup. Nothing to recover here.
         }
-        if try await !reloadConfig() {
-            var out = ""
-            check(
-                try await reloadConfig(forceConfigUrl: defaultConfigUrl, stdout: &out),
-                """
-                Can't load default config. Your installation is probably corrupted.
-                Please don't modify '\(defaultConfigUrl)'
+    }
+}
 
-                \(out)
-                """,
-            )
-        }
+@MainActor private func initAppBundleImpl() async throws {
+    initTerminationHandler()
+    isCli = false
+    initServerArgs()
+    if isDebug {
+        await toggleReleaseServerIfDebug(.off)
+        interceptTermination(SIGINT)
+        interceptTermination(SIGKILL)
+    }
+    if try await !reloadConfig() {
+        var out = ""
+        check(
+            try await reloadConfig(forceConfigUrl: defaultConfigUrl, stdout: &out),
+            """
+            Can't load default config. Your installation is probably corrupted.
+            Please don't modify '\(defaultConfigUrl)'
 
-        checkAccessibilityPermissions()
-        checkMacOsSettings()
-        startUnixSocketServer()
-        GlobalObserver.initObserver()
-        registerQuickSwitcherHotkey()
-        Workspace.garbageCollectUnusedWorkspaces() // init workspaces
-        _ = Workspace.all.first?.focusWorkspace()
-        try await runRefreshSessionBlocking(.startup, layoutWorkspaces: false)
-        try await runLightSession(.startup, .forceRun) {
-            smartLayoutAtStartup()
-            _ = try await config.afterStartupCommand.runCmdSeq(.defaultEnv, .emptyStdin)
-        }
+            \(out)
+            """,
+        )
+    }
+
+    checkAccessibilityPermissions()
+    checkMacOsSettings()
+    startUnixSocketServer()
+    GlobalObserver.initObserver()
+    registerQuickSwitcherHotkey()
+    Workspace.garbageCollectUnusedWorkspaces() // init workspaces
+    _ = Workspace.all.first?.focusWorkspace()
+    try await runRefreshSessionBlocking(.startup, layoutWorkspaces: false)
+    try await runLightSession(.startup, .forceRun) {
+        smartLayoutAtStartup()
+        _ = try await config.afterStartupCommand.runCmdSeq(.defaultEnv, .emptyStdin)
     }
 }
 

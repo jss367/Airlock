@@ -24,8 +24,8 @@ public final class VolumePanel: NSPanelHud {
     }
 
     func startTimer() {
-        timer = .scheduledTimer(withTimeInterval: 2 /* seconds */, repeats: false) { _ in
-            Task { @MainActor [weak self] in
+        timer = .scheduledTimer(withTimeInterval: 2 /* seconds */, repeats: false) { [weak self] _ in
+            Task { @MainActor in
                 self?.close()
             }
         }

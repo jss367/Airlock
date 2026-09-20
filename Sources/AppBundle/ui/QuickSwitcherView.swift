@@ -369,19 +369,23 @@ struct QuickSwitcherContent: View {
             case .workspace, .window:
                 guard let token: RunSessionGuard = .isServerEnabled else { return }
                 Task {
-                    try await runLightSession(.menuBarButton, token) {
-                        switch item.kind {
-                            case .workspace(let name):
-                                _ = Workspace.get(byName: name).focusWorkspace()
-                            case .window(let id):
-                                if let window = Window.get(byId: id) {
-                                    _ = window.focusWindow()
-                                }
-                            default:
-                                break
+                    do {
+                        try await runLightSession(.menuBarButton, token) {
+                            switch item.kind {
+                                case .workspace(let name):
+                                    _ = Workspace.get(byName: name).focusWorkspace()
+                                case .window(let id):
+                                    if let window = Window.get(byId: id) {
+                                        _ = window.focusWindow()
+                                    }
+                                default:
+                                    break
+                            }
                         }
+                        dismissQuickSwitcher()
+                    } catch {
+                        // Cancellation or a failed AX call. Nothing to recover here.
                     }
-                    dismissQuickSwitcher()
                 }
         }
     }

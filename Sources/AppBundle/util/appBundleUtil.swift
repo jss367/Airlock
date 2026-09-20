@@ -13,7 +13,8 @@ func interceptTermination(_ _signal: Int32) {
         check(Thread.current.isMainThread)
         Task {
             defer { exit(signal) }
-            try await terminationHandler.beforeTermination()
+            // The error is dropped on purpose. We are already terminating.
+            try? await terminationHandler.beforeTermination()
         }
     } as sig_t)
 }

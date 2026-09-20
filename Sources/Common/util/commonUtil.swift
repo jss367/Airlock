@@ -58,7 +58,8 @@ public func dieT<T>(
         let semaphore = DispatchSemaphore(value: 0)
         Task {
             defer { semaphore.signal() }
-            try await $recursionDetectorDuringTermination.withValue(true) {
+            // The error is dropped on purpose. We are already dying, and fatalError follows.
+            try? await $recursionDetectorDuringTermination.withValue(true) {
                 try await terminationHandler.beforeTermination()
             }
         }

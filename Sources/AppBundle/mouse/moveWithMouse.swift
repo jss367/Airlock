@@ -9,16 +9,20 @@ func movedObs(_: AXObserver, ax: AXUIElement, notif: CFString, _: UnsafeMutableR
     let notif = notif as String
     Task { @MainActor in
         guard let token: RunSessionGuard = .isServerEnabled else { return }
-        guard let windowId, let window = Window.get(byId: windowId), try await isManipulatedWithMouse(window) else {
-            scheduleRefreshSession(.ax(notif))
-            return
-        }
-        moveWithMouseTask?.cancel()
-        moveWithMouseTask = Task {
-            try checkCancellation()
-            try await runLightSession(.ax(notif), token) {
-                try await moveWithMouse(window)
+        do {
+            guard let windowId, let window = Window.get(byId: windowId), try await isManipulatedWithMouse(window) else {
+                scheduleRefreshSession(.ax(notif))
+                return
             }
+            moveWithMouseTask?.cancel()
+            moveWithMouseTask = Task {
+                try checkCancellation()
+                try await runLightSession(.ax(notif), token) {
+                    try await moveWithMouse(window)
+                }
+            }
+        } catch {
+            // Cancellation or a failed AX call. Nothing to recover here.
         }
     }
 }
