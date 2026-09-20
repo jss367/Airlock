@@ -28,13 +28,13 @@ public func menuBar(viewModel: TrayMenuModel) -> some Scene {
                     Divider()
                     Button("Focus") {
                         Task {
-                            try await runLightSession(.menuBarButton, token) { _ = Workspace.get(byName: workspace.name).focusWorkspace() }
+                            try? await runLightSession(.menuBarButton, token) { _ = Workspace.get(byName: workspace.name).focusWorkspace() }
                         }
                     }
                     Button("Rename...") {
                         Task {
                             if let newName = showRenameDialog(currentName: workspace.name) {
-                                try await runLightSession(.menuBarButton, token) {
+                                try? await runLightSession(.menuBarButton, token) {
                                     _ = try await Workspace.rename(Workspace.get(byName: workspace.name), to: newName)
                                 }
                             }
@@ -50,7 +50,7 @@ public func menuBar(viewModel: TrayMenuModel) -> some Scene {
         }
         Button(viewModel.isEnabled ? "Disable" : "Enable") {
             Task {
-                try await runLightSession(.menuBarButton, .forceRun) { () throws in
+                try? await runLightSession(.menuBarButton, .forceRun) { () throws in
                     _ = try await EnableCommand(args: EnableCmdArgs(rawArgs: [], targetState: .toggle))
                         .run(.defaultEnv, .emptyStdin)
                 }
@@ -74,7 +74,8 @@ public func menuBar(viewModel: TrayMenuModel) -> some Scene {
         Button("Quit \(airlockAppName)") {
             Task {
                 defer { terminateApp() }
-                try await terminationHandler.beforeTermination()
+                // The error is dropped on purpose. We are already terminating.
+                try? await terminationHandler.beforeTermination()
             }
         }.keyboardShortcut("Q", modifiers: .command)
     } label: {
@@ -115,7 +116,7 @@ func reloadConfigButton(showShortcutGroup: Bool = false) -> some View {
     if let token: RunSessionGuard = .isServerEnabled {
         let button = Button("Reload config") {
             Task {
-                try await runLightSession(.menuBarButton, token) { _ = try await reloadConfig() }
+                try? await runLightSession(.menuBarButton, token) { _ = try await reloadConfig() }
             }
         }.keyboardShortcut("R", modifiers: .command)
         if showShortcutGroup {

@@ -187,7 +187,7 @@ extension Workspace {
     if config.onFocusedMonitorChanged.isEmpty { return }
     guard let token: RunSessionGuard = .isServerEnabled else { return }
     Task {
-        try await runLightSession(.onFocusedMonitorChanged, token) {
+        try? await runLightSession(.onFocusedMonitorChanged, token) {
             _ = try await config.onFocusedMonitorChanged.runCmdSeq(.defaultEnv.withFocus(focus), .emptyStdin)
         }
     }
@@ -201,7 +201,7 @@ extension Workspace {
     if config.onFocusChanged.isEmpty { return }
     guard let token: RunSessionGuard = .isServerEnabled else { return }
     Task {
-        try await runLightSession(.onFocusChanged, token) {
+        try? await runLightSession(.onFocusChanged, token) {
             _ = try await config.onFocusChanged.runCmdSeq(.defaultEnv.withFocus(focus), .emptyStdin)
         }
     }

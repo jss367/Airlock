@@ -319,10 +319,14 @@ struct MissionControlContent: View {
     private func switchToWorkspace(_ ws: WorkspaceInfo) {
         guard let token: RunSessionGuard = .isServerEnabled else { return }
         Task {
-            try await runLightSession(.menuBarButton, token) {
-                _ = Workspace.get(byName: ws.name).focusWorkspace()
+            do {
+                try await runLightSession(.menuBarButton, token) {
+                    _ = Workspace.get(byName: ws.name).focusWorkspace()
+                }
+                dismissMissionControl()
+            } catch {
+                // Cancellation or a failed AX call. Nothing to recover here.
             }
-            dismissMissionControl()
         }
     }
 
@@ -330,12 +334,16 @@ struct MissionControlContent: View {
     private func focusWindow(_ window: WindowInfo) {
         guard let token: RunSessionGuard = .isServerEnabled else { return }
         Task {
-            try await runLightSession(.menuBarButton, token) {
-                if let w = Window.get(byId: window.windowId) {
-                    _ = w.focusWindow()
+            do {
+                try await runLightSession(.menuBarButton, token) {
+                    if let w = Window.get(byId: window.windowId) {
+                        _ = w.focusWindow()
+                    }
                 }
+                dismissMissionControl()
+            } catch {
+                // Cancellation or a failed AX call. Nothing to recover here.
             }
-            dismissMissionControl()
         }
     }
 }
