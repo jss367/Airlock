@@ -12,7 +12,10 @@ func parseCommand(_ raw: String) -> ParsedCmd<any Command> {
 }
 
 func parseCommand(_ args: [String]) -> ParsedCmd<any Command> {
-    parseCmdArgs(args.slice).map { $0.toCommand() }
+    parseCmdArgs(args.slice)
+        // subscribe has no Command impl. The server handles it before calling parseCommand
+        .filterNot("Command 'subscribe' can only be run from the CLI") { $0.kind == .subscribe }
+        .map { $0.toCommand() }
 }
 
 func expectedActualTypeError(expected: TOMLType, actual: TOMLType) -> String {

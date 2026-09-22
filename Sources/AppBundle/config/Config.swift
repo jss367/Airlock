@@ -40,6 +40,7 @@ struct Config: ConvenienceCopyable {
     var enableNormalizationFlattenContainers: Bool = true
     var _nonEmptyWorkspacesRootContainersLayoutOnStartup: Void = ()
     var _execOnWorkspaceChange: Void = ()
+    var _workspacesShorthand: Void = () // [workspaces] is expanded manually after the table is parsed
     var defaultRootContainerLayout: Layout = .tiles
     var defaultRootContainerOrientation: DefaultContainerOrientation = .auto
     var startAtLogin: Bool = false

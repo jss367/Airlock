@@ -26,8 +26,7 @@ func registerQuickSwitcherHotkey() {
 @MainActor
 func toggleQuickSwitcher() {
     if let panel = quickSwitcherPanel, panel.isVisible {
-        panel.close()
-        quickSwitcherPanel = nil
+        dismissQuickSwitcher()
     } else {
         let panel = QuickSwitcherPanel()
         quickSwitcherPanel = panel
@@ -35,10 +34,15 @@ func toggleQuickSwitcher() {
     }
 }
 
+/// Pass `restoreFocus: false` when another app is about to take focus (launch, web search).
+/// Otherwise the panel activated Airlock, and nothing else hands focus back to a real window.
 @MainActor
-func dismissQuickSwitcher() {
+func dismissQuickSwitcher(restoreFocus: Bool = true) {
     quickSwitcherPanel?.close()
     quickSwitcherPanel = nil
+    if restoreFocus {
+        focus.windowOrNil?.nativeFocus()
+    }
 }
 
 private final class QuickSwitcherPanel: NSPanelHud {
@@ -358,14 +362,14 @@ struct QuickSwitcherContent: View {
                 let config = NSWorkspace.OpenConfiguration()
                 config.activates = true
                 NSWorkspace.shared.openApplication(at: url, configuration: config)
-                dismissQuickSwitcher()
+                dismissQuickSwitcher(restoreFocus: false)
             case .webSearch(let query):
                 if let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
                    let url = URL(string: "https://google.com/search?q=\(encoded)")
                 {
                     NSWorkspace.shared.open(url)
                 }
-                dismissQuickSwitcher()
+                dismissQuickSwitcher(restoreFocus: false)
             case .workspace, .window:
                 guard let token: RunSessionGuard = .isServerEnabled else { return }
                 Task {

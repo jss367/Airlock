@@ -67,6 +67,29 @@ final class ConfigTest: XCTestCase {
         XCTAssertTrue(errors.descriptions.singleOrNil()?.contains("cannot be used in config") == true)
     }
 
+    func testSubscribeCantBeUsedInConfig() {
+        let (_, errors) = parseConfig(
+            """
+            [mode.main.binding]
+                option-a = 'subscribe --all'
+            """,
+        )
+        assertEquals(errors.descriptions, ["mode.main.binding.option-a: Command 'subscribe' can only be run from the CLI"])
+    }
+
+    func testWorkspacesShorthandKeepsPersistentWorkspaces() {
+        let (config, errors) = parseConfig(
+            """
+            config-version = 2
+            persistent-workspaces = ['X', 'Y']
+            [workspaces.names]
+                1 = '1'
+            """,
+        )
+        assertEquals(errors.descriptions, [])
+        assertEquals(config.persistentWorkspaces.sorted(), ["1", "X", "Y"])
+    }
+
     func testDropBindings() {
         let (config, errors) = parseConfig(
             """

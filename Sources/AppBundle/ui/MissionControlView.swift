@@ -23,6 +23,8 @@ func toggleMissionControl() {
 func dismissMissionControl() {
     missionControlPanel?.close()
     missionControlPanel = nil
+    // The panel activated Airlock, and nothing else hands focus back to a real window
+    focus.windowOrNil?.nativeFocus()
 }
 
 private final class MissionControlPanel: NSPanelHud {
