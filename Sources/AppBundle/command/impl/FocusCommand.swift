@@ -144,6 +144,7 @@ struct FocusCommand: Command {
 
 @MainActor private func makeFloatingWindowsSeenAsTiling(workspace: Workspace) async throws -> FloatingWindowsSnapshot {
     let workspaceMruSnapshot = workspace.mruSnapshot()
+    let focusedWindow = focus.windowOrNil
     var _floatingWindows: [FloatingWindowData] = []
     for window in workspace.floatingWindows {
         let center = try await window.getCenter()
@@ -184,7 +185,7 @@ struct FocusCommand: Command {
     for floating in floatingWindows { // Make floating windows be seen as tiling
         floating.window.bind(to: floating.parent, adaptiveWeight: 1, index: floating.index, updateMru: false)
     }
-    return FloatingWindowsSnapshot(windows: floatingWindows, workspaceMruSnapshot: workspaceMruSnapshot)
+    return FloatingWindowsSnapshot(windows: floatingWindows, workspaceMruSnapshot: workspaceMruSnapshot, focusedWindow: focusedWindow)
 }
 
 @MainActor private func restoreFloatingWindows(_ snapshot: FloatingWindowsSnapshot, workspace: Workspace) {
@@ -194,8 +195,9 @@ struct FocusCommand: Command {
     // Restore workspace MRU to the exact order before the floating-as-tiling operation,
     // so that floating windows retain their prior recency positions.
     workspace.restoreMruOrder(from: snapshot.workspaceMruSnapshot)
-    // The snapshot predates the focus change, so the replay just demoted the newly focused window
-    if let window = focus.windowOrNil, window.nodeWorkspace == workspace {
+    // The snapshot predates the focus change, so the replay just demoted the newly focused window.
+    // Only re-raise it if focus actually changed, otherwise keep the snapshot's order as is
+    if let window = focus.windowOrNil, window !== snapshot.focusedWindow, window.nodeWorkspace == workspace {
         window.markAsMostRecentChild()
     }
 }
@@ -203,6 +205,7 @@ struct FocusCommand: Command {
 private struct FloatingWindowsSnapshot {
     let windows: [FloatingWindowData]
     let workspaceMruSnapshot: [TreeNode]
+    let focusedWindow: Window?
 }
 
 private struct FloatingWindowData {

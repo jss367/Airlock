@@ -88,6 +88,21 @@ final class FocusCommandTest: XCTestCase {
         assertEquals(workspace.mostRecentWindowRecursive?.windowId, 3)
     }
 
+    func testFocusOverFloatingWindowsAtBoundaryKeepsMru() async throws {
+        let workspace = Workspace.get(byName: name)
+        let window1 = TestWindow.new(id: 1, parent: workspace, rect: Rect(topLeftX: 0, topLeftY: 0, width: 100, height: 100))
+        TestWindow.new(id: 2, parent: workspace, rect: Rect(topLeftX: 10, topLeftY: 10, width: 100, height: 100))
+        let window3 = TestWindow.new(id: 3, parent: workspace, rect: Rect(topLeftX: 20, topLeftY: 20, width: 100, height: 100))
+        assertEquals(window3.focusWindow(), true)
+        window1.markAsMostRecentChild()
+        assertEquals(workspace.mostRecentWindowRecursive?.windowId, 1)
+
+        // Window 3 is the rightmost, so focus stops at the boundary without changing focus
+        try await FocusCommand.new(direction: .right).run(.defaultEnv, .emptyStdin)
+        assertEquals(focus.windowOrNil?.windowId, 3)
+        assertEquals(workspace.mostRecentWindowRecursive?.windowId, 1)
+    }
+
     func testFocusAlongTheContainerOrientation() async throws {
         Workspace.get(byName: name).rootTilingContainer.apply {
             assertEquals(TestWindow.new(id: 1, parent: $0).focusWindow(), true)
