@@ -144,7 +144,7 @@ private func bindingLineMatches(_ line: String, key: String, modifiers: NSEvent.
 
 /// The table name of a `[table]` header line, ignoring a trailing comment. Nil for any other line
 private func tomlTableHeader(_ line: String) -> String? {
-    let code = line.split(separator: "#", maxSplits: 1, omittingEmptySubsequences: false).first ?? ""
+    let code = line[..<scanTomlCode(line)]
     let trimmed = code.trimmingCharacters(in: CharacterSet.whitespaces)
     guard trimmed.hasPrefix("[") && trimmed.hasSuffix("]") else { return nil }
     return trimmed.trimmingCharacters(in: CharacterSet(charactersIn: "[]")).trimmingCharacters(in: CharacterSet.whitespaces)
@@ -185,9 +185,25 @@ private func tomlEntryLineCount(_ lines: [String], at index: Int) -> Int {
 /// Net `[` minus `]` outside of quoted strings and comments
 private func bracketDepthChange(_ text: String) -> Int {
     var depth = 0
+    scanTomlCode(text) { char in
+        switch char {
+            case "[": depth += 1
+            case "]": depth -= 1
+            default: break
+        }
+    }
+    return depth
+}
+
+/// Walks `text` up to its trailing comment, passing each character outside quoted strings
+/// to `body`. A `#` inside a quoted string (e.g. `[mode."foo#bar".binding]`) is not a comment.
+/// Returns the index where the comment starts, or `text.endIndex` if there is none.
+@discardableResult
+private func scanTomlCode(_ text: String, _ body: (Character) -> Void = { _ in }) -> String.Index {
     var quote: Character? = nil
     var escaped = false
-    for char in text {
+    for index in text.indices {
+        let char = text[index]
         if let q = quote {
             if escaped {
                 escaped = false
@@ -200,13 +216,11 @@ private func bracketDepthChange(_ text: String) -> Int {
         }
         switch char {
             case "'", "\"": quote = char
-            case "#": return depth
-            case "[": depth += 1
-            case "]": depth -= 1
-            default: break
+            case "#": return index
+            default: body(char)
         }
     }
-    return depth
+    return text.endIndex
 }
 
 // MARK: - Helpers

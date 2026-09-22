@@ -118,7 +118,7 @@ private func buildAppGroups() -> [AppGroup] {
     }
 
     var windowsByPid: [Int32: [AppGroupWindow]] = [:]
-    for window in workspace.mruLeafWindowsRecursive {
+    for window in windowsByFocusRecency(workspace) {
         let title = window.app.name ?? "Window \(window.windowId)"
         windowsByPid[window.app.pid, default: []].append(AppGroupWindow(
             id: window.windowId,
@@ -134,6 +134,18 @@ private func buildAppGroups() -> [AppGroup] {
         let icon = app?.icon ?? NSImage(named: NSImage.applicationIconName)!
         return AppGroup(id: pid, pid: pid, name: name, icon: icon, windows: windows)
     }
+}
+
+/// The workspace's windows, most recently focused first. Never-focused windows come last, in tree order
+@MainActor
+func windowsByFocusRecency(_ workspace: Workspace) -> [Window] {
+    workspace.allLeafWindowsRecursive.enumerated()
+        .sorted { a, b in
+            a.element.focusRecency != b.element.focusRecency
+                ? a.element.focusRecency > b.element.focusRecency
+                : a.offset < b.offset
+        }
+        .map(\.element)
 }
 
 // MARK: - Observable State

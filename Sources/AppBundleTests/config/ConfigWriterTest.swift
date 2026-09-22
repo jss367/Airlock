@@ -318,6 +318,23 @@ final class ConfigWriterTest: XCTestCase {
         ])
     }
 
+    func testAddBindingStopsAtHeaderWithHashInQuotedKey() {
+        let lines = [
+            "[mode.main.binding]",
+            "    option-h = 'focus left'",
+            "[mode.\"foo#bar\".binding]",
+            "    option-s = 'mode main'",
+        ]
+        let result = addBindingToLines(lines, key: "s", appName: "Spotify", modifierPrefix: .option)
+        assertEquals(result, [
+            "[mode.main.binding]",
+            "    option-h = 'focus left'",
+            "    option-s = 'summon-app \"Spotify\"'",
+            "[mode.\"foo#bar\".binding]",
+            "    option-s = 'mode main'",
+        ])
+    }
+
     func testAddBindingToEmptyConfig() {
         // When there's no [mode.main.binding] section, it should be created
         let lines = [
