@@ -144,7 +144,7 @@ private func bindingLineMatches(_ line: String, key: String, modifiers: NSEvent.
 
 /// The table name of a `[table]` header line, ignoring a trailing comment. Nil for any other line
 private func tomlTableHeader(_ line: String) -> String? {
-    let code = line[..<scanTomlCode(line)]
+    let code = line[..<tomlCommentStart(line)]
     let trimmed = code.trimmingCharacters(in: CharacterSet.whitespaces)
     guard trimmed.hasPrefix("[") && trimmed.hasSuffix("]") else { return nil }
     return trimmed.trimmingCharacters(in: CharacterSet(charactersIn: "[]")).trimmingCharacters(in: CharacterSet.whitespaces)
@@ -161,45 +161,83 @@ private func tomlSectionEnd(_ lines: [String], sectionStart: Int) -> Int {
     return lines.count
 }
 
-/// Number of lines the entry starting at `index` spans. A value that opens a multi-line
-/// string (`'''` or `"""`) or an array continues until its closing delimiter.
+/// Number of lines the entry starting at `index` spans. A value continues onto later lines
+/// while a multi-line string (`'''` or `"""`) or an array is still open.
 private func tomlEntryLineCount(_ lines: [String], at index: Int) -> Int {
-    let line = lines[index]
-    guard !line.trimmingCharacters(in: CharacterSet.whitespaces).hasPrefix("#"),
-          let eqIndex = line.firstIndex(of: "=") else { return 1 }
-    let value = line[line.index(after: eqIndex)...].trimmingCharacters(in: CharacterSet.whitespaces)
-    for delimiter in ["'''", "\"\"\""] where value.hasPrefix(delimiter) {
-        if value.dropFirst(delimiter.count).contains(delimiter) { return 1 }
-        let closing = lines[(index + 1)...].firstIndex { $0.contains(delimiter) }
-        return (closing ?? lines.count - 1) - index + 1
-    }
-    guard value.hasPrefix("[") else { return 1 }
-    var depth = 0
+    var scanner = TomlValueScanner()
     for i in index ..< lines.count {
-        depth += bracketDepthChange(i == index ? value : lines[i])
-        if depth <= 0 { return i - index + 1 }
+        scanner.scan(lines[i])
+        if scanner.isComplete { return i - index + 1 }
     }
     return lines.count - index
 }
 
-/// Net `[` minus `]` outside of quoted strings and comments
-private func bracketDepthChange(_ text: String) -> Int {
-    var depth = 0
-    scanTomlCode(text) { char in
-        switch char {
-            case "[": depth += 1
-            case "]": depth -= 1
-            default: break
+/// Tracks string and array nesting across the lines of one `key = value` entry, so a
+/// bracket, quote, or `#` inside any kind of string is never read as TOML syntax.
+private struct TomlValueScanner {
+    private enum Context { case code, basic, literal, multiLineBasic, multiLineLiteral }
+    private var context = Context.code
+    private var depth = 0
+
+    /// True when no string or array is left open
+    var isComplete: Bool { context == .code && depth <= 0 }
+
+    mutating func scan(_ line: String) {
+        let chars = Array(line)
+        /// Length of the run of `char` starting at `i`
+        func run(_ char: Character, _ i: Int) -> Int {
+            chars[i...].prefix { $0 == char }.count
         }
+        var i = 0
+        scanning: while i < chars.count {
+            let char = chars[i]
+            switch context {
+                case .code:
+                    switch char {
+                        case "#": break scanning
+                        case "[": depth += 1
+                        case "]": depth -= 1
+                        case "\"", "'":
+                            let triple = run(char, i) >= 3
+                            if triple { i += 2 }
+                            context = switch (char, triple) {
+                                case ("\"", false): .basic
+                                case ("\"", true): .multiLineBasic
+                                case (_, false): .literal
+                                case (_, true): .multiLineLiteral
+                            }
+                        default: break
+                    }
+                case .basic, .multiLineBasic:
+                    if char == "\\" {
+                        i += 1 // skip the escaped character
+                    } else if char == "\"" {
+                        if context == .basic {
+                            context = .code
+                        } else if run(char, i) >= 3 {
+                            // Up to two quotes before the closing `"""` belong to the string
+                            i += run(char, i) - 1
+                            context = .code
+                        }
+                    }
+                case .literal:
+                    if char == "'" { context = .code }
+                case .multiLineLiteral:
+                    if char == "'" && run(char, i) >= 3 {
+                        i += run(char, i) - 1
+                        context = .code
+                    }
+            }
+            i += 1
+        }
+        // Single-line strings cannot continue onto the next line
+        if context == .basic || context == .literal { context = .code }
     }
-    return depth
 }
 
-/// Walks `text` up to its trailing comment, passing each character outside quoted strings
-/// to `body`. A `#` inside a quoted string (e.g. `[mode."foo#bar".binding]`) is not a comment.
-/// Returns the index where the comment starts, or `text.endIndex` if there is none.
-@discardableResult
-private func scanTomlCode(_ text: String, _ body: (Character) -> Void = { _ in }) -> String.Index {
+/// Index where the trailing comment of `text` starts, or `text.endIndex` if there is none.
+/// A `#` inside a quoted string (e.g. `[mode."foo#bar".binding]`) is not a comment.
+private func tomlCommentStart(_ text: String) -> String.Index {
     var quote: Character? = nil
     var escaped = false
     for index in text.indices {
@@ -217,7 +255,7 @@ private func scanTomlCode(_ text: String, _ body: (Character) -> Void = { _ in }
         switch char {
             case "'", "\"": quote = char
             case "#": return index
-            default: body(char)
+            default: break
         }
     }
     return text.endIndex

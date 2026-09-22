@@ -302,6 +302,26 @@ final class ConfigWriterTest: XCTestCase {
         assertEquals(parseConfig(result.joined(separator: "\n")).errors.descriptions, [])
     }
 
+    func testAddBindingSkipsBracketInsideMultiLineStringInArray() {
+        // The `[` inside the multi-line string is not array syntax, so the array still ends at its `]`
+        let mainSection = [
+            "[mode.main.binding]",
+            "    option-t = [",
+            "        'workspace T',",
+            "        '''exec-and-forget sh -c '",
+            "        echo [",
+            "        ''',",
+            "    ]",
+        ]
+        let serviceSection = [
+            "[mode.service.binding]",
+            "    option-s = 'mode main'",
+        ]
+        let result = addBindingToLines(mainSection + serviceSection, key: "s", appName: "Spotify", modifierPrefix: .option)
+        assertEquals(result, mainSection + ["    option-s = 'summon-app \"Spotify\"'"] + serviceSection)
+        assertEquals(parseConfig(result.joined(separator: "\n")).errors.descriptions, [])
+    }
+
     func testAddBindingWithCommentedSectionHeaders() {
         let lines = [
             "[mode.main.binding] # my keys",
