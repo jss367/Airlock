@@ -14,7 +14,7 @@ import XCTest
 /// app with windows on two workspaces can drive this.
 @MainActor
 final class FocusSyncOnGeometryEventsTest: XCTestCase {
-    override func setUp() async throws { resetFocusEvidenceForTests() }
+    override func setUp() async throws { resetFocusCacheForTests() }
 
     func testMoveAndResizeAreNotEvidenceThatFocusChanged() {
         XCTAssertFalse(RefreshSessionEvent.ax(kAXMovedNotification as String).mayHaveChangedFocus)

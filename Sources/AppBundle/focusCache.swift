@@ -23,8 +23,9 @@ import Common
     return pendingFocusEvidence
 }
 
-@MainActor func resetFocusEvidenceForTests() {
+@MainActor func resetFocusCacheForTests() {
     pendingFocusEvidence = false
+    lastKnownNativeFocusedWindowId = nil
 }
 
 /// A refresh session syncs focus from macOS before it runs anything, so the session's own trigger
@@ -48,7 +49,7 @@ func focusChangeTrigger(sessionTrigger: String?, syncedFromMacOs: Bool) -> Strin
     }
     // Record this even when the change below gets blocked. macOS did make the window key, and a stale
     // value lets MacApp.nativeFocus take its activate-only shortcut, which leaves a same-app stealer key
-    nativeFocused?.macAppUnsafe.lastNativeFocusedWindowId = nativeFocused?.windowId
+    (nativeFocused?.app as? MacApp)?.lastNativeFocusedWindowId = nativeFocused?.windowId
     var syncedFromMacOs = false
     if nativeFocused?.windowId != lastKnownNativeFocusedWindowId {
         if shouldAllowFocusChange(to: nativeFocused) {

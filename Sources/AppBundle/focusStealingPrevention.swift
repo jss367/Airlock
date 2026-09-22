@@ -34,6 +34,12 @@ var hadRecentAppActivation: Bool {
     Date() < _recentAppActivationDeadline
 }
 
+@MainActor
+func resetFocusStealingPreventionForTests() {
+    _userInitiatedFocusChangeDeadline = .distantPast
+    _recentAppActivationDeadline = .distantPast
+}
+
 /// Determines whether a focus change to `newWindow` should be blocked based on the
 /// `prevent-focus-stealing` config setting.
 ///
