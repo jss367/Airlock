@@ -268,6 +268,56 @@ final class ConfigWriterTest: XCTestCase {
         XCTAssertTrue(result.contains { $0.contains("summon-app") && $0.contains("Spotify") })
     }
 
+    func testAddBindingReplacesMultiLineBinding() {
+        let lines = [
+            "[mode.main.binding]",
+            "    option-enter = '''exec-and-forget osascript -e '",
+            "    tell application \"Terminal\"",
+            "        do script",
+            "        activate",
+            "    end tell'",
+            "    '''",
+            "    option-h = 'focus left'",
+        ]
+        let result = addBindingToLines(lines, key: "enter", appName: "Ghostty", modifierPrefix: .option)
+        assertEquals(result, [
+            "[mode.main.binding]",
+            "    option-h = 'focus left'",
+            "    option-enter = 'summon-app \"Ghostty\"'",
+        ])
+        assertEquals(parseConfig(result.joined(separator: "\n")).errors.descriptions, [])
+    }
+
+    func testAddBindingInsertsAfterMultiLineValue() {
+        // A multi-line value that is kept must stay whole, and its contents must not be read as a header
+        let lines = [
+            "[mode.main.binding]",
+            "    option-t = [",
+            "        'workspace T',",
+            "        'exec-and-forget echo \"[not a header]\"',",
+            "    ]",
+        ]
+        let result = addBindingToLines(lines, key: "s", appName: "Spotify", modifierPrefix: .option)
+        assertEquals(result, lines + ["    option-s = 'summon-app \"Spotify\"'"])
+        assertEquals(parseConfig(result.joined(separator: "\n")).errors.descriptions, [])
+    }
+
+    func testAddBindingWithCommentedSectionHeaders() {
+        let lines = [
+            "[mode.main.binding] # my keys",
+            "    option-s = 'workspace S'",
+            "[mode.service.binding] # service keys",
+            "    option-s = 'mode main'",
+        ]
+        let result = addBindingToLines(lines, key: "s", appName: "Spotify", modifierPrefix: .option)
+        assertEquals(result, [
+            "[mode.main.binding] # my keys",
+            "    option-s = 'summon-app \"Spotify\"'",
+            "[mode.service.binding] # service keys",
+            "    option-s = 'mode main'",
+        ])
+    }
+
     func testAddBindingToEmptyConfig() {
         // When there's no [mode.main.binding] section, it should be created
         let lines = [

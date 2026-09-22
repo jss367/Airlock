@@ -118,6 +118,12 @@ open class TreeNode: Equatable, AeroAny {
 
     var mostRecentChild: TreeNode? { _mruChildren.mostRecent ?? children.last }
 
+    /// Leaf windows, most recent first, following the MRU order at each level of the tree
+    var mruLeafWindowsRecursive: [Window] {
+        if let window = self as? Window { return [window] }
+        return _mruChildren.flatMap { $0.mruLeafWindowsRecursive }
+    }
+
     /// Snapshot the MRU ordering of this node's children (most recent first)
     func mruSnapshot() -> [TreeNode] { _mruChildren.snapshot() }
 

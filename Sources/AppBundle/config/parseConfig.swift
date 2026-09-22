@@ -410,6 +410,16 @@ private func expandWorkspacesShorthand(
     let mainModeTable = modeTable[mainModeId]?.table ?? TOMLTable()
     let bindingTable = mainModeTable["binding"]?.table ?? TOMLTable()
 
+    // Compare bindings by what they parse to, so 'shift-option-a' and 'option-shift-a' count as the same key
+    let mapping = config.keyMapping.resolve()
+    func normalized(_ binding: String) -> String {
+        switch parseBinding(binding, backtrace, mapping) {
+            case .success(let (modifiers, key)): modifiers.isEmpty ? key.toString() : modifiers.toString() + "-" + key.toString()
+            case .failure: binding
+        }
+    }
+    var boundKeys = Set(bindingTable.map { normalized($0.0) })
+
     for (workspaceName, keyRaw) in namesTable {
         let entryBacktrace = backtrace + .key("names") + .key(workspaceName)
         guard let key = keyRaw.string else {
@@ -421,13 +431,13 @@ private func expandWorkspacesShorthand(
 
         // Generate focus binding: e.g. "option-a" = "workspace A"
         let focusBinding = "\(focusModifier)-\(key)"
-        if bindingTable[focusBinding] == nil {
+        if boundKeys.insert(normalized(focusBinding)).inserted {
             bindingTable[focusBinding] = "workspace \(workspaceName)"
         }
 
         // Generate move binding: e.g. "option-shift-a" = "move-node-to-workspace A"
         let moveBinding = "\(moveModifier)-\(key)"
-        if bindingTable[moveBinding] == nil {
+        if boundKeys.insert(normalized(moveBinding)).inserted {
             bindingTable[moveBinding] = "move-node-to-workspace \(workspaceName)"
         }
     }

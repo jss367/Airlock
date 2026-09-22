@@ -60,6 +60,25 @@ final class TreeNodeExTest: XCTestCase {
         assertEquals(workspace.mostRecentWindowRecursive?.windowId, 1)
     }
 
+    func testMruLeafWindowsRecursive() {
+        let workspace = Workspace.get(byName: name)
+        var window1: Window!
+        var window2: Window!
+        var window3: Window!
+        workspace.rootTilingContainer.apply {
+            window1 = TestWindow.new(id: 1, parent: $0)
+            TilingContainer.newVTiles(parent: $0, adaptiveWeight: 1).apply {
+                window2 = TestWindow.new(id: 2, parent: $0)
+                window3 = TestWindow.new(id: 3, parent: $0)
+            }
+        }
+        window1.markAsMostRecentChild()
+        window2.markAsMostRecentChild()
+        window3.markAsMostRecentChild()
+        window1.markAsMostRecentChild()
+        assertEquals(workspace.mruLeafWindowsRecursive.map(\.windowId), [1, 3, 2])
+    }
+
     func testAnyLeafWindowRecursive() {
         let workspace = Workspace.get(byName: name)
         workspace.rootTilingContainer.apply {

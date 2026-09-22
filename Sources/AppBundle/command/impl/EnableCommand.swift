@@ -15,7 +15,7 @@ struct EnableCommand: Command {
         if newState == prevState {
             if !args.failIfNoop {
                 io.out((newState ? "Already enabled" : "Already disabled") +
-                    "Tip: use --fail-if-noop to exit with non-zero code")
+                    ". Tip: use --fail-if-noop to exit with non-zero code")
             }
             return !args.failIfNoop
         }

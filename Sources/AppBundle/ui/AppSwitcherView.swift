@@ -109,19 +109,18 @@ struct AppGroup: Identifiable {
 @MainActor
 private func buildAppGroups() -> [AppGroup] {
     let workspace = focus.workspace
-    let allWindows = workspace.allLeafWindowsRecursive
 
+    // Apps keep tree order. Each app's windows are listed most recent first, so committing
+    // the switcher lands on the window the user last used rather than the app's first one
     var seenPids: [Int32] = []
-    var windowsByPid: [Int32: [AppGroupWindow]] = [:]
+    for window in workspace.allLeafWindowsRecursive where !seenPids.contains(window.app.pid) {
+        seenPids.append(window.app.pid)
+    }
 
-    for window in allWindows {
-        let pid = window.app.pid
-        if windowsByPid[pid] == nil {
-            seenPids.append(pid)
-            windowsByPid[pid] = []
-        }
+    var windowsByPid: [Int32: [AppGroupWindow]] = [:]
+    for window in workspace.mruLeafWindowsRecursive {
         let title = window.app.name ?? "Window \(window.windowId)"
-        windowsByPid[pid]?.append(AppGroupWindow(
+        windowsByPid[window.app.pid, default: []].append(AppGroupWindow(
             id: window.windowId,
             windowId: window.windowId,
             title: title,
