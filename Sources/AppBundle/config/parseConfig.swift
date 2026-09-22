@@ -125,7 +125,7 @@ private let configParser: [String: any ParserProtocol<Config>] = [
 
     keyMappingConfigRootKey: Parser(\.keyMapping, skipParsing(Config().keyMapping)), // Parsed manually
     modeConfigRootKey: Parser(\.modes, skipParsing(Config().modes)), // Parsed manually
-    workspacesShorthandKey: Parser(\.persistentWorkspaces, skipParsing(Config().persistentWorkspaces)), // Parsed manually
+    workspacesShorthandKey: Parser(\._workspacesShorthand, skipParsing(())), // Parsed manually
 
     "gaps": Parser(\.gaps, parseGaps),
     "workspace-to-monitor-force-assignment": Parser(\.workspaceToMonitorForceAssignment, parseWorkspaceToMonitorAssignment),

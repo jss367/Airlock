@@ -74,6 +74,20 @@ final class FocusCommandTest: XCTestCase {
         assertEquals(focus.windowOrNil?.windowId, 3)
     }
 
+    func testFocusOverFloatingWindowsKeepsMru() async throws {
+        let workspace = Workspace.get(byName: name)
+        let window2 = TestWindow.new(id: 2, parent: workspace, rect: Rect(topLeftX: 10, topLeftY: 10, width: 100, height: 100))
+        TestWindow.new(id: 1, parent: workspace, rect: Rect(topLeftX: 0, topLeftY: 0, width: 100, height: 100))
+        TestWindow.new(id: 3, parent: workspace, rect: Rect(topLeftX: 20, topLeftY: 20, width: 100, height: 100))
+        assertEquals(window2.focusWindow(), true)
+        assertEquals(workspace.mostRecentWindowRecursive?.windowId, 2)
+
+        try await FocusCommand.new(direction: .right).run(.defaultEnv, .emptyStdin)
+        assertEquals(focus.windowOrNil?.windowId, 3)
+        // Restoring the floating windows must not undo the MRU update the focus change made
+        assertEquals(workspace.mostRecentWindowRecursive?.windowId, 3)
+    }
+
     func testFocusAlongTheContainerOrientation() async throws {
         Workspace.get(byName: name).rootTilingContainer.apply {
             assertEquals(TestWindow.new(id: 1, parent: $0).focusWindow(), true)

@@ -194,6 +194,10 @@ struct FocusCommand: Command {
     // Restore workspace MRU to the exact order before the floating-as-tiling operation,
     // so that floating windows retain their prior recency positions.
     workspace.restoreMruOrder(from: snapshot.workspaceMruSnapshot)
+    // The snapshot predates the focus change, so the replay just demoted the newly focused window
+    if let window = focus.windowOrNil, window.nodeWorkspace == workspace {
+        window.markAsMostRecentChild()
+    }
 }
 
 private struct FloatingWindowsSnapshot {

@@ -46,6 +46,9 @@ func focusChangeTrigger(sessionTrigger: String?, syncedFromMacOs: Bool) -> Strin
     if nativeFocused?.parent is MacosPopupWindowsContainer {
         return false
     }
+    // Record this even when the change below gets blocked. macOS did make the window key, and a stale
+    // value lets MacApp.nativeFocus take its activate-only shortcut, which leaves a same-app stealer key
+    nativeFocused?.macAppUnsafe.lastNativeFocusedWindowId = nativeFocused?.windowId
     var syncedFromMacOs = false
     if nativeFocused?.windowId != lastKnownNativeFocusedWindowId {
         if shouldAllowFocusChange(to: nativeFocused) {
@@ -60,6 +63,5 @@ func focusChangeTrigger(sessionTrigger: String?, syncedFromMacOs: Bool) -> Strin
             return false
         }
     }
-    nativeFocused?.macAppUnsafe.lastNativeFocusedWindowId = nativeFocused?.windowId
     return syncedFromMacOs
 }
