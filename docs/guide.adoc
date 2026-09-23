@@ -550,7 +550,7 @@ xref:commands.adoc#flash-focus[flash-focus] command to a hotkey:
 [source,toml]
 ----
 [mode.main.binding]
-    alt-shift-f = 'flash-focus'
+    option-shift-f = 'flash-focus'
 ----
 
 [#multiple-monitors]

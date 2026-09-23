@@ -90,6 +90,22 @@ final class ConfigTest: XCTestCase {
         assertEquals(config.persistentWorkspaces.sorted(), ["1", "X", "Y"])
     }
 
+    func testWorkspacesShorthandKeepsExistingBindingWrittenInOtherModifierOrder() {
+        let (config, errors) = parseConfig(
+            """
+            [workspaces]
+                move-modifier = 'shift-option'
+            [workspaces.names]
+                A = 'a'
+            [mode.main.binding]
+                option-shift-a = 'focus left'
+            """,
+        )
+        assertEquals(errors.descriptions, [])
+        let binding = config.modes[mainModeId]?.bindings["option-shift-a"]
+        XCTAssertTrue(binding?.commands.singleOrNil() is FocusCommand)
+    }
+
     func testDropBindings() {
         let (config, errors) = parseConfig(
             """

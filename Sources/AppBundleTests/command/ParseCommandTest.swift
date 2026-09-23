@@ -25,6 +25,12 @@ final class ParseCommandTest: XCTestCase {
         }
     }
 
+    func testDeprecatedMoveWorkspaceToDisplayIsValidated() {
+        let error = "--wrap-around is incompatible with <monitor-pattern> argument"
+        assertEquals(parseCommand("move-workspace-to-monitor --wrap-around main").errorOrNil, error)
+        assertEquals(parseCommand("move-workspace-to-display --wrap-around main").errorOrNil, error)
+    }
+
     func testParseLayoutCommand() {
         testParseCommandSucc("layout tiles", LayoutCmdArgs(rawArgs: ["layout", "tiles"], toggleBetween: [.tiles]))
         testParseCommandSucc("layout accordion", LayoutCmdArgs(rawArgs: ["layout", "accordion"], toggleBetween: [.accordion]))

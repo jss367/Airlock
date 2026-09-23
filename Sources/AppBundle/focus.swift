@@ -71,9 +71,16 @@ private struct FrozenFocus: AeroAny, Equatable, Sendable {
     _focus = newFocus.frozen
     let status = newFocus.workspace.workspaceMonitor.setActiveWorkspace(newFocus.workspace)
 
-    newFocus.windowOrNil?.markAsMostRecentChild()
+    if let window = newFocus.windowOrNil {
+        focusRecencyCounter += 1
+        window.focusRecency = focusRecencyCounter
+        window.markAsMostRecentChild()
+    }
     return status
 }
+
+/// Bumped on every focus change so windows can be ordered by when they were last focused
+@MainActor private var focusRecencyCounter: UInt64 = 0
 extension Window {
     @MainActor func focusWindow() -> Bool {
         if let focus = toLiveFocusOrNil() {
