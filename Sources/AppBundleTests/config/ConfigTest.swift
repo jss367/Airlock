@@ -689,6 +689,19 @@ final class ConfigTest: XCTestCase {
         assertEquals(errors, [])
     }
 
+    func testQuickSwitcherMayShareKeyWithSwitchedOffBinding() {
+        let (_, errors) = parseConfig(
+            """
+            enable-keyboard-shortcuts = false
+            [quick-switcher]
+                binding = 'option-space'
+            [mode.main.binding]
+                option-space = 'exec-and-forget open -a Terminal'
+            """,
+        )
+        assertEquals(errors, [])
+    }
+
     func testDisabledBindingInUserOnlyModeIsDropped() {
         let (config, errors) = parseConfig(
             """
