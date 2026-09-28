@@ -54,6 +54,8 @@ struct SummonAppCommand: Command {
     private func launchNewInstance(_ app: InstalledApp) {
         let config = NSWorkspace.OpenConfiguration()
         config.activates = true
+        // Without this, a running app is only re-activated and no new window appears
+        config.createsNewApplicationInstance = true
         NSWorkspace.shared.openApplication(at: app.url, configuration: config)
     }
 }

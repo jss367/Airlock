@@ -58,7 +58,9 @@ func mergeModesWithDefaults(userModes: [String: Mode], defaultModes: [String: Mo
             }
             result[modeName] = Mode(bindings: mergedBindings)
         } else {
-            result[modeName] = userMode
+            // 'disabled' has nothing to remove here, and keeping it would register a hotkey that
+            // swallows the keystroke and runs nothing
+            result[modeName] = Mode(bindings: userMode.bindings.filter { !$0.value.commands.isEmpty })
         }
     }
     return result

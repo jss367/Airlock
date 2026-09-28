@@ -194,9 +194,15 @@ final class AppLauncherPanel: NSPanelHud {
                 // Already on current workspace — just focus it
                 windowOnCurrentWs.nativeFocus()
             } else if let windowToMove = appWindows.first {
-                // Move a window from another workspace to current
-                _ = windowToMove.bindAsFloatingWindow(to: currentWorkspace)
-                windowToMove.nativeFocus()
+                // Move a window from another workspace to current. Inside a session so the
+                // layout and Airlock's own focus get updated, not only macOS's
+                guard let token: RunSessionGuard = .isServerEnabled else { return }
+                Task {
+                    try? await runLightSession(.menuBarButton, token) {
+                        _ = windowToMove.bindAsFloatingWindow(to: currentWorkspace)
+                        _ = windowToMove.focusWindow()
+                    }
+                }
             } else {
                 // Running but no windows — launch a new instance
                 launchViaWorkspace(app)

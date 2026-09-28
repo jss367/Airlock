@@ -5,6 +5,10 @@ import QuartzCore
 final class FocusFlashOverlay {
     private let panel: NSPanel
     private let outlineLayer: CAShapeLayer
+    /// Bumped by every flash() and cancel(). removeAnimation fires the removed transaction's
+    /// completion block asynchronously, after the next flash() has already ordered the panel
+    /// front, so the block has to check it still owns the panel before hiding it.
+    private var generation: UInt64 = 0
 
     init() {
         let panel = NSPanel(
@@ -78,8 +82,11 @@ final class FocusFlashOverlay {
         // Animate path expansion + opacity fade together.
         CATransaction.begin()
         CATransaction.setAnimationDuration(duration)
+        generation &+= 1
+        let flashGeneration = generation
         CATransaction.setCompletionBlock { [weak self] in
-            self?.panel.orderOut(nil)
+            guard let self, self.generation == flashGeneration else { return }
+            self.panel.orderOut(nil)
         }
 
         let pathAnim = CABasicAnimation(keyPath: "path")
@@ -106,6 +113,7 @@ final class FocusFlashOverlay {
 
     /// Stop any in-flight animation and hide the panel.
     func cancel() {
+        generation &+= 1
         outlineLayer.removeAnimation(forKey: "pathPop")
         outlineLayer.removeAnimation(forKey: "fade")
         outlineLayer.opacity = 0
