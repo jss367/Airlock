@@ -224,7 +224,7 @@ private func bindingLineMatches(_ line: String, key: String, modifiers: NSEvent.
 // MARK: - TOML line scanning
 
 /// The table name of a `[table]` header line, ignoring a trailing comment. Nil for any other line
-private func tomlTableHeader(_ line: String) -> String? {
+func tomlTableHeader(_ line: String) -> String? {
     let code = line[..<tomlCommentStart(line)]
     let trimmed = code.trimmingCharacters(in: CharacterSet.whitespaces)
     guard trimmed.hasPrefix("[") && trimmed.hasSuffix("]") else { return nil }
@@ -365,9 +365,8 @@ func readConfigLines(from url: URL) throws -> (lines: [String], separator: Strin
     return (lines, text.contains("\r\n") ? "\r\n" : "\n")
 }
 
-/// Writes through a symlinked config (e.g. into a dotfiles repo) instead of replacing the link
 func writeConfigLines(_ lines: [String], to url: URL, separator: String = "\n") throws {
-    try lines.joined(separator: separator).write(to: url.resolvingSymlinksInPath(), atomically: true, encoding: .utf8)
+    try writeConfigFile(lines.joined(separator: separator), to: url)
 }
 
 private func loadOrCreateConfig() throws -> (URL, (lines: [String], separator: String)) {

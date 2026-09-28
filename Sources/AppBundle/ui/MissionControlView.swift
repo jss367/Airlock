@@ -30,10 +30,11 @@ func dismissMissionControl() {
 private final class MissionControlPanel: NSPanelHud {
     // periphery:ignore
     private var hostingView: NSHostingView<MissionControlContent>?
+    private let keyMonitor = PanelKeyMonitor()
 
     init(preloadedData: [MissionControlContent.WorkspaceInfo]) {
         super.init()
-        let content = MissionControlContent(preloadedData: preloadedData)
+        let content = MissionControlContent(preloadedData: preloadedData, keyMonitor: keyMonitor)
         let hosting = NSHostingView(rootView: content)
         self.contentView = hosting
         self.hostingView = hosting
@@ -47,6 +48,11 @@ private final class MissionControlPanel: NSPanelHud {
         self.isOpaque = false
     }
 
+    override func close() {
+        keyMonitor.remove()
+        super.close()
+    }
+
     func show() {
         makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
@@ -55,8 +61,8 @@ private final class MissionControlPanel: NSPanelHud {
 
 struct MissionControlContent: View {
     let preloadedData: [WorkspaceInfo]
+    let keyMonitor: PanelKeyMonitor
     @State private var selectedWorkspaceIndex: Int = 0
-    @State private var keyMonitor: Any?
     @State private var isVisible: Bool = false
 
     struct WorkspaceInfo: Identifiable {
@@ -130,17 +136,9 @@ struct MissionControlContent: View {
             if let focusedIndex = preloadedData.firstIndex(where: { $0.isFocused }) {
                 selectedWorkspaceIndex = focusedIndex
             }
-            keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-                return handleKeyEvent(event) ? nil : event
-            }
+            keyMonitor.install(handleKeyEvent)
             withAnimation(.easeOut(duration: 0.2)) {
                 isVisible = true
-            }
-        }
-        .onDisappear {
-            if let monitor = keyMonitor {
-                NSEvent.removeMonitor(monitor)
-                keyMonitor = nil
             }
         }
     }

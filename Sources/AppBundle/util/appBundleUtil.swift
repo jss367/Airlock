@@ -41,8 +41,8 @@ private func makeAllWindowsVisibleAndRestoreSize() async throws {
         let monitorVisibleRect = monitor.visibleRect
         let windowSize = window.lastFloatingSize ?? CGSize(width: monitorVisibleRect.width, height: monitorVisibleRect.height)
         let point = CGPoint(
-            x: (monitorVisibleRect.width - windowSize.width) / 2,
-            y: (monitorVisibleRect.height - windowSize.height) / 2,
+            x: monitorVisibleRect.topLeftX + (monitorVisibleRect.width - windowSize.width) / 2,
+            y: monitorVisibleRect.topLeftY + (monitorVisibleRect.height - windowSize.height) / 2,
         )
         try await window.setAxFrameBlocking(point, windowSize)
     }
