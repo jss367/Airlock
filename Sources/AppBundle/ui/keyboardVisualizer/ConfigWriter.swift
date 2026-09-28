@@ -6,6 +6,7 @@ enum ConfigWriterError: LocalizedError {
     case ambiguousConfig([URL])
     case writeError(String)
     case unrepresentableAppName(String)
+    case inlineTable(String)
 
     var errorDescription: String? {
         switch self {
@@ -15,6 +16,8 @@ enum ConfigWriterError: LocalizedError {
                 return "Failed to write config: \(msg)"
             case .unrepresentableAppName(let name):
                 return "Cannot bind '\(name)': app names containing both ' and \" are not supported"
+            case .inlineTable(let table):
+                return "'\(table)' is written as an inline table. Edit it in the config file instead"
         }
     }
 }
@@ -22,9 +25,7 @@ enum ConfigWriterError: LocalizedError {
 func addBinding(key: String, appName: String, modifierPrefix: NSEvent.ModifierFlags) throws {
     guard canRepresentAppName(appName) else { throw ConfigWriterError.unrepresentableAppName(appName) }
     let (url, lines) = try loadOrCreateConfig()
-    let content = addBindingToLines(lines, key: key, appName: appName, modifierPrefix: modifierPrefix)
-    let output = content.joined(separator: "\n")
-    try output.write(to: url, atomically: true, encoding: .utf8)
+    try writeConfigLines(addBindingToLines(lines, key: key, appName: appName, modifierPrefix: modifierPrefix), to: url)
 }
 
 /// Pure line-manipulation logic for adding a binding, separated from file I/O for testability.
@@ -73,8 +74,7 @@ func removeBinding(key: String, modifierPrefix: NSEvent.ModifierFlags) throws {
 
     lines = removeMatchingBindingLines(lines, sectionStart: sectionIndex, sectionEnd: sectionEnd, key: key, modifiers: modifierPrefix)
 
-    let output = lines.joined(separator: "\n")
-    try output.write(to: url, atomically: true, encoding: .utf8)
+    try writeConfigLines(lines, to: url)
 }
 
 /// `splitArgs()` has no escape sequences, so an app name containing both quote characters
@@ -103,6 +103,89 @@ func summonAppTomlValue(appName: String) -> String {
         .replacingOccurrences(of: "\\", with: "\\\\")
         .replacingOccurrences(of: "\"", with: "\\\"")
     return "\"\(escaped)\""
+}
+
+// MARK: - Config values
+
+/// Sets `key` to `value` (already TOML-encoded, e.g. `true` or `'off'`) inside `[table]`, or at
+/// the top level when `table` is nil, and writes the config file. With no config file yet, it
+/// starts from a copy of the default config, so defaults like `persistent-workspaces` survive.
+func setConfigValue(table: String?, key: String, value: String) throws {
+    let url: URL
+    switch findCustomConfigUrl() {
+        case .file(let existing):
+            url = existing
+        case .noCustomConfigExists:
+            url = FileManager.default.homeDirectoryForCurrentUser.appending(path: configDotfileName)
+            try FileManager.default.copyItem(at: defaultConfigUrl, to: url)
+        case .ambiguousConfigError(let urls):
+            throw ConfigWriterError.ambiguousConfig(urls)
+    }
+    let lines = try String(contentsOf: url, encoding: .utf8).components(separatedBy: "\n")
+    try writeConfigLines(setTomlValueInLines(lines, table: table, key: key, value: value), to: url)
+}
+
+/// Pure line-manipulation logic for `setConfigValue`, separated from file I/O for testability.
+/// Replaces the existing entry (keeping its indentation and trailing comment) or adds a new one.
+func setTomlValueInLines(_ lines: [String], table: String?, key: String, value: String) throws -> [String] {
+    let topLevel = 0 ..< tomlSectionEnd(lines, sectionStart: -1)
+    guard let table else {
+        return setTomlEntry(lines, in: topLevel, key: key, value: value, defaultIndent: "")
+    }
+    if let header = lines.firstIndex(where: { tomlTableHeader($0) == table }) {
+        let section = header + 1 ..< tomlSectionEnd(lines, sectionStart: header)
+        return setTomlEntry(lines, in: section, key: key, value: value, defaultIndent: "    ")
+    }
+    // The table may be written without a header, as `table = { ... }` or `table.key = ...`
+    let topLevelKeys = tomlEntries(lines, in: topLevel).map(\.key)
+    if topLevelKeys.contains(table) {
+        throw ConfigWriterError.inlineTable(table)
+    }
+    if topLevelKeys.contains(where: { $0.hasPrefix(table + ".") }) {
+        return setTomlEntry(lines, in: topLevel, key: "\(table).\(key)", value: value, defaultIndent: "")
+    }
+    var content = lines
+    while content.last?.trimmingCharacters(in: .whitespaces).isEmpty == true { content.removeLast() }
+    if !content.isEmpty { content.append("") }
+    return content + ["[\(table)]", "    \(key) = \(value)", ""]
+}
+
+private func setTomlEntry(_ lines: [String], in range: Range<Int>, key: String, value: String, defaultIndent: String) -> [String] {
+    func indent(_ line: String) -> String { String(line.prefix { $0 == " " || $0 == "\t" }) }
+    var content = lines
+    let entries = tomlEntries(lines, in: range)
+    if let entry = entries.first(where: { $0.key == key }) {
+        let line = lines[entry.lines.lowerBound]
+        // A trailing comment can only be kept when the old value fits on one line
+        let comment = entry.lines.count == 1 ? String(line[tomlCommentStart(line)...]) : ""
+        let newLine = "\(indent(line))\(key) = \(value)" + (comment.isEmpty ? "" : " \(comment)")
+        content.replaceSubrange(entry.lines, with: [newLine])
+    } else {
+        let lastEntry = entries.last
+        let newLine = "\(lastEntry.map { indent(lines[$0.lines.lowerBound]) } ?? defaultIndent)\(key) = \(value)"
+        content.insert(newLine, at: lastEntry?.lines.upperBound ?? range.lowerBound)
+    }
+    return content
+}
+
+/// The `key = value` entries in `range`, each with the lines its value spans.
+/// Dotted keys have the whitespace around their dots removed.
+private func tomlEntries(_ lines: [String], in range: Range<Int>) -> [(key: String, lines: Range<Int>)] {
+    var result: [(key: String, lines: Range<Int>)] = []
+    var index = range.lowerBound
+    while index < range.upperBound {
+        let span = min(tomlEntryLineCount(lines, at: index), range.upperBound - index)
+        let line = lines[index]
+        let code = line[..<tomlCommentStart(line)]
+        if let eq = code.firstIndex(of: "=") {
+            let key = code[..<eq].split(separator: ".", omittingEmptySubsequences: false)
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+                .joined(separator: ".")
+            if !key.isEmpty { result.append((key, index ..< index + span)) }
+        }
+        index += span
+    }
+    return result
 }
 
 // MARK: - Binding Matching
@@ -150,8 +233,8 @@ private func tomlTableHeader(_ line: String) -> String? {
     return trimmed.trimmingCharacters(in: CharacterSet(charactersIn: "[]")).trimmingCharacters(in: CharacterSet.whitespaces)
 }
 
-/// Index of the next table header after `sectionStart`, or `lines.count`.
-/// Skips over multi-line values so their contents are never read as headers.
+/// Index of the next table header after `sectionStart`, or `lines.count`. Pass -1 to find
+/// where the top-level keys end. Skips over multi-line values so their contents are never read as headers.
 private func tomlSectionEnd(_ lines: [String], sectionStart: Int) -> Int {
     var index = sectionStart + 1
     while index < lines.count {
@@ -262,6 +345,11 @@ private func tomlCommentStart(_ text: String) -> String.Index {
 }
 
 // MARK: - Helpers
+
+/// Writes through a symlinked config (e.g. into a dotfiles repo) instead of replacing the link
+func writeConfigLines(_ lines: [String], to url: URL) throws {
+    try lines.joined(separator: "\n").write(to: url.resolvingSymlinksInPath(), atomically: true, encoding: .utf8)
+}
 
 private func loadOrCreateConfig() throws -> (URL, [String]) {
     let configFile = findCustomConfigUrl()

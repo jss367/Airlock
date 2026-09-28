@@ -68,6 +68,7 @@ public func menuBar(viewModel: TrayMenuModel) -> some Scene {
         Button("Keyboard Visualizer") {
             showKeyboardVisualizer()
         }.keyboardShortcut("V", modifiers: .command)
+        featuresMenu()
         getExperimentalUISettingsMenu(viewModel: viewModel)
         openConfigButton()
         reloadConfigButton()
