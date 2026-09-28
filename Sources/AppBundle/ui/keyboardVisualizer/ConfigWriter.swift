@@ -45,7 +45,8 @@ func addBindingToLines(
     let modStr = modifierPrefix.toString()
     let physicalKey = keyNotationToKeyCode[key]
     let configKey = physicalKey.flatMap { configKeyNotation(for: $0, in: keyMapping) } ?? key
-    let bindingLine = "    \(modStr)-\(configKey) = \(summonAppTomlValue(appName: appName))"
+    // A mapped key name can need quoting, e.g. one with a dot would otherwise read as a dotted key
+    let bindingLine = "    \(tomlKey("\(modStr)-\(configKey)")) = \(summonAppTomlValue(appName: appName))"
 
     // Find [mode.main.binding] section
     if let sectionIndex = content.firstIndex(where: { tomlTableHeader($0) == "mode.main.binding" }) {
@@ -239,6 +240,7 @@ private func bindingLineMatches(_ line: String, key: String, modifiers: NSEvent.
     // Extract the binding key (everything before " =" or "=")
     guard let eqIndex = trimmed.firstIndex(of: "=") else { return false }
     let bindingKey = trimmed[trimmed.startIndex ..< eqIndex].trimmingCharacters(in: CharacterSet.whitespaces)
+        .trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
     // Parse the binding key into parts: the last part is the key, everything before is modifiers
     let parts = bindingKey.split(separator: "-")
     guard let lastPart = parts.last else { return false }

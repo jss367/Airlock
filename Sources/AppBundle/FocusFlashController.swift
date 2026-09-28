@@ -33,6 +33,8 @@ final class FocusFlashController {
     func flushPendingFlash() {
         guard let window = pendingFlashWindow else { return }
         pendingFlashWindow = nil
+        // A later focus change that didn't ask for a flash of its own can land before the flush
+        guard window === focus.windowOrNil else { return }
 
         let cfg = config.focusFlash
         guard cfg.enabled else { return }
