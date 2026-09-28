@@ -106,6 +106,14 @@ private final class QuickSwitcherPanel: NSPanelHud {
     }
 }
 
+func webSearchUrl(query: String) -> URL? {
+    // .urlQueryAllowed leaves &, + and = as is, so "c++" would search "c" and "AT&T" would search "AT"
+    var allowed = CharacterSet.urlQueryAllowed
+    allowed.remove(charactersIn: "&+=")
+    guard let encoded = query.addingPercentEncoding(withAllowedCharacters: allowed) else { return nil }
+    return URL(string: "https://google.com/search?q=\(encoded)")
+}
+
 struct SwitcherItem: Identifiable, Hashable {
     let id: String
     let title: String
@@ -372,9 +380,7 @@ struct QuickSwitcherContent: View {
                 NSWorkspace.shared.openApplication(at: url, configuration: config)
                 dismissQuickSwitcher(restoreFocus: false)
             case .webSearch(let query):
-                if let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-                   let url = URL(string: "https://google.com/search?q=\(encoded)")
-                {
+                if let url = webSearchUrl(query: query) {
                     NSWorkspace.shared.open(url)
                 }
                 dismissQuickSwitcher(restoreFocus: false)
