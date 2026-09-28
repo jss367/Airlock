@@ -561,7 +561,7 @@ moves focus to them even when they live on another workspace. Airlock pushes tha
 so you stay where you are. The `prevent-focus-stealing` key controls this:
 
 * `cross-workspace` -- block focus changes to a window on another workspace (default)
-* `always` -- block every focus change that you didn't trigger yourself
+* `always` -- block every focus change that you didn't trigger yourself, unless the focused workspace has no window
 * `off` -- follow macOS, the original AeroSpace behavior
 
 Focus changes you trigger yourself (a hotkey, a CLI command, or a mouse click) open a short grace
