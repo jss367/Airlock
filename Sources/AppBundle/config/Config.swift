@@ -73,9 +73,9 @@ enum DefaultContainerOrientation: String {
 }
 
 enum PreventFocusStealingMode: String, CaseIterable {
-    /// Don't prevent focus stealing (default, original behavior)
+    /// Don't prevent focus stealing (original AeroSpace behavior)
     case off
-    /// Prevent apps from stealing focus to a different workspace
+    /// Prevent apps from stealing focus to a different workspace (default)
     case crossWorkspace = "cross-workspace"
     /// Prevent all uninitiated focus changes (aggressive)
     case always

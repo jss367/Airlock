@@ -79,11 +79,15 @@ struct HotkeyBinding: Equatable, Sendable {
     let commands: [any Command]
     let descriptionWithKeyCode: String
     let descriptionWithKeyNotation: String
+    /// The 'disabled' sentinel: removes the default binding for this key. Distinct from `[]`,
+    /// which binds the key to nothing so the keystroke is swallowed instead of reaching macOS
+    let isDisabled: Bool
 
-    init(_ modifiers: NSEvent.ModifierFlags, _ keyCode: Key, _ commands: [any Command], descriptionWithKeyNotation: String) {
+    init(_ modifiers: NSEvent.ModifierFlags, _ keyCode: Key, _ commands: [any Command], descriptionWithKeyNotation: String, isDisabled: Bool = false) {
         self.modifiers = modifiers
         self.keyCode = keyCode
         self.commands = commands
+        self.isDisabled = isDisabled
         self.descriptionWithKeyCode = modifiers.isEmpty
             ? keyCode.toString()
             : modifiers.toString() + "-" + keyCode.toString()
@@ -94,6 +98,8 @@ struct HotkeyBinding: Equatable, Sendable {
         lhs.modifiers == rhs.modifiers &&
             lhs.keyCode == rhs.keyCode &&
             lhs.descriptionWithKeyCode == rhs.descriptionWithKeyCode &&
+            lhs.isDisabled == rhs.isDisabled &&
+            lhs.commands.count == rhs.commands.count &&
             zip(lhs.commands, rhs.commands).allSatisfy { $0.equals($1) }
     }
 }
@@ -107,10 +113,10 @@ func parseBindings(_ raw: TOMLValueConvertible, _ backtrace: TomlBacktrace, _ er
     for (binding, rawCommand): (String, TOMLValueConvertible) in rawTable {
         let backtrace = backtrace + .key(binding)
         if rawCommand.string == "disabled" {
-            // 'disabled' sentinel: parse the key combo, store binding with empty commands
+            // 'disabled' sentinel: parse the key combo, store a marker binding to remove the default
             let parsed = parseBinding(binding, backtrace, mapping)
                 .map { modifiers, key in
-                    HotkeyBinding(modifiers, key, [], descriptionWithKeyNotation: binding)
+                    HotkeyBinding(modifiers, key, [], descriptionWithKeyNotation: binding, isDisabled: true)
                 }
                 .getOrNil(appendErrorTo: &errors)
             if let parsed {

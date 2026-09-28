@@ -340,10 +340,10 @@ struct MissionControlContent: View {
                 try await runLightSession(.menuBarButton, token) {
                     _ = Workspace.get(byName: ws.name).focusWorkspace()
                 }
-                dismissMissionControl()
             } catch {
                 // Cancellation or a failed AX call. Nothing to recover here.
             }
+            dismissMissionControl()
         }
     }
 
@@ -357,10 +357,10 @@ struct MissionControlContent: View {
                         _ = w.focusWindow()
                     }
                 }
-                dismissMissionControl()
             } catch {
                 // Cancellation or a failed AX call. Nothing to recover here.
             }
+            dismissMissionControl()
         }
     }
 }
