@@ -50,10 +50,11 @@ struct WorkspaceCommand: Command {
     guard let index = workspaces.firstIndex(where: { $0 == target.workspace }) else {
         // The list from stdin can leave out the current workspace (e.g. `list-workspaces --empty no`
         // while on an empty one). Step from where it would sort, not from the first entry
+        // The list isn't necessarily sorted, so compare rather than take the first match
         let workspace = isNext
-            ? workspaces.first(where: { $0 > target.workspace })
-            : workspaces.last(where: { $0 < target.workspace })
-        return workspace ?? (wrapAround ? (isNext ? workspaces.first : workspaces.last) : nil)
+            ? workspaces.filter { $0 > target.workspace }.min()
+            : workspaces.filter { $0 < target.workspace }.max()
+        return workspace ?? (wrapAround ? (isNext ? workspaces.min() : workspaces.max()) : nil)
     }
     let workspace: Workspace? = if wrapAround {
         workspaces.get(wrappingIndex: isNext ? index + 1 : index - 1)
