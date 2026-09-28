@@ -1,6 +1,7 @@
 import AppKit
 import Common
 import Foundation
+import HotKey
 
 enum ConfigWriterError: LocalizedError {
     case ambiguousConfig([URL])
@@ -19,26 +20,36 @@ enum ConfigWriterError: LocalizedError {
     }
 }
 
-func addBinding(key: String, appName: String, modifierPrefix: NSEvent.ModifierFlags) throws {
+/// `key` is the physical key as the visualizer names it (qwerty notation). `keyMapping` is the
+/// active `[key-mapping]`, which the config parser uses to turn the written key name back into a key code.
+func addBinding(key: String, appName: String, modifierPrefix: NSEvent.ModifierFlags, keyMapping: [String: Key]) throws {
     guard canRepresentAppName(appName) else { throw ConfigWriterError.unrepresentableAppName(appName) }
     let (url, lines) = try loadOrCreateConfig()
-    let content = addBindingToLines(lines, key: key, appName: appName, modifierPrefix: modifierPrefix)
+    let content = addBindingToLines(lines, key: key, appName: appName, modifierPrefix: modifierPrefix, keyMapping: keyMapping)
     let output = content.joined(separator: "\n")
     try writeConfigFile(output, to: url)
 }
 
 /// Pure line-manipulation logic for adding a binding, separated from file I/O for testability.
-func addBindingToLines(_ lines: [String], key: String, appName: String, modifierPrefix: NSEvent.ModifierFlags) -> [String] {
+func addBindingToLines(
+    _ lines: [String],
+    key: String,
+    appName: String,
+    modifierPrefix: NSEvent.ModifierFlags,
+    keyMapping: [String: Key] = keyNotationToKeyCode,
+) -> [String] {
     var content = lines
 
     let modStr = modifierPrefix.toString()
-    let bindingLine = "    \(modStr)-\(key) = \(summonAppTomlValue(appName: appName))"
+    let physicalKey = keyNotationToKeyCode[key]
+    let configKey = physicalKey.flatMap { configKeyNotation(for: $0, in: keyMapping) } ?? key
+    let bindingLine = "    \(modStr)-\(configKey) = \(summonAppTomlValue(appName: appName))"
 
     // Find [mode.main.binding] section
     if let sectionIndex = content.firstIndex(where: { tomlTableHeader($0) == "mode.main.binding" }) {
         // Remove existing binding for this key+modifier (matching by parsed modifiers, not string)
         let sectionEnd = tomlSectionEnd(content, sectionStart: sectionIndex)
-        content = removeMatchingBindingLines(content, sectionStart: sectionIndex, sectionEnd: sectionEnd, key: key, modifiers: modifierPrefix)
+        content = removeMatchingBindingLines(content, sectionStart: sectionIndex, sectionEnd: sectionEnd, key: key, modifiers: modifierPrefix, keyMapping: keyMapping)
 
         // Insert before the next section header or at end of file
         content.insert(bindingLine, at: tomlSectionEnd(content, sectionStart: sectionIndex))
@@ -55,7 +66,7 @@ func addBindingToLines(_ lines: [String], key: String, appName: String, modifier
 }
 
 // periphery:ignore
-func removeBinding(key: String, modifierPrefix: NSEvent.ModifierFlags) throws {
+func removeBinding(key: String, modifierPrefix: NSEvent.ModifierFlags, keyMapping: [String: Key]) throws {
     let configFile = findCustomConfigUrl()
 
     guard case .file(let url) = configFile else {
@@ -71,7 +82,7 @@ func removeBinding(key: String, modifierPrefix: NSEvent.ModifierFlags) throws {
     }
     let sectionEnd = tomlSectionEnd(lines, sectionStart: sectionIndex)
 
-    lines = removeMatchingBindingLines(lines, sectionStart: sectionIndex, sectionEnd: sectionEnd, key: key, modifiers: modifierPrefix)
+    lines = removeMatchingBindingLines(lines, sectionStart: sectionIndex, sectionEnd: sectionEnd, key: key, modifiers: modifierPrefix, keyMapping: keyMapping)
 
     let output = lines.joined(separator: "\n")
     try writeConfigFile(output, to: url)
@@ -107,15 +118,32 @@ func summonAppTomlValue(appName: String) -> String {
 
 // MARK: - Binding Matching
 
+/// The key name that `mapping` resolves to `key`. Prefers the qwerty name, so a plain qwerty
+/// config keeps getting the names it always did.
+func configKeyNotation(for key: Key, in mapping: [String: Key]) -> String? {
+    let qwertyName = key.toString()
+    if mapping[qwertyName] == key { return qwertyName }
+    return mapping.filter { $0.value == key }.keys.min()
+}
+
 /// Remove bindings within a binding section that bind the same key+modifiers,
 /// regardless of modifier order in the text (e.g. "shift-cmd-k" matches "cmd-shift-k").
+/// `key` is the physical key in qwerty notation; line keys are resolved through `keyMapping`
+/// so a binding written under another layout still matches.
 /// A binding whose value spans several lines is removed as a whole.
-func removeMatchingBindingLines(_ lines: [String], sectionStart: Int, sectionEnd: Int, key: String, modifiers: NSEvent.ModifierFlags) -> [String] {
+func removeMatchingBindingLines(
+    _ lines: [String],
+    sectionStart: Int,
+    sectionEnd: Int,
+    key: String,
+    modifiers: NSEvent.ModifierFlags,
+    keyMapping: [String: Key] = keyNotationToKeyCode,
+) -> [String] {
     var result = Array(lines[...sectionStart])
     var index = sectionStart + 1
     while index < sectionEnd {
         let span = min(tomlEntryLineCount(lines, at: index), sectionEnd - index)
-        if !bindingLineMatches(lines[index], key: key, modifiers: modifiers) {
+        if !bindingLineMatches(lines[index], key: key, modifiers: modifiers, keyMapping: keyMapping) {
             result += lines[index ..< index + span]
         }
         index += span
@@ -123,7 +151,7 @@ func removeMatchingBindingLines(_ lines: [String], sectionStart: Int, sectionEnd
     return result + lines[sectionEnd...]
 }
 
-private func bindingLineMatches(_ line: String, key: String, modifiers: NSEvent.ModifierFlags) -> Bool {
+private func bindingLineMatches(_ line: String, key: String, modifiers: NSEvent.ModifierFlags, keyMapping: [String: Key]) -> Bool {
     let trimmed = line.trimmingCharacters(in: CharacterSet.whitespaces)
     guard !trimmed.isEmpty && !trimmed.hasPrefix("#") else { return false }
     // Extract the binding key (everything before " =" or "=")
@@ -131,7 +159,12 @@ private func bindingLineMatches(_ line: String, key: String, modifiers: NSEvent.
     let bindingKey = trimmed[trimmed.startIndex ..< eqIndex].trimmingCharacters(in: CharacterSet.whitespaces)
     // Parse the binding key into parts: the last part is the key, everything before is modifiers
     let parts = bindingKey.split(separator: "-")
-    guard let lastPart = parts.last, String(lastPart) == key else { return false }
+    guard let lastPart = parts.last else { return false }
+    if let physicalKey = keyNotationToKeyCode[key] {
+        guard keyMapping[String(lastPart)] == physicalKey else { return false }
+    } else {
+        guard String(lastPart) == key else { return false }
+    }
     // Parse modifiers from the line
     let lineMods = parts.dropLast().reduce(NSEvent.ModifierFlags()) { flags, part in
         if let mod = modifiersMap[String(part)] { return flags.union(mod) }

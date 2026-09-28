@@ -79,6 +79,26 @@ final class ConfigWriterTest: XCTestCase {
         assertTrue(hasBinding)
     }
 
+    func testAddBindingUnderColemakWritesKeyThatResolvesToClickedPhysicalKey() {
+        let colemak = KeyMapping(preset: .colemak).resolve()
+        // Under colemak, "e" is the physical K key and "k" is the physical N key
+        let lines = [
+            "[mode.main.binding]",
+            "    option-e = 'summon-app \"OldApp\"'",
+            "    option-k = 'focus left'",
+        ]
+
+        let result = addBindingToLines(lines, key: "k", appName: "NewApp", modifierPrefix: .option, keyMapping: colemak)
+
+        assertEquals(result, [
+            "[mode.main.binding]",
+            "    option-k = 'focus left'",
+            "    option-e = 'summon-app \"NewApp\"'",
+        ])
+        let parsed = parseBinding("option-e", .emptyRoot, colemak).getOrNil()
+        assertEquals(parsed?.1, .k)
+    }
+
     // MARK: - Binding line format
 
     func testBindingLineGeneratesSummonApp() {
