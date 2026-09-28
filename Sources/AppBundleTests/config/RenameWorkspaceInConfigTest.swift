@@ -24,7 +24,7 @@ final class RenameWorkspaceInConfigTest: XCTestCase {
                 option-shift-1 = ['move-node-to-workspace --window-id 1 1', 'workspace 1']
                 option-3 = 'summon-workspace 1 && layout floating; workspace 11'
                 option-4 = 'balance-sizes --workspace 1'
-                option-5 = 'list-windows --workspace 2,1,11'
+                option-5 = 'list-windows --workspace 2,1,11 1 --format x'
                 option-6 = 'focus --window-id 1'
                 option-7 = 'workspace next' # workspace 1
             """
@@ -35,7 +35,7 @@ final class RenameWorkspaceInConfigTest: XCTestCase {
                 option-shift-1 = ['move-node-to-workspace --window-id 1 Web', 'workspace Web']
                 option-3 = 'summon-workspace Web && layout floating; workspace 11'
                 option-4 = 'balance-sizes --workspace Web'
-                option-5 = 'list-windows --workspace 2,Web,11'
+                option-5 = 'list-windows --workspace 2,Web,11 Web --format x'
                 option-6 = 'focus --window-id 1'
                 option-7 = 'workspace next' # workspace 1
             """)

@@ -102,6 +102,7 @@ private func tomlField(table: String, key: String) -> TomlField {
 
 private let workspaceArgCommands: Set<String> = ["workspace", "move-node-to-workspace", "summon-workspace"]
 private let flagsWithValue: Set<String> = ["--window-id", "--workspace"]
+let commandSeparators: Set<String> = ["&&", "||", ";"]
 
 /// Renames the workspace in one command string, which can hold a whole sequence (`a && b; c`)
 func renameWorkspaceInCommand(_ command: String, from old: String, to new: String) -> String {
@@ -125,16 +126,18 @@ func renameWorkspaceInCommand(_ command: String, from old: String, to new: Strin
     var i = 0
     while i < words.count {
         let word = String(command[words[i]])
-        if word == "&&" || word == "||" || word == ";" {
+        if commandSeparators.contains(word) {
             isAtCommandStart = true
             isWorkspaceCommand = false
         } else if isAtCommandStart {
             isAtCommandStart = false
             isWorkspaceCommand = workspaceArgCommands.contains(word)
-        } else if word == "--workspace", i + 1 < words.count {
-            // `list-windows --workspace` takes a comma separated list
-            replacements += commaSeparatedMatches(command, words[i + 1], old)
-            i += 1
+        } else if word == "--workspace" {
+            // `list-windows --workspace` takes every word up to the next flag, each a comma separated list
+            while i + 1 < words.count, !command[words[i + 1]].hasPrefix("-"), !commandSeparators.contains(String(command[words[i + 1]])) {
+                replacements += commaSeparatedMatches(command, words[i + 1], old)
+                i += 1
+            }
         } else if flagsWithValue.contains(word) {
             i += 1
         } else if word.hasPrefix("-") {
