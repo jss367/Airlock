@@ -469,7 +469,7 @@ final class ConfigTest: XCTestCase {
             "q": .q,
             "unicorn": .u,
         ]))
-        let binding = HotkeyBinding(.option, .u, [WorkspaceCommand(args: WorkspaceCmdArgs(target: .direct(.parse("unicorn").getOrDie())))])
+        let binding = HotkeyBinding(.option, .u, [WorkspaceCommand(args: WorkspaceCmdArgs(target: .direct(.parse("wonderland").getOrDie())))])
         assertEquals(config.modes[mainModeId]?.bindings[binding.descriptionWithKeyCode], binding)
 
         let (_, errors1) = parseConfig(
@@ -632,5 +632,67 @@ final class ConfigTest: XCTestCase {
             config.modes[mainModeId]?.bindings[lBinding.descriptionWithKeyCode],
             lBinding,
         )
+    }
+
+    func testQuickSwitcherBindingMustNotCollideWithModeBinding() {
+        let (_, errors) = parseConfig(
+            """
+            [quick-switcher]
+                binding = 'option-space'
+            [mode.main.binding]
+                option-space = 'exec-and-forget open -a Terminal'
+            """,
+        )
+        assertEquals(
+            errors.descriptions,
+            ["quick-switcher.binding: 'option-space' is already bound in mode 'main'. Use 'disabled' or a different key for one of them"],
+        )
+    }
+
+    func testDisabledQuickSwitcherMayShareItsKey() {
+        let (_, errors) = parseConfig(
+            """
+            [quick-switcher]
+                enabled = false
+            [mode.main.binding]
+                option-space = 'exec-and-forget open -a Terminal'
+            """,
+        )
+        assertEquals(errors, [])
+    }
+
+    func testDisabledBindingInUserOnlyModeIsDropped() {
+        let (config, errors) = parseConfig(
+            """
+            [mode.main.binding]
+                option-r = 'mode resize'
+            [mode.resize.binding]
+                minus = 'resize smart -50'
+                equal = 'disabled'
+                cmd-h = []
+            """,
+        )
+        assertEquals(errors, [])
+        let minus = HotkeyBinding([], .minus, [])
+        let equal = HotkeyBinding([], .equal, [])
+        let cmdH = HotkeyBinding(.command, .h, [])
+        XCTAssertNotNil(config.modes["resize"]?.bindings[minus.descriptionWithKeyCode])
+        XCTAssertNil(config.modes["resize"]?.bindings[equal.descriptionWithKeyCode])
+        // `[]` is not the sentinel: it binds the key to nothing so macOS never sees it
+        assertEquals(config.modes["resize"]?.bindings[cmdH.descriptionWithKeyCode], cmdH)
+    }
+
+    func testEmptyArrayBindingOverridesDefaultInsteadOfRemovingIt() {
+        let defaultBinding = defaultConfig.modes[mainModeId]!.bindings.values.first!
+        let (config, errors) = parseConfig(
+            """
+            [mode.main.binding]
+                \(defaultBinding.descriptionWithKeyNotation) = []
+            """,
+        )
+        assertEquals(errors, [])
+        let binding = config.modes[mainModeId]?.bindings[defaultBinding.descriptionWithKeyCode]
+        XCTAssertNotNil(binding)
+        assertEquals(binding?.commands.isEmpty, true)
     }
 }

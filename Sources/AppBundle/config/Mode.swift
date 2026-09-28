@@ -41,7 +41,7 @@ func parseMode(_ raw: TOMLValueConvertible, _ backtrace: TomlBacktrace, _ errors
 
 /// Merge user-defined modes on top of default modes.
 /// - User bindings override default bindings for the same key.
-/// - Bindings with empty commands ('disabled' sentinel) remove the default binding.
+/// - The 'disabled' sentinel removes the default binding. `[]` keeps the key bound to nothing.
 /// - Modes only in defaults are preserved; modes only in user config are added.
 func mergeModesWithDefaults(userModes: [String: Mode], defaultModes: [String: Mode]) -> [String: Mode] {
     var result = defaultModes
@@ -49,7 +49,7 @@ func mergeModesWithDefaults(userModes: [String: Mode], defaultModes: [String: Mo
         if let defaultMode = result[modeName] {
             var mergedBindings = defaultMode.bindings
             for (key, binding) in userMode.bindings {
-                if binding.commands.isEmpty {
+                if binding.isDisabled {
                     // 'disabled' sentinel: remove the default binding
                     mergedBindings.removeValue(forKey: key)
                 } else {
@@ -58,7 +58,9 @@ func mergeModesWithDefaults(userModes: [String: Mode], defaultModes: [String: Mo
             }
             result[modeName] = Mode(bindings: mergedBindings)
         } else {
-            result[modeName] = userMode
+            // 'disabled' has nothing to remove here, and keeping it would register a hotkey that
+            // swallows the keystroke and runs nothing. `[]` bindings stay: swallowing is their job
+            result[modeName] = Mode(bindings: userMode.bindings.filter { !$0.value.isDisabled })
         }
     }
     return result

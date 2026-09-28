@@ -18,15 +18,16 @@ struct SummonAppCommand: Command {
             return true
         }
 
-        // Check if the app is already running and has windows
-        let runningApp: MacApp? = installedApp.bundleIdentifier.flatMap { bundleId in
-            MacApp.allAppsMap.values.first { $0.rawAppBundleId == bundleId }
-        }
+        // Check if the app is already running and has windows. --new-window can start several
+        // processes for one bundle id, so look at every matching process, not the first one
+        let runningPids: Set<pid_t> = installedApp.bundleIdentifier.map { bundleId in
+            Set(MacApp.allAppsMap.values.filter { $0.rawAppBundleId == bundleId }.map(\.pid))
+        } ?? []
 
-        if let runningApp {
+        if !runningPids.isEmpty {
             // App is running — find its windows
             let appWindows = Workspace.all
-                .flatMap { ws in ws.allLeafWindowsRecursive.filter { $0.app.pid == runningApp.pid } }
+                .flatMap { ws in ws.allLeafWindowsRecursive.filter { runningPids.contains($0.app.pid) } }
 
             let currentWorkspace = focus.workspace
             let windowOnCurrentWs = appWindows.first { $0.nodeWorkspace == currentWorkspace }
@@ -54,6 +55,8 @@ struct SummonAppCommand: Command {
     private func launchNewInstance(_ app: InstalledApp) {
         let config = NSWorkspace.OpenConfiguration()
         config.activates = true
+        // Without this, a running app is only re-activated and no new window appears
+        config.createsNewApplicationInstance = true
         NSWorkspace.shared.openApplication(at: app.url, configuration: config)
     }
 }

@@ -230,6 +230,18 @@ func parseCommandOrCommands(_ raw: TOMLValueConvertible) -> Parsed<[any Command]
         errors += [.semantic(.rootKey(modeConfigRootKey), "Please specify '\(mainModeId)' mode")]
     }
 
+    // The quick-switcher hotkey is registered globally, so it must not collide with any mode binding.
+    // The HotKey library ignores registration failures, so a collision would otherwise be silent
+    if config.quickSwitcher.enabled,
+       case .success(let (modifiers, key)) = parseBinding(config.quickSwitcher.binding, .emptyRoot, config.keyMapping.resolve())
+    {
+        let combo = HotkeyBinding(modifiers, key, [], descriptionWithKeyNotation: config.quickSwitcher.binding).descriptionWithKeyCode
+        for modeName in config.modes.keys.sorted() where config.modes[modeName]?.bindings[combo] != nil {
+            let backtrace: TomlBacktrace = .rootKey("quick-switcher") + .key("binding")
+            errors += [.semantic(backtrace, "'\(config.quickSwitcher.binding)' is already bound in mode '\(modeName)'. Use 'disabled' or a different key for one of them")]
+        }
+    }
+
     if config.configVersion <= 1 {
         if rawTable.contains(key: persistentWorkspacesKey) {
             errors += [.semantic(.rootKey(persistentWorkspacesKey), "This config option is only available since 'config-version = 2'")]

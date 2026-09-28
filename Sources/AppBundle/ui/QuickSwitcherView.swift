@@ -386,10 +386,10 @@ struct QuickSwitcherContent: View {
                                     break
                             }
                         }
-                        dismissQuickSwitcher()
                     } catch {
                         // Cancellation or a failed AX call. Nothing to recover here.
                     }
+                    dismissQuickSwitcher()
                 }
         }
     }

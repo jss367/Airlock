@@ -73,7 +73,7 @@ If no custom config is found, Airlock will load the default config.
 
 If the key is omitted in the custom config, it falls back to the value in the default config, unless it's stated otherwise for the specific keys. Namely:
 
-* `mode.*.binding`. It falls back to the empty TOML table. Your config is the source of truth for keyboard bindings. You must explicitly mention all the keyboard bindings and <<binding-modes,binding modes>> in your config.
+* `mode.*.binding`. Your bindings are merged on top of the default ones: a key you bind overrides the default for that key, and everything you don't mention keeps its default. To remove a default binding, set it to `'disabled'`, for example `option-h = 'disabled'`. See <<binding-modes,binding modes>>.
 * `on-focused-monitor-changed`. It falls back to the empty TOML array.
 * `exec` TOML table. See: <<exec-env-vars>> (It's so boring and verbose, I don't even want to mention it in the `default-config.toml`)
 
@@ -551,6 +551,27 @@ xref:commands.adoc#flash-focus[flash-focus] command to a hotkey:
 ----
 [mode.main.binding]
     option-shift-f = 'flash-focus'
+----
+
+[#prevent-focus-stealing]
+== Focus stealing prevention
+
+Apps sometimes activate themselves (a notification, a finished download, a timer) and macOS
+moves focus to them even when they live on another workspace. Airlock pushes that focus back
+so you stay where you are. The `prevent-focus-stealing` key controls this:
+
+* `cross-workspace` -- block focus changes to a window on another workspace (default)
+* `always` -- block every focus change that you didn't trigger yourself, unless the focused workspace has no window
+* `off` -- follow macOS, the original AeroSpace behavior
+
+Focus changes you trigger yourself (a hotkey, a CLI command, or a mouse click) open a short grace
+window during which focus may move anywhere. The window opens when the click is released, so a
+click on another workspace's window can occasionally be pushed back if macOS moves focus on
+mouse-down first. Clicking again gets you there.
+
+[source,toml]
+----
+prevent-focus-stealing = 'cross-workspace'
 ----
 
 [#multiple-monitors]

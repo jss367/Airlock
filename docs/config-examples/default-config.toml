@@ -40,6 +40,10 @@ on-focused-monitor-changed = ['move-mouse monitor-lazy-center']
 # Disable this if the first click on a control only focuses its window.
 focus-workspace-on-mouse-click = true
 
+# Push focus back when an app activates itself from another workspace.
+# One of: 'cross-workspace' (default), 'always', 'off'
+prevent-focus-stealing = 'cross-workspace'
+
 # You can effectively turn off macOS "Hide application" (cmd-h) feature by toggling this flag
 # Useful if you don't use this macOS feature, but accidentally hit cmd-h or cmd-option-h key
 automatically-unhide-macos-hidden-apps = false
