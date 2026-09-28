@@ -114,6 +114,8 @@ private let configParser: [String: any ParserProtocol<Config>] = [
     "auto-reload-config": Parser(\.autoReloadConfig, parseBool),
     "automatically-unhide-macos-hidden-apps": Parser(\.automaticallyUnhideMacosHiddenApps, parseBool),
     "focus-workspace-on-mouse-click": Parser(\.focusWorkspaceOnMouseClick, parseBool),
+    "enable-workspace-app-switching": Parser(\.enableWorkspaceAppSwitching, parseBool),
+    "enable-keyboard-shortcuts": Parser(\.enableKeyboardShortcuts, parseBool),
     "prevent-focus-stealing": Parser(\.preventFocusStealing, parsePreventFocusStealing),
     "accordion-padding": Parser(\.accordionPadding, parseInt),
     persistentWorkspacesKey: Parser(\.persistentWorkspaces, parsePersistentWorkspaces),

@@ -98,13 +98,13 @@ private struct FeatureSettingsContent: View {
 
     private var masterSwitch: some View {
         FeatureRow(
-            title: "Airlock",
+            title: "Workspace isolation",
             summary: model.isEnabled
-                ? "Workspace isolation, hotkeys, and the features below are on. Turn this off to pause all of them. Your settings are kept."
-                : "Airlock is paused. Workspace isolation, hotkeys, and the features below are off until you turn it back on.",
+                ? "Each workspace shows only its own windows. Everything below builds on this, so turning it off pauses Airlock entirely. Your settings are kept."
+                : "Airlock is paused. Every window is visible and the features below are off until you turn this back on.",
             titleFont: .title3.bold(),
         ) {
-            Toggle("Airlock", isOn: Binding(
+            Toggle("Workspace isolation", isOn: Binding(
                 get: { model.isEnabled },
                 set: { setAirlockEnabled($0) },
             ))
