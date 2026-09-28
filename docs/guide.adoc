@@ -564,7 +564,10 @@ so you stay where you are. The `prevent-focus-stealing` key controls this:
 * `always` -- block every focus change that you didn't trigger yourself
 * `off` -- follow macOS, the original AeroSpace behavior
 
-Hotkeys, mouse clicks, and CLI commands that change focus are always allowed through.
+Focus changes you trigger yourself (a hotkey, a CLI command, or a mouse click) open a short grace
+window during which focus may move anywhere. The window opens when the click is released, so a
+click on another workspace's window can occasionally be pushed back if macOS moves focus on
+mouse-down first. Clicking again gets you there.
 
 [source,toml]
 ----
