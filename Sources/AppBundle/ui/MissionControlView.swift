@@ -36,9 +36,21 @@ private final class MissionControlPanel: NSPanelHud {
     // periphery:ignore
     private var hostingView: NSHostingView<MissionControlContent>?
     private let keyMonitor = PanelKeyMonitor()
+    private var resignActiveObserver: NSObjectProtocol?
 
     init(preloadedData: [MissionControlContent.WorkspaceInfo]) {
         super.init()
+        // The full-screen overlay would otherwise stay on top of the app the user switched to. The
+        // panel can't become key, so watch Airlock losing active status rather than resignKey
+        resignActiveObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didResignActiveNotification,
+            object: nil,
+            queue: .main,
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                if let self, missionControlPanel === self { dismissMissionControl(restoreFocus: false) }
+            }
+        }
         let content = MissionControlContent(preloadedData: preloadedData, keyMonitor: keyMonitor)
         let hosting = NSHostingView(rootView: content)
         self.contentView = hosting
@@ -55,13 +67,9 @@ private final class MissionControlPanel: NSPanelHud {
 
     override func close() {
         keyMonitor.remove()
+        if let resignActiveObserver { NotificationCenter.default.removeObserver(resignActiveObserver) }
+        resignActiveObserver = nil
         super.close()
-    }
-
-    override func resignKey() {
-        super.resignKey()
-        // The full-screen overlay would otherwise stay on top of the app the user switched to
-        if missionControlPanel === self { dismissMissionControl(restoreFocus: false) }
     }
 
     func show() {
