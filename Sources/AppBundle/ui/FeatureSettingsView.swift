@@ -42,7 +42,7 @@ private struct FeatureSettingsContent: View {
                             title: "Prevent focus stealing",
                             summary: "Stops apps from taking focus on their own. Across workspaces blocks jumps to another workspace. Always blocks every focus change you didn't start.",
                         ) {
-                            Picker("", selection: preventFocusStealingBinding()) {
+                            Picker("Prevent focus stealing", selection: preventFocusStealingBinding()) {
                                 ForEach(PreventFocusStealingMode.allCases, id: \.self) { mode in
                                     Text(mode.menuTitle).tag(mode)
                                 }
@@ -104,7 +104,7 @@ private struct FeatureSettingsContent: View {
                 : "Airlock is paused. Workspace isolation, hotkeys, and the features below are off until you turn it back on.",
             titleFont: .title3.bold(),
         ) {
-            Toggle("", isOn: Binding(
+            Toggle("Airlock", isOn: Binding(
                 get: { model.isEnabled },
                 set: { setAirlockEnabled($0) },
             ))
@@ -142,7 +142,7 @@ private struct FeatureSettingsContent: View {
 
     private func featureRow(_ feature: BoolFeature) -> some View {
         FeatureRow(title: feature.title, summary: feature.summary) {
-            Toggle("", isOn: binding(for: feature))
+            Toggle(feature.title, isOn: binding(for: feature))
                 .toggleStyle(.switch)
                 .labelsHidden()
         }
