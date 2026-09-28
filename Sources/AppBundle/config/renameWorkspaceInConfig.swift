@@ -1,17 +1,19 @@
 import Foundation
 
 /// Rewrites the config text so references to workspace `old` name `new` instead. Covers:
-/// - entries of `persistent-workspaces`
+/// - entries of `persistent-workspaces` and the `workspace` matcher of `[[on-window-detected]]`
 /// - keys of `[workspaces.names]` and `[workspace-to-monitor-force-assignment]` (their values are
 ///   keys and monitor patterns, so they stay as they are)
 /// - the workspace argument of `workspace`, `move-node-to-workspace` and `summon-workspace`, and the
-///   value of `--workspace`, inside any string value
+///   value of `--workspace`, in fields that hold commands (bindings, callbacks, `run`)
 ///
-/// Anything else that happens to equal `old` (a monitor pattern, a window id) is left alone.
-/// Multi-line strings and strings with escapes are never rewritten.
+/// Other strings are left alone, even when they look like commands. So are multi-line strings,
+/// strings with escapes, and inline or dotted forms of the tables above. `configStillReferences`
+/// catches a reference this missed
 func renameWorkspaceInConfig(_ text: String, from old: String, to new: String) -> String {
     var table = ""
-    var persistentWorkspacesDepth = 0
+    var key = ""
+    var arrayDepth = 0
     var openMultiLineString: String? = nil
     let lines = text.components(separatedBy: "\n").map { line -> String in
         if let delimiter = openMultiLineString {
@@ -19,47 +21,75 @@ func renameWorkspaceInConfig(_ text: String, from old: String, to new: String) -
             if line.contains(delimiter) { openMultiLineString = nil }
             return line
         }
-        if let header = tomlTableHeader(line) {
+        if arrayDepth <= 0, let header = tomlTableHeader(line) {
             table = header
             return line
         }
-        let tokens = tomlLineTokens(line)
-        var result = line
-        // Apply replacements from the end so earlier ranges stay valid
+        var tokens = tomlLineTokens(line)[...]
         var replacements: [(Range<String.Index>, String)] = []
-        let isPersistentWorkspaces = persistentWorkspacesDepth > 0
-            || table.isEmpty && tokens.first.map { $0.kind == .bare && line[$0.content] == "persistent-workspaces" } == true
-        for (i, token) in tokens.enumerated() {
+        // A line inside an open array continues the previous line's value
+        if arrayDepth <= 0, let first = tokens.first, tokens.dropFirst().first?.kind == .equals {
+            key = String(line[first.content])
+            arrayDepth = 0
+            if (first.kind == .bare || first.kind == .string) && key == old && workspaceNameKeyTables.contains(table) {
+                replacements.append((first.whole, first.kind == .bare ? tomlKey(new) : "\"\(new)\""))
+            }
+            tokens = tokens.dropFirst(2)
+        }
+        let field = tomlField(table: table, key: key)
+        for token in tokens {
             switch token.kind {
                 case .openMultiLine(let delimiter):
                     openMultiLineString = delimiter
                 case .bracket(let delta):
-                    if isPersistentWorkspaces { persistentWorkspacesDepth += delta }
-                case .bare, .string:
+                    arrayDepth += delta
+                case .string where !token.hasEscapes:
                     let content = String(line[token.content])
-                    let isKey = i == 0 && tokens.count > 1 && tokens[1].kind == .equals
-                    if isKey {
-                        if content == old && (table == "workspaces.names" || table == "workspace-to-monitor-force-assignment") {
-                            replacements.append((token.whole, token.kind == .bare ? tomlKey(new) : "\"\(new)\""))
-                        }
-                    } else if token.kind == .string && !token.hasEscapes {
-                        if isPersistentWorkspaces {
+                    switch field {
+                        case .workspaceName:
                             if content == old { replacements.append((token.content, new)) }
-                        } else if table != "workspaces.names" && table != "workspace-to-monitor-force-assignment" {
+                        case .commands:
                             let renamed = renameWorkspaceInCommand(content, from: old, to: new)
                             if renamed != content { replacements.append((token.content, renamed)) }
-                        }
+                        case .other:
+                            break
                     }
-                case .equals:
+                case .string, .bare, .equals:
                     break
             }
         }
+        var result = line
+        // Apply replacements from the end so earlier ranges stay valid
         for (range, replacement) in replacements.reversed() {
             result.replaceSubrange(range, with: replacement)
         }
         return result
     }
     return lines.joined(separator: "\n")
+}
+
+/// Whether the parsed config still names workspace `name` somewhere a rename must reach
+func configStillReferences(_ config: Config, workspace name: String) -> Bool {
+    config.persistentWorkspaces.contains(name) ||
+        config.workspaceToMonitorForceAssignment[name] != nil ||
+        config.onWindowDetected.contains { $0.matcher.workspace == name }
+}
+
+private let workspaceNameKeyTables: Set<String> = ["workspaces.names", "workspace-to-monitor-force-assignment"]
+private let rootCommandKeys: Set<String> = ["after-startup-command", "on-focus-changed", "on-mode-changed", "on-focused-monitor-changed"]
+
+private enum TomlField { case workspaceName, commands, other }
+
+private func tomlField(table: String, key: String) -> TomlField {
+    switch true {
+        case table.isEmpty && key == "persistent-workspaces": .workspaceName
+        case table == "on-window-detected" && key == "if.workspace": .workspaceName
+        case table == "on-window-detected.if" && key == "workspace": .workspaceName
+        case table.isEmpty && rootCommandKeys.contains(key): .commands
+        case table == "on-window-detected" && key == "run": .commands
+        case table.hasPrefix("mode.") && table.hasSuffix(".binding"): .commands
+        default: .other
+    }
 }
 
 private let workspaceArgCommands: Set<String> = ["workspace", "move-node-to-workspace", "summon-workspace"]

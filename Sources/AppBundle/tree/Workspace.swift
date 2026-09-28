@@ -127,9 +127,11 @@ final class Workspace: TreeNode, NonLeafTreeNodeObject, Hashable, Comparable {
         guard case .file(let url) = findCustomConfigUrl() else { return true }
         guard let contents = try? String(contentsOf: url, encoding: .utf8) else { return false }
         let updated = renameWorkspaceInConfig(contents, from: oldWorkspaceName, to: newWorkspaceName)
+        // Check the rewrite before it reaches disk. It must parse, and must not leave a reference it
+        // couldn't reach (an inline table, a dotted key), which would bring the old workspace back
+        let parsed = parseConfig(updated)
+        guard parsed.errors.isEmpty, !configStillReferences(parsed.config, workspace: oldWorkspaceName) else { return false }
         if updated == contents { return true }
-        // Check the rewrite before it reaches disk, so a rename never leaves a broken config behind
-        guard parseConfig(updated).errors.isEmpty else { return false }
         try writeConfigFile(updated, to: url)
         return try await reloadConfig()
     }

@@ -103,6 +103,56 @@ final class RenameWorkspaceInConfigTest: XCTestCase {
         assertTrue(!parsed.persistentWorkspaces.contains("1"))
     }
 
+    func testRenamesWindowDetectedMatcherAndRun() {
+        let config = """
+            [[on-window-detected]]
+                if.workspace = '1'
+                run = ['move-node-to-workspace 1', 'layout floating']
+
+            [[on-window-detected]]
+                if.window-title-regex-substring = 'workspace 1'
+                run = 'layout floating'
+            """
+        assertEquals(renameWorkspaceInConfig(config, from: "1", to: "Web"), """
+            [[on-window-detected]]
+                if.workspace = 'Web'
+                run = ['move-node-to-workspace Web', 'layout floating']
+
+            [[on-window-detected]]
+                if.window-title-regex-substring = 'workspace 1'
+                run = 'layout floating'
+            """)
+    }
+
+    func testLeavesStringsOutsideCommandFieldsAlone() {
+        let config = """
+            after-startup-command = ['workspace 1']
+            [exec.env-vars]
+                RULE = 'workspace 1'
+            [mode.main.binding]
+                option-1 = 'workspace 1'
+            """
+        assertEquals(renameWorkspaceInConfig(config, from: "1", to: "Web"), """
+            after-startup-command = ['workspace Web']
+            [exec.env-vars]
+                RULE = 'workspace 1'
+            [mode.main.binding]
+                option-1 = 'workspace Web'
+            """)
+    }
+
+    func testReportsReferencesTheRewriteCannotReach() {
+        let config = """
+            config-version = 2
+            [workspaces]
+                names = { 1 = "1" }
+            """
+        let renamed = renameWorkspaceInConfig(config, from: "1", to: "Web")
+        let (parsed, errors) = parseConfig(renamed)
+        assertEquals(errors.map(\.description), [])
+        assertTrue(configStillReferences(parsed, workspace: "1"))
+    }
+
     func testWriteConfigFileKeepsSymlink() throws {
         let dir = FileManager.default.temporaryDirectory.appending(component: UUID().uuidString)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
