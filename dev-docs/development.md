@@ -14,7 +14,7 @@ From the repository root:
 ./build.sh
 ```
 
-This builds `Airlock.xcodeproj` in Release configuration with local ad-hoc signing, runs `swift test`, and builds the `airlock` command-line tool. It does not stop or replace the running app. App build products are in `.xcode-build/Build/Products/Release/`; use `swift build --product airlock -c release --show-bin-path` to find the command-line binary.
+This builds `Airlock.xcodeproj` in Debug configuration with local ad-hoc signing and runs `swift test`, which also builds the `airlock` command-line tool. Debug builds are incremental, so a small edit rebuilds in seconds. It does not stop or replace the running app. The app is built as `.xcode-build/Build/Products/Debug/Airlock-Debug.app`; use `swift build --product airlock --show-bin-path` to find the command-line binary. `deploy.sh` does the Release builds, so errors that only appear with optimization show up there and in CI.
 
 To run the Swift tests alone:
 
