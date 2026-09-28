@@ -38,6 +38,34 @@ final class ConfigTest: XCTestCase {
         assertEquals(config.focusWorkspaceOnMouseClick, false)
     }
 
+    func testParseFeatureSwitchesForBindings() {
+        let (config, errors) = parseConfig(
+            """
+            enable-workspace-app-switching = false
+            enable-keyboard-shortcuts = false
+            """,
+        )
+        assertEquals(errors, [])
+        assertEquals(config.enableWorkspaceAppSwitching, false)
+        assertEquals(config.enableKeyboardShortcuts, false)
+    }
+
+    func testActiveBindingsFollowFeatureSwitches() {
+        let bindings = defaultConfig.modes[mainModeId]!.bindings
+        let all = Set(bindings.values.map(\.descriptionWithKeyNotation))
+        let appSwitching: Set = ["cmd-tab", "shift-cmd-tab", "cmd-backtick", "shift-cmd-backtick"]
+        func activeKeys(appSwitching: Bool, shortcuts: Bool) -> Set<String> {
+            var config = defaultConfig
+            config.enableWorkspaceAppSwitching = appSwitching
+            config.enableKeyboardShortcuts = shortcuts
+            return Set(activeBindings(bindings, config).values.map(\.descriptionWithKeyNotation))
+        }
+        assertEquals(activeKeys(appSwitching: true, shortcuts: true), all)
+        assertEquals(activeKeys(appSwitching: true, shortcuts: false), appSwitching)
+        assertEquals(activeKeys(appSwitching: false, shortcuts: true), all.subtracting(appSwitching))
+        assertEquals(activeKeys(appSwitching: false, shortcuts: false), [])
+    }
+
     func testDuplicatedPersistentWorkspaces() {
         let (_, errors) = parseConfig(
             """
@@ -654,6 +682,19 @@ final class ConfigTest: XCTestCase {
             """
             [quick-switcher]
                 enabled = false
+            [mode.main.binding]
+                option-space = 'exec-and-forget open -a Terminal'
+            """,
+        )
+        assertEquals(errors, [])
+    }
+
+    func testQuickSwitcherMayShareKeyWithSwitchedOffBinding() {
+        let (_, errors) = parseConfig(
+            """
+            enable-keyboard-shortcuts = false
+            [quick-switcher]
+                binding = 'option-space'
             [mode.main.binding]
                 option-space = 'exec-and-forget open -a Terminal'
             """,

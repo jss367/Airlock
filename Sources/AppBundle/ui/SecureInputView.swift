@@ -16,7 +16,7 @@ public final class SecureInputPanel: NSPanelHud {
     @MainActor
     public func refresh() {
         if let activeMode, TrayMenuModel.shared.isEnabled &&
-            config.modes[activeMode]?.bindings.isEmpty == false && IsSecureEventInputEnabled()
+            config.modes[activeMode].map({ !activeBindings($0.bindings, config).isEmpty }) == true && IsSecureEventInputEnabled()
         {
             if isVisible { return }
             self.contentView?.subviews.removeAll()

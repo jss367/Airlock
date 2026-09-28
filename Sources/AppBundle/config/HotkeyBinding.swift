@@ -29,7 +29,7 @@ extension HotKey {
 
 @MainActor var activeMode: String? = mainModeId
 @MainActor func activateMode(_ targetMode: String?) async throws {
-    let targetBindings = targetMode.flatMap { config.modes[$0] }?.bindings ?? [:]
+    let targetBindings = activeBindings(targetMode.flatMap { config.modes[$0] }?.bindings ?? [:], config)
     for binding in targetBindings.values where !hotkeys.keys.contains(binding.descriptionWithKeyCode) {
         hotkeys[binding.descriptionWithKeyCode] = HotKey(key: binding.keyCode, modifiers: binding.modifiers, keyDownHandler: {
             Task {
@@ -73,6 +73,12 @@ extension HotKey {
     }
 }
 
+/// Drops the bindings whose feature is switched off, so their keys go back to macOS.
+/// App switching bindings belong to `enable-workspace-app-switching`, the rest to `enable-keyboard-shortcuts`
+func activeBindings(_ bindings: [String: HotkeyBinding], _ config: Config) -> [String: HotkeyBinding] {
+    bindings.filter { $0.value.isAppSwitching ? config.enableWorkspaceAppSwitching : config.enableKeyboardShortcuts }
+}
+
 struct HotkeyBinding: Equatable, Sendable {
     let modifiers: NSEvent.ModifierFlags
     let keyCode: Key
@@ -92,6 +98,14 @@ struct HotkeyBinding: Equatable, Sendable {
             ? keyCode.toString()
             : modifiers.toString() + "-" + keyCode.toString()
         self.descriptionWithKeyNotation = descriptionWithKeyNotation
+    }
+
+    /// Runs `focus app-next`, `focus same-app-next`, or their `prev` twins
+    var isAppSwitching: Bool {
+        commands.contains { command in
+            guard let focus = command as? FocusCommand, case .appCycle = focus.args.target else { return false }
+            return true
+        }
     }
 
     static func == (lhs: HotkeyBinding, rhs: HotkeyBinding) -> Bool {

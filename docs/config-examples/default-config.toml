@@ -40,6 +40,14 @@ on-focused-monitor-changed = ['move-mouse monitor-lazy-center']
 # Disable this if the first click on a control only focuses its window.
 focus-workspace-on-mouse-click = true
 
+# Register the bindings that run 'focus app-next/prev' and 'focus same-app-next/prev'
+# (cmd-tab and cmd-backtick below). Set to false to give those keys back to macOS.
+enable-workspace-app-switching = true
+
+# Register every other binding in the [mode.*.binding] tables.
+# Set to false to give those keys back to macOS.
+enable-keyboard-shortcuts = true
+
 # Push focus back when an app activates itself from another workspace.
 # One of: 'cross-workspace' (default), 'always', 'off'
 prevent-focus-stealing = 'cross-workspace'

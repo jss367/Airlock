@@ -14,6 +14,16 @@ struct BoolFeature: Identifiable {
 
 @MainActor let behaviorFeatures: [BoolFeature] = [
     BoolFeature(
+        title: "Workspace app switching",
+        summary: "Your app switching keys (⌘Tab and ⌘` by default) cycle only the apps and windows in the current workspace. Turn this off to give those keys back to macOS.",
+        key: "enable-workspace-app-switching", isOn: { config.enableWorkspaceAppSwitching },
+    ),
+    BoolFeature(
+        title: "Keyboard shortcuts",
+        summary: "The other key bindings in your config, such as switching workspaces and moving windows. Turn this off to give those keys back to macOS.",
+        key: "enable-keyboard-shortcuts", isOn: { config.enableKeyboardShortcuts },
+    ),
+    BoolFeature(
         title: "Quick switcher",
         summary: "A searchable panel of the windows in the current workspace, opened with ⌥Space unless you rebind it.",
         table: "quick-switcher", key: "enabled", isOn: { config.quickSwitcher.enabled },

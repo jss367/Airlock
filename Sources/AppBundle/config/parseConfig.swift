@@ -114,6 +114,8 @@ private let configParser: [String: any ParserProtocol<Config>] = [
     "auto-reload-config": Parser(\.autoReloadConfig, parseBool),
     "automatically-unhide-macos-hidden-apps": Parser(\.automaticallyUnhideMacosHiddenApps, parseBool),
     "focus-workspace-on-mouse-click": Parser(\.focusWorkspaceOnMouseClick, parseBool),
+    "enable-workspace-app-switching": Parser(\.enableWorkspaceAppSwitching, parseBool),
+    "enable-keyboard-shortcuts": Parser(\.enableKeyboardShortcuts, parseBool),
     "prevent-focus-stealing": Parser(\.preventFocusStealing, parsePreventFocusStealing),
     "accordion-padding": Parser(\.accordionPadding, parseInt),
     persistentWorkspacesKey: Parser(\.persistentWorkspaces, parsePersistentWorkspaces),
@@ -231,12 +233,13 @@ func parseCommandOrCommands(_ raw: TOMLValueConvertible) -> Parsed<[any Command]
     }
 
     // The quick-switcher hotkey is registered globally, so it must not collide with any mode binding.
-    // The HotKey library ignores registration failures, so a collision would otherwise be silent
+    // The HotKey library ignores registration failures, so a collision would otherwise be silent.
+    // Bindings switched off by a feature switch are never registered, so they can't collide
     if config.quickSwitcher.enabled,
        case .success(let (modifiers, key)) = parseBinding(config.quickSwitcher.binding, .emptyRoot, config.keyMapping.resolve())
     {
         let combo = HotkeyBinding(modifiers, key, [], descriptionWithKeyNotation: config.quickSwitcher.binding).descriptionWithKeyCode
-        for modeName in config.modes.keys.sorted() where config.modes[modeName]?.bindings[combo] != nil {
+        for modeName in config.modes.keys.sorted() where config.modes[modeName].map({ activeBindings($0.bindings, config)[combo] != nil }) == true {
             let backtrace: TomlBacktrace = .rootKey("quick-switcher") + .key("binding")
             errors += [.semantic(backtrace, "'\(config.quickSwitcher.binding)' is already bound in mode '\(modeName)'. Use 'disabled' or a different key for one of them")]
         }
