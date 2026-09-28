@@ -466,6 +466,24 @@ final class ConfigWriterTest: XCTestCase {
         assertEquals(parseConfig(result.joined(separator: "\n")).config.quickSwitcher.enabled, false)
     }
 
+    func testSetValueMatchesQuotedKeys() throws {
+        let lines = [
+            "\"start-at-login\" = false",
+            "\"quick-switcher\" . 'enabled' = true",
+            "[\"focus-flash\"]",
+            "    'enabled' = true",
+        ]
+        var result = try setTomlValueInLines(lines, table: nil, key: "start-at-login", value: "true")
+        result = try setTomlValueInLines(result, table: "quick-switcher", key: "enabled", value: "false")
+        result = try setTomlValueInLines(result, table: "focus-flash", key: "enabled", value: "false")
+        assertEquals(result, [
+            "start-at-login = true",
+            "quick-switcher.enabled = false",
+            "[\"focus-flash\"]",
+            "    enabled = false",
+        ])
+    }
+
     func testSetTableValueRefusesInlineTable() {
         let lines = ["quick-switcher = { enabled = true }"]
         XCTAssertThrowsError(try setTomlValueInLines(lines, table: "quick-switcher", key: "enabled", value: "false"))
@@ -497,5 +515,15 @@ final class ConfigWriterTest: XCTestCase {
         try writeConfigLines(setTomlValueInLines(lines, table: nil, key: "start-at-login", value: "true"), to: link)
         assertEquals(try FileManager.default.destinationOfSymbolicLink(atPath: link.path), target.path)
         assertEquals(try String(contentsOf: target, encoding: .utf8), "start-at-login = true\n")
+    }
+
+    func testCrlfConfigKeepsLineEndingsAndFindsTable() throws {
+        let url = tempDir.appending(component: "crlf.toml")
+        try "[quick-switcher]\r\n    enabled = true\r\n".write(to: url, atomically: true, encoding: .utf8)
+        let config = try readConfigLines(from: url)
+        assertEquals(config.lines, ["[quick-switcher]", "    enabled = true", ""])
+        let result = try setTomlValueInLines(config.lines, table: "quick-switcher", key: "enabled", value: "false")
+        try writeConfigLines(result, to: url, separator: config.separator)
+        assertEquals(try String(contentsOf: url, encoding: .utf8), "[quick-switcher]\r\n    enabled = false\r\n")
     }
 }

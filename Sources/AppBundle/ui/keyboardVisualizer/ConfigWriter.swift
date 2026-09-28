@@ -24,8 +24,8 @@ enum ConfigWriterError: LocalizedError {
 
 func addBinding(key: String, appName: String, modifierPrefix: NSEvent.ModifierFlags) throws {
     guard canRepresentAppName(appName) else { throw ConfigWriterError.unrepresentableAppName(appName) }
-    let (url, lines) = try loadOrCreateConfig()
-    try writeConfigLines(addBindingToLines(lines, key: key, appName: appName, modifierPrefix: modifierPrefix), to: url)
+    let (url, config) = try loadOrCreateConfig()
+    try writeConfigLines(addBindingToLines(config.lines, key: key, appName: appName, modifierPrefix: modifierPrefix), to: url, separator: config.separator)
 }
 
 /// Pure line-manipulation logic for adding a binding, separated from file I/O for testability.
@@ -63,8 +63,8 @@ func removeBinding(key: String, modifierPrefix: NSEvent.ModifierFlags) throws {
         return
     }
 
-    let text = try String(contentsOf: url, encoding: .utf8)
-    var lines = text.components(separatedBy: "\n")
+    let config = try readConfigLines(from: url)
+    var lines = config.lines
 
     // Find [mode.main.binding] section
     guard let sectionIndex = lines.firstIndex(where: { tomlTableHeader($0) == "mode.main.binding" }) else {
@@ -74,7 +74,7 @@ func removeBinding(key: String, modifierPrefix: NSEvent.ModifierFlags) throws {
 
     lines = removeMatchingBindingLines(lines, sectionStart: sectionIndex, sectionEnd: sectionEnd, key: key, modifiers: modifierPrefix)
 
-    try writeConfigLines(lines, to: url)
+    try writeConfigLines(lines, to: url, separator: config.separator)
 }
 
 /// `splitArgs()` has no escape sequences, so an app name containing both quote characters
@@ -121,8 +121,8 @@ func setConfigValue(table: String?, key: String, value: String) throws {
         case .ambiguousConfigError(let urls):
             throw ConfigWriterError.ambiguousConfig(urls)
     }
-    let lines = try String(contentsOf: url, encoding: .utf8).components(separatedBy: "\n")
-    try writeConfigLines(setTomlValueInLines(lines, table: table, key: key, value: value), to: url)
+    let config = try readConfigLines(from: url)
+    try writeConfigLines(setTomlValueInLines(config.lines, table: table, key: key, value: value), to: url, separator: config.separator)
 }
 
 /// Pure line-manipulation logic for `setConfigValue`, separated from file I/O for testability.
@@ -169,7 +169,7 @@ private func setTomlEntry(_ lines: [String], in range: Range<Int>, key: String, 
 }
 
 /// The `key = value` entries in `range`, each with the lines its value spans.
-/// Dotted keys have the whitespace around their dots removed.
+/// Keys are normalized with `tomlNormalizedKey`.
 private func tomlEntries(_ lines: [String], in range: Range<Int>) -> [(key: String, lines: Range<Int>)] {
     var result: [(key: String, lines: Range<Int>)] = []
     var index = range.lowerBound
@@ -178,9 +178,7 @@ private func tomlEntries(_ lines: [String], in range: Range<Int>) -> [(key: Stri
         let line = lines[index]
         let code = line[..<tomlCommentStart(line)]
         if let eq = code.firstIndex(of: "=") {
-            let key = code[..<eq].split(separator: ".", omittingEmptySubsequences: false)
-                .map { $0.trimmingCharacters(in: .whitespaces) }
-                .joined(separator: ".")
+            let key = tomlNormalizedKey(code[..<eq])
             if !key.isEmpty { result.append((key, index ..< index + span)) }
         }
         index += span
@@ -230,7 +228,20 @@ private func tomlTableHeader(_ line: String) -> String? {
     let code = line[..<tomlCommentStart(line)]
     let trimmed = code.trimmingCharacters(in: CharacterSet.whitespaces)
     guard trimmed.hasPrefix("[") && trimmed.hasSuffix("]") else { return nil }
-    return trimmed.trimmingCharacters(in: CharacterSet(charactersIn: "[]")).trimmingCharacters(in: CharacterSet.whitespaces)
+    return tomlNormalizedKey(trimmed.trimmingCharacters(in: CharacterSet(charactersIn: "[]")))
+}
+
+/// A dotted key with the whitespace around its dots and the quotes around each part removed,
+/// so `"quick-switcher" . 'enabled'` compares equal to `quick-switcher.enabled`.
+/// Quoted parts containing a dot or an escape are left as written; the keys we look up are all bare.
+private func tomlNormalizedKey(_ key: some StringProtocol) -> String {
+    key.split(separator: ".", omittingEmptySubsequences: false)
+        .map { part in
+            let trimmed = part.trimmingCharacters(in: .whitespaces)
+            guard trimmed.count >= 2, let quote = trimmed.first, quote == "\"" || quote == "'", trimmed.last == quote else { return trimmed }
+            return String(trimmed.dropFirst().dropLast())
+        }
+        .joined(separator: ".")
 }
 
 /// Index of the next table header after `sectionStart`, or `lines.count`. Pass -1 to find
@@ -346,24 +357,31 @@ private func tomlCommentStart(_ text: String) -> String.Index {
 
 // MARK: - Helpers
 
-/// Writes through a symlinked config (e.g. into a dotfiles repo) instead of replacing the link
-func writeConfigLines(_ lines: [String], to url: URL) throws {
-    try lines.joined(separator: "\n").write(to: url.resolvingSymlinksInPath(), atomically: true, encoding: .utf8)
+/// Reads a config file as lines without their `\n` or `\r\n` endings, so the line functions never
+/// see a `\r`. `separator` is `\r\n` when the file uses it, so the file can be written back as it was.
+func readConfigLines(from url: URL) throws -> (lines: [String], separator: String) {
+    let text = try String(contentsOf: url, encoding: .utf8)
+    let lines = text.components(separatedBy: "\n").map { $0.hasSuffix("\r") ? String($0.dropLast()) : $0 }
+    return (lines, text.contains("\r\n") ? "\r\n" : "\n")
 }
 
-private func loadOrCreateConfig() throws -> (URL, [String]) {
+/// Writes through a symlinked config (e.g. into a dotfiles repo) instead of replacing the link
+func writeConfigLines(_ lines: [String], to url: URL, separator: String = "\n") throws {
+    try lines.joined(separator: separator).write(to: url.resolvingSymlinksInPath(), atomically: true, encoding: .utf8)
+}
+
+private func loadOrCreateConfig() throws -> (URL, (lines: [String], separator: String)) {
     let configFile = findCustomConfigUrl()
 
     switch configFile {
         case .file(let url):
-            let text = try String(contentsOf: url, encoding: .utf8)
-            return (url, text.components(separatedBy: "\n"))
+            return (url, try readConfigLines(from: url))
 
         case .noCustomConfigExists:
             let url = FileManager.default.homeDirectoryForCurrentUser.appending(path: configDotfileName)
             let initial = "[mode.main.binding]\n"
             try initial.write(to: url, atomically: true, encoding: .utf8)
-            return (url, initial.components(separatedBy: "\n"))
+            return (url, (initial.components(separatedBy: "\n"), "\n"))
 
         case .ambiguousConfigError(let urls):
             throw ConfigWriterError.ambiguousConfig(urls)
