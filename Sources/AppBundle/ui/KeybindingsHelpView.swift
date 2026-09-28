@@ -4,6 +4,8 @@ import SwiftUI
 @MainActor
 func showKeybindingsHelp() {
     let window = KeybindingsWindowController.shared
+    // Rebuild on every open so the bindings reflect the current config
+    if window.window?.isVisible != true { window.updateContent() }
     window.showWindow(nil)
     NSApp.activate(ignoringOtherApps: true)
     window.window?.makeKeyAndOrderFront(nil)
@@ -20,9 +22,7 @@ private final class KeybindingsWindowController: NSWindowController {
         window.title = "Airlock Keybindings"
         window.center()
         window.isReleasedWhenClosed = false
-        let controller = KeybindingsWindowController(window: window)
-        controller.updateContent()
-        return controller
+        return KeybindingsWindowController(window: window)
     }()
 
     @MainActor func updateContent() {
