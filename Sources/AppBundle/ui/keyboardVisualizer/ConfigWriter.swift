@@ -237,8 +237,15 @@ func removeMatchingBindingLines(
 private func bindingLineMatches(_ line: String, key: String, modifiers: NSEvent.ModifierFlags, keyMapping: [String: Key]) -> Bool {
     let trimmed = line.trimmingCharacters(in: CharacterSet.whitespaces)
     guard !trimmed.isEmpty && !trimmed.hasPrefix("#") else { return false }
-    // Extract the binding key (everything before " =" or "=")
-    guard let eqIndex = trimmed.firstIndex(of: "=") else { return false }
+    // Extract the binding key (everything before " =" or "="). A quoted key can contain `=` itself
+    let keyEnd: String.Index
+    if let quote = trimmed.first, quote == "\"" || quote == "'" {
+        guard let close = trimmed.dropFirst().firstIndex(of: quote) else { return false }
+        keyEnd = trimmed.index(after: close)
+    } else {
+        keyEnd = trimmed.startIndex
+    }
+    guard let eqIndex = trimmed[keyEnd...].firstIndex(of: "=") else { return false }
     let bindingKey = trimmed[trimmed.startIndex ..< eqIndex].trimmingCharacters(in: CharacterSet.whitespaces)
         .trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
     // Parse the binding key into parts: the last part is the key, everything before is modifiers

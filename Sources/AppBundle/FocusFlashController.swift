@@ -70,7 +70,8 @@ final class FocusFlashController {
             do {
                 guard let axRect = try await window.getAxRect() else { return }
                 if Task.isCancelled { return }
-                guard let self else { return }
+                // Focus can move on to a window that doesn't ask for a flash while the query runs
+                guard let self, window === focus.windowOrNil else { return }
                 let nsRect = self.airlockRectToNSRect(axRect)
                 guard nsRect.width > 0, nsRect.height > 0 else { return }
                 self.flashAt(nsRect: nsRect, cfg: cfg)

@@ -113,6 +113,16 @@ final class ConfigWriterTest: XCTestCase {
         assertEquals(twice, ["[mode.main.binding]", "    \"option-foo.bar\" = 'summon-app \"OtherApp\"'"])
     }
 
+    func testAddBindingReplacesAQuotedKeyContainingEquals() {
+        var mapping = keyNotationToKeyCode
+        mapping["k"] = .n
+        mapping["foo=bar"] = .k
+
+        let once = addBindingToLines(["[mode.main.binding]"], key: "k", appName: "NewApp", modifierPrefix: .option, keyMapping: mapping)
+        let twice = addBindingToLines(once, key: "k", appName: "OtherApp", modifierPrefix: .option, keyMapping: mapping)
+        assertEquals(twice, ["[mode.main.binding]", "    \"option-foo=bar\" = 'summon-app \"OtherApp\"'"])
+    }
+
     // MARK: - Binding line format
 
     func testBindingLineGeneratesSummonApp() {
