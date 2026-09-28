@@ -35,7 +35,9 @@ public func menuBar(viewModel: TrayMenuModel) -> some Scene {
                         Task {
                             if let newName = showRenameDialog(currentName: workspace.name) {
                                 try? await runLightSession(.menuBarButton, token) {
-                                    if try await !Workspace.rename(Workspace.get(byName: workspace.name), to: newName) {
+                                    // A failed config write throws. Report it like any other failure
+                                    let renamed = (try? await Workspace.rename(Workspace.get(byName: workspace.name), to: newName)) ?? false
+                                    if !renamed {
                                         MessageModel.shared.message = Message(
                                             description: "Can't Rename Workspace",
                                             body: "Can't rename workspace '\(workspace.name)' to '\(newName)'. The name may be invalid or taken, or the config couldn't be updated",

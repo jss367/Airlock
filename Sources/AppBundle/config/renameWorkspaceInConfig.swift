@@ -68,11 +68,19 @@ func renameWorkspaceInConfig(_ text: String, from old: String, to new: String) -
     return lines.joined(separator: "\n")
 }
 
-/// Whether the parsed config still names workspace `name` somewhere a rename must reach
+/// Whether the parsed config still names workspace `name` somewhere a rename must reach. Parse
+/// without defaults: the default bindings aren't in the file, so no rename could change them
 func configStillReferences(_ config: Config, workspace name: String) -> Bool {
-    config.persistentWorkspaces.contains(name) ||
+    let commands = config.modes.values.flatMap { $0.bindings.values.flatMap(\.commands) } +
+        config.afterStartupCommand + config.onFocusChanged + config.onFocusedMonitorChanged + config.onModeChanged +
+        config.onWindowDetected.flatMap { $0.rawRun ?? [] }
+    return config.persistentWorkspaces.contains(name) ||
         config.workspaceToMonitorForceAssignment[name] != nil ||
-        config.onWindowDetected.contains { $0.matcher.workspace == name }
+        config.onWindowDetected.contains { $0.matcher.workspace == name } ||
+        commands.contains { command in
+            let description = command.args.description
+            return renameWorkspaceInCommand(description, from: name, to: "_") != description
+        }
 }
 
 private let workspaceNameKeyTables: Set<String> = ["workspaces.names", "workspace-to-monitor-force-assignment"]
@@ -96,7 +104,7 @@ private let workspaceArgCommands: Set<String> = ["workspace", "move-node-to-work
 private let flagsWithValue: Set<String> = ["--window-id", "--workspace"]
 
 /// Renames the workspace in one command string, which can hold a whole sequence (`a && b; c`)
-private func renameWorkspaceInCommand(_ command: String, from old: String, to new: String) -> String {
+func renameWorkspaceInCommand(_ command: String, from old: String, to new: String) -> String {
     var words: [Range<String.Index>] = []
     var index = command.startIndex
     while index < command.endIndex {

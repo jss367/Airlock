@@ -153,6 +153,21 @@ final class RenameWorkspaceInConfigTest: XCTestCase {
         assertTrue(configStillReferences(parsed, workspace: "1"))
     }
 
+    func testReportsCommandsTheRewriteCannotReach() {
+        let config = """
+            config-version = 2
+            persistent-workspaces = ["1"]
+            [mode.main.binding]
+                option-1 = \"\"\"workspace 1\"\"\"
+                option-2 = 'workspace 2'
+            """
+        let renamed = renameWorkspaceInConfig(config, from: "1", to: "Web")
+        assertEquals(parseConfig(renamed).errors.map(\.description), [])
+        let parsed = parseConfig(renamed, mergeWithDefaults: false).config
+        assertTrue(configStillReferences(parsed, workspace: "1"))
+        assertTrue(!configStillReferences(parsed, workspace: "3"))
+    }
+
     func testWriteConfigFileKeepsSymlink() throws {
         let dir = FileManager.default.temporaryDirectory.appending(component: UUID().uuidString)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
