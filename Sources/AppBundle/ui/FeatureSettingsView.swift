@@ -12,7 +12,7 @@ func showFeatureSettings() {
 private final class FeatureSettingsWindowController: NSWindowController {
     @MainActor static let shared: FeatureSettingsWindowController = {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 520, height: 760),
+            contentRect: NSRect(x: 0, y: 0, width: 720, height: 760),
             styleMask: [.titled, .closable, .resizable],
             backing: .buffered,
             defer: false,
