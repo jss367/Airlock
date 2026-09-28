@@ -19,4 +19,14 @@ final class WorkspaceCommandTest: XCTestCase {
         testParseCommandSucc("workspace --stdin next", WorkspaceCmdArgs(target: .relative(.next)).copy(\.explicitStdinFlag, true))
         testParseCommandSucc("workspace --no-stdin next", WorkspaceCmdArgs(target: .relative(.next)).copy(\.explicitStdinFlag, false))
     }
+
+    /// `list-workspaces --empty no` leaves out the empty workspace the user is on
+    func testStdinNextPrevWhenCurrentWorkspaceIsNotInTheList() async throws {
+        for (from, command, to) in [("3", "next", "5"), ("3", "prev", "2"), ("9", "prev", "8"), ("1", "next", "2"), ("6", "next", "8")] {
+            check(Workspace.get(byName: from).focusWorkspace())
+            let result = try await parseCommand("workspace --stdin \(command)").cmdOrDie.run(.defaultEnv, CmdStdin("5\n8\n2\n"))
+            assertEquals(result.exitCode, 0)
+            assertEquals(focus.workspace.name, to, additionalMsg: "workspace --stdin \(command) from \(from)")
+        }
+    }
 }

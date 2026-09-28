@@ -38,8 +38,10 @@ func toggleQuickSwitcher() {
 /// Otherwise the panel activated Airlock, and nothing else hands focus back to a real window.
 @MainActor
 func dismissQuickSwitcher(restoreFocus: Bool = true) {
-    quickSwitcherPanel?.close()
+    // Clear the global before closing: close() resigns key, and resignKey dismisses only the current panel
+    let panel = quickSwitcherPanel
     quickSwitcherPanel = nil
+    panel?.close()
     if restoreFocus {
         focus.windowOrNil?.nativeFocus()
     }
@@ -76,6 +78,12 @@ private final class QuickSwitcherPanel: NSPanelHud {
         super.close()
     }
 
+    override func resignKey() {
+        super.resignKey()
+        // The user moved focus elsewhere on purpose, so don't pull it back to Airlock's focused window
+        if quickSwitcherPanel === self { dismissQuickSwitcher(restoreFocus: false) }
+    }
+
     func show() {
         makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
@@ -96,6 +104,14 @@ private final class QuickSwitcherPanel: NSPanelHud {
         }
         return nil
     }
+}
+
+func webSearchUrl(query: String) -> URL? {
+    // .urlQueryAllowed leaves &, + and = as is, so "c++" would search "c" and "AT&T" would search "AT"
+    var allowed = CharacterSet.urlQueryAllowed
+    allowed.remove(charactersIn: "&+=")
+    guard let encoded = query.addingPercentEncoding(withAllowedCharacters: allowed) else { return nil }
+    return URL(string: "https://google.com/search?q=\(encoded)")
 }
 
 struct SwitcherItem: Identifiable, Hashable {
@@ -364,9 +380,7 @@ struct QuickSwitcherContent: View {
                 NSWorkspace.shared.openApplication(at: url, configuration: config)
                 dismissQuickSwitcher(restoreFocus: false)
             case .webSearch(let query):
-                if let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-                   let url = URL(string: "https://google.com/search?q=\(encoded)")
-                {
+                if let url = webSearchUrl(query: query) {
                     NSWorkspace.shared.open(url)
                 }
                 dismissQuickSwitcher(restoreFocus: false)

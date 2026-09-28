@@ -167,9 +167,10 @@ private func commaSeparatedMatches(_ text: String, _ range: Range<String.Index>,
 }
 
 /// `name` as a TOML key, quoted unless it's a valid bare key
-private func tomlKey(_ name: String) -> String {
-    let bare = name.allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-" || $0 == "_") }
-    return bare ? name : "\"\(name)\""
+func tomlKey(_ name: String) -> String {
+    let bare = !name.isEmpty && name.allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-" || $0 == "_") }
+    let escaped = name.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
+    return bare ? name : "\"\(escaped)\""
 }
 
 private struct TomlToken {

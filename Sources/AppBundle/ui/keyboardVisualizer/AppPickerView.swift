@@ -72,7 +72,7 @@ struct AppPickerView: View {
 
     private func selectApp(_ app: InstalledApp) {
         do {
-            try addBinding(key: keyNotation, appName: app.name, modifierPrefix: modifierPrefix)
+            try addBinding(key: keyNotation, appName: app.name, modifierPrefix: modifierPrefix, keyMapping: config.keyMapping.resolve())
             Task { @MainActor in
                 _ = try? await reloadConfig()
                 onDismiss()

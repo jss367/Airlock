@@ -19,21 +19,38 @@ func toggleMissionControl() {
     }
 }
 
+/// Pass `restoreFocus: false` when something else already took focus.
+/// Otherwise the panel activated Airlock, and nothing else hands focus back to a real window.
 @MainActor
-func dismissMissionControl() {
-    missionControlPanel?.close()
+func dismissMissionControl(restoreFocus: Bool = true) {
+    // Clear the global before closing: close() resigns key, and resignKey dismisses only the current panel
+    let panel = missionControlPanel
     missionControlPanel = nil
-    // The panel activated Airlock, and nothing else hands focus back to a real window
-    focus.windowOrNil?.nativeFocus()
+    panel?.close()
+    if restoreFocus {
+        focus.windowOrNil?.nativeFocus()
+    }
 }
 
 private final class MissionControlPanel: NSPanelHud {
     // periphery:ignore
     private var hostingView: NSHostingView<MissionControlContent>?
     private let keyMonitor = PanelKeyMonitor()
+    private var resignActiveObserver: NSObjectProtocol?
 
     init(preloadedData: [MissionControlContent.WorkspaceInfo]) {
         super.init()
+        // The full-screen overlay would otherwise stay on top of the app the user switched to. The
+        // panel can't become key, so watch Airlock losing active status rather than resignKey
+        resignActiveObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didResignActiveNotification,
+            object: nil,
+            queue: .main,
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                if let self, missionControlPanel === self { dismissMissionControl(restoreFocus: false) }
+            }
+        }
         let content = MissionControlContent(preloadedData: preloadedData, keyMonitor: keyMonitor)
         let hosting = NSHostingView(rootView: content)
         self.contentView = hosting
@@ -50,6 +67,8 @@ private final class MissionControlPanel: NSPanelHud {
 
     override func close() {
         keyMonitor.remove()
+        if let resignActiveObserver { NotificationCenter.default.removeObserver(resignActiveObserver) }
+        resignActiveObserver = nil
         super.close()
     }
 
@@ -207,9 +226,9 @@ struct MissionControlContent: View {
                 ))
             }
 
-            let windowIds = Set(leafWindows.map { CGWindowID($0.windowId) })
+            let windowsById = Dictionary(leafWindows.map { (CGWindowID($0.windowId), $0) }, uniquingKeysWith: { a, _ in a })
             let compositeThumbnail = captureWorkspaceComposite(
-                windowIds: windowIds,
+                windowsById: windowsById,
                 windowInfoList: windowInfoList,
             )
 
@@ -247,30 +266,36 @@ struct MissionControlContent: View {
         return scaled
     }
 
+    @MainActor
     private static func captureWorkspaceComposite(
-        windowIds: Set<CGWindowID>,
+        windowsById: [CGWindowID: Window],
         windowInfoList: [[CFString: Any]],
     ) -> NSImage? {
-        if windowIds.isEmpty { return nil }
+        if windowsById.isEmpty { return nil }
 
         var minX = CGFloat.infinity, minY = CGFloat.infinity
         var maxX = -CGFloat.infinity, maxY = -CGFloat.infinity
-        var foundWindows: [CGWindowID] = []
+        var foundWindows: [(wid: CGWindowID, rect: CGRect)] = []
 
         for info in windowInfoList {
             guard let windowNumber = info[kCGWindowNumber] as? NSNumber else { continue }
             let wid = CGWindowID(windowNumber.uint32Value)
-            guard windowIds.contains(wid) else { continue }
+            guard let window = windowsById[wid] else { continue }
 
             if let boundsDict = info[kCGWindowBounds] as? [String: CGFloat],
                let x = boundsDict["X"], let y = boundsDict["Y"],
                let w = boundsDict["Width"], let h = boundsDict["Height"]
             {
-                minX = min(minX, x)
-                minY = min(minY, y)
-                maxX = max(maxX, x + w)
-                maxY = max(maxY, y + h)
-                foundWindows.append(wid)
+                var rect = CGRect(x: x, y: y, width: w, height: h)
+                // Windows of hidden workspaces all sit parked in one corner, so draw them where they'll be when shown
+                if let unhidden = (window as? MacWindow)?.rectWhenUnhidden(currentSize: rect.size) {
+                    rect = CGRect(x: unhidden.topLeftX, y: unhidden.topLeftY, width: unhidden.width, height: unhidden.height)
+                }
+                minX = min(minX, rect.minX)
+                minY = min(minY, rect.minY)
+                maxX = max(maxX, rect.maxX)
+                maxY = max(maxY, rect.maxY)
+                foundWindows.append((wid, rect))
             }
         }
 
@@ -285,29 +310,21 @@ struct MissionControlContent: View {
         NSColor.windowBackgroundColor.withAlphaComponent(0.3).setFill()
         NSBezierPath.fill(NSRect(origin: .zero, size: scaledSize))
 
-        for wid in foundWindows {
+        for (wid, rect) in foundWindows {
             if let cgImage = CGWindowListCreateImage(
                 .null,
                 .optionIncludingWindow,
                 wid,
                 [.boundsIgnoreFraming, .bestResolution],
             ) {
-                if let info = windowInfoList.first(where: {
-                    ($0[kCGWindowNumber] as? NSNumber)?.uint32Value == wid
-                }),
-                    let boundsDict = info[kCGWindowBounds] as? [String: CGFloat],
-                    let x = boundsDict["X"], let y = boundsDict["Y"],
-                    let w = boundsDict["Width"], let h = boundsDict["Height"]
-                {
-                    let destRect = NSRect(
-                        x: (x - minX) * scale,
-                        y: (captureRect.height - (y - minY) - h) * scale,
-                        width: w * scale,
-                        height: h * scale,
-                    )
-                    let nsImage = NSImage(cgImage: cgImage, size: NSSize(width: w, height: h))
-                    nsImage.draw(in: destRect)
-                }
+                let destRect = NSRect(
+                    x: (rect.minX - minX) * scale,
+                    y: (captureRect.height - (rect.minY - minY) - rect.height) * scale,
+                    width: rect.width * scale,
+                    height: rect.height * scale,
+                )
+                let nsImage = NSImage(cgImage: cgImage, size: rect.size)
+                nsImage.draw(in: destRect)
             }
         }
 

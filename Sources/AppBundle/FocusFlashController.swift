@@ -13,7 +13,12 @@ final class FocusFlashController {
     /// the newer flash with a stale outline on the wrong window.
     private var pendingAxFlashTask: Task<Void, Never>?
 
-    /// Public entry point — fire a flash on the given window if it's eligible.
+    /// The window to flash once the session that asked for it has laid out its workspaces
+    private var pendingFlashWindow: Window?
+
+    /// Public entry point — flash the given window if it's eligible, once the current session has
+    /// laid out its workspaces (see `flushPendingFlash`). Focus changes are reported before layout,
+    /// when a window on a workspace that just became visible still has its old or hidden geometry.
     /// Caller is responsible for the `enabled`/`mode` predicate; this method only
     /// handles "is this window flashable?" edge cases.
     func flash(window: Window?) {
@@ -21,8 +26,15 @@ final class FocusFlashController {
         // call ends up bailing on eligibility, the pending one is now stale.
         pendingAxFlashTask?.cancel()
         pendingAxFlashTask = nil
+        pendingFlashWindow = window
+    }
 
-        guard let window else { return }
+    /// Draws the flash requested since the last call. Sessions call it after `layoutWorkspaces()`
+    func flushPendingFlash() {
+        guard let window = pendingFlashWindow else { return }
+        pendingFlashWindow = nil
+        // A later focus change that didn't ask for a flash of its own can land before the flush
+        guard window === focus.windowOrNil else { return }
 
         let cfg = config.focusFlash
         guard cfg.enabled else { return }
@@ -58,7 +70,8 @@ final class FocusFlashController {
             do {
                 guard let axRect = try await window.getAxRect() else { return }
                 if Task.isCancelled { return }
-                guard let self else { return }
+                // Focus can move on to a window that doesn't ask for a flash while the query runs
+                guard let self, window === focus.windowOrNil else { return }
                 let nsRect = self.airlockRectToNSRect(axRect)
                 guard nsRect.width > 0, nsRect.height > 0 else { return }
                 self.flashAt(nsRect: nsRect, cfg: cfg)

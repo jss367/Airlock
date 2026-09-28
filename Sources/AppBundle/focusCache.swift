@@ -61,7 +61,7 @@ func focusChangeTrigger(sessionTrigger: String?, syncedFromMacOs: Bool) -> Strin
             // Refocus the previously focused window to resist the steal
             if let currentWindow = focus.windowOrNil {
                 currentWindow.nativeFocus()
-            } else if !serverArgs.isReadOnly {
+            } else if !isUnitTest && !serverArgs.isReadOnly {
                 // The focused workspace is empty, so there is no window to hand key focus back to.
                 // Take it ourselves: otherwise the stealer stays key and receives keystrokes
                 // while Airlock believes an empty workspace is focused

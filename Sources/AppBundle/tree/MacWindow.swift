@@ -156,21 +156,35 @@ final class MacWindow: Window {
             // Just a small optimization to avoid unnecessary AX calls for non floating windows
             // Tiling windows should be unhidden with layoutRecursive anyway
             case .floatingWindow:
-                let workspaceRect = nodeWorkspace.workspaceMonitor.rect
-                var newX = workspaceRect.topLeftX + workspaceRect.width * prevUnhiddenProportionalPositionInsideWorkspaceRect.x
-                var newY = workspaceRect.topLeftY + workspaceRect.height * prevUnhiddenProportionalPositionInsideWorkspaceRect.y
-                // https://github.com/nikitabobko/AeroSpace/issues/1519
-                let windowWidth = lastFloatingSize?.width ?? 0
-                let windowHeight = lastFloatingSize?.height ?? 0
-                newX = newX.coerce(in: workspaceRect.minX ... max(workspaceRect.minX, workspaceRect.maxX - windowWidth))
-                newY = newY.coerce(in: workspaceRect.minY ... max(workspaceRect.minY, workspaceRect.maxY - windowHeight))
-
-                setAxFrame(CGPoint(x: newX, y: newY), nil)
+                setAxFrame(unhiddenFloatingTopLeft(prevUnhiddenProportionalPositionInsideWorkspaceRect, nodeWorkspace), nil)
             case .macosNativeFullscreenWindow, .macosNativeHiddenAppWindow, .macosNativeMinimizedWindow,
                  .macosPopupWindow, .tiling, .rootTilingContainer, .shimContainerRelation: break
         }
 
         self.prevUnhiddenProportionalPositionInsideWorkspaceRect = nil
+    }
+
+    @MainActor
+    private func unhiddenFloatingTopLeft(_ proportionalPosition: CGPoint, _ workspace: Workspace) -> CGPoint {
+        let workspaceRect = workspace.workspaceMonitor.rect
+        var newX = workspaceRect.topLeftX + workspaceRect.width * proportionalPosition.x
+        var newY = workspaceRect.topLeftY + workspaceRect.height * proportionalPosition.y
+        // https://github.com/nikitabobko/AeroSpace/issues/1519
+        let windowWidth = lastFloatingSize?.width ?? 0
+        let windowHeight = lastFloatingSize?.height ?? 0
+        newX = newX.coerce(in: workspaceRect.minX ... max(workspaceRect.minX, workspaceRect.maxX - windowWidth))
+        newY = newY.coerce(in: workspaceRect.minY ... max(workspaceRect.minY, workspaceRect.maxY - windowHeight))
+        return CGPoint(x: newX, y: newY)
+    }
+
+    /// Where the window will be once its workspace is shown again, or nil if it isn't hidden in the corner.
+    /// Tiling windows go back to their last layout rect, floating windows to their saved position.
+    @MainActor
+    func rectWhenUnhidden(currentSize: CGSize) -> Rect? {
+        guard let prevUnhiddenProportionalPositionInsideWorkspaceRect, let nodeWorkspace else { return nil }
+        if let lastAppliedLayoutPhysicalRect { return lastAppliedLayoutPhysicalRect }
+        let topLeft = unhiddenFloatingTopLeft(prevUnhiddenProportionalPositionInsideWorkspaceRect, nodeWorkspace)
+        return Rect(topLeftX: topLeft.x, topLeftY: topLeft.y, width: currentSize.width, height: currentSize.height)
     }
 
     override var isHiddenInCorner: Bool {

@@ -6,12 +6,14 @@ import SwiftUI
 @MainActor
 func showKeyboardVisualizer() {
     let window = KeyboardVisualizerWindowController.shared
+    // Rebuild on every open so the modifier options reflect the current config
+    if window.window?.isVisible != true { window.updateContent() }
     window.showWindow(nil)
     NSApp.activate(ignoringOtherApps: true)
     window.window?.makeKeyAndOrderFront(nil)
 }
 
-private final class KeyboardVisualizerWindowController: NSWindowController {
+private final class KeyboardVisualizerWindowController: NSWindowController, NSWindowDelegate {
     @MainActor static let shared: KeyboardVisualizerWindowController = {
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 960, height: 450),
@@ -23,12 +25,17 @@ private final class KeyboardVisualizerWindowController: NSWindowController {
         window.center()
         window.isReleasedWhenClosed = false
         let controller = KeyboardVisualizerWindowController(window: window)
-        controller.updateContent()
+        window.delegate = controller
         return controller
     }()
 
     @MainActor func updateContent() {
         window?.contentView = NSHostingView(rootView: KeyboardVisualizerContent())
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        // Dropping the hosting view tears down the view, which stops its refresh timer
+        window?.contentView = nil
     }
 }
 

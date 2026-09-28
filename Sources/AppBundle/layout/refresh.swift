@@ -59,6 +59,7 @@ func runRefreshSessionBlocking(
             // One check here reports all of it while this session is still the honest cause,
             // instead of leaving it for whichever session runs next to claim.
             refreshModel()
+            FocusFlashController.shared.flushPendingFlash()
         }
     }
 }
@@ -94,6 +95,7 @@ func runLightSession<T>(
             updateTrayText()
             SecureInputPanel.shared.refresh()
             try await layoutWorkspaces()
+            FocusFlashController.shared.flushPendingFlash()
             if focusBefore != focusAfter {
                 focusAfter?.nativeFocus() // syncFocusToMacOs
             }

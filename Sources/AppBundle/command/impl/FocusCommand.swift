@@ -145,46 +145,49 @@ struct FocusCommand: Command {
 @MainActor private func makeFloatingWindowsSeenAsTiling(workspace: Workspace) async throws -> FloatingWindowsSnapshot {
     let workspaceMruSnapshot = workspace.mruSnapshot()
     let focusedWindow = focus.windowOrNil
-    var _floatingWindows: [FloatingWindowData] = []
+    // Every AX query happens before any window is unbound. A refresh can run during a query, and one
+    // that garbage-collects a window already unbound here would crash on unbinding it again
+    var candidates: [(window: Window, center: CGPoint, parent: TilingContainer, index: Int)] = []
     for window in workspace.floatingWindows {
         let center = try await window.getCenter()
         guard let center else { continue }
-        // getCenter suspends, which lets other main actor work mutate the tree. The window
-        // may have been closed or moved to another parent by now, so re-check before unbinding
-        guard window.parent === workspace else { continue }
 
-        let tilingParent: TilingContainer
-        let index: Int
         if let target = center.coerce(in: workspace.workspaceMonitor.visibleRectPaddedByOuterGaps)?
             .findIn(tree: workspace.rootTilingContainer, virtual: true)
         {
             guard let targetCenter = try await target.getCenter() else { continue }
-            guard window.parent === workspace else { continue }
-            guard let _tilingParent = target.parent as? TilingContainer else { continue }
-            tilingParent = _tilingParent
-            index = center.getProjection(tilingParent.orientation) >= targetCenter.getProjection(tilingParent.orientation)
-                ? target.ownIndex.orDie() + 1
-                : target.ownIndex.orDie()
+            guard let tilingParent = target.parent as? TilingContainer, let targetIndex = target.ownIndex else { continue }
+            let index = center.getProjection(tilingParent.orientation) >= targetCenter.getProjection(tilingParent.orientation)
+                ? targetIndex + 1
+                : targetIndex
+            candidates.append((window, center, tilingParent, index))
         } else {
-            index = 0
-            tilingParent = workspace.rootTilingContainer
+            candidates.append((window, center, workspace.rootTilingContainer, 0))
         }
-
-        let data = window.unbindFromParent()
-        let floatingWindowData = FloatingWindowData(
-            window: window,
-            center: center,
-            parent: tilingParent,
-            adaptiveWeight: data.adaptiveWeight,
-            index: index,
-        )
-        _floatingWindows.append(floatingWindowData)
     }
-    let floatingWindows: [FloatingWindowData] = _floatingWindows.sortedBy { $0.center.getProjection($0.parent.orientation) }.reversed()
 
-    for floating in floatingWindows { // Make floating windows be seen as tiling
+    var floatingWindows: [FloatingWindowData] = []
+    for candidate in candidates {
+        // The queries above suspend, which lets other main actor work mutate the tree. The window
+        // may have been closed or moved to another parent by now, and so may its tiling target
+        guard candidate.window.parent === workspace else { continue }
+        let isParentAttached = candidate.parent.nodeWorkspace === workspace
+        let parent = isParentAttached ? candidate.parent : workspace.rootTilingContainer
+        let data = candidate.window.unbindFromParent()
+        floatingWindows.append(FloatingWindowData(
+            window: candidate.window,
+            center: candidate.center,
+            parent: parent,
+            adaptiveWeight: data.adaptiveWeight,
+            index: isParentAttached ? min(candidate.index, parent.children.count) : 0,
+        ))
+    }
+
+    let bindOrder: [FloatingWindowData] = floatingWindows.sortedBy { $0.center.getProjection($0.parent.orientation) }.reversed()
+    for floating in bindOrder { // Make floating windows be seen as tiling
         floating.window.bind(to: floating.parent, adaptiveWeight: 1, index: floating.index, updateMru: false)
     }
+    // Keep the workspace order, so restoring doesn't reorder floating windows on every focus call
     return FloatingWindowsSnapshot(windows: floatingWindows, workspaceMruSnapshot: workspaceMruSnapshot, focusedWindow: focusedWindow)
 }
 

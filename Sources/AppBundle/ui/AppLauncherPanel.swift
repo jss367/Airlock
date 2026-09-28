@@ -6,6 +6,7 @@ final class AppLauncherPanel: NSPanelHud {
     @MainActor static var shared = AppLauncherPanel()
     private let viewModel = AppLauncherViewModel()
     private var eventMonitor: Any?
+    private var isDismissing = false
 
     private let panelWidth: CGFloat = 500
     private let panelHeight: CGFloat = 400
@@ -117,6 +118,8 @@ final class AppLauncherPanel: NSPanelHud {
     override func resignKey() {
         if Self.debugLogging { NSLog("[AppLauncher][resignKey] Panel resigning key window") }
         super.resignKey()
+        // The user moved focus elsewhere on purpose, so don't pull it back to Airlock's focused window
+        if isVisible && !isDismissing { dismiss(restoreFocus: false) }
     }
 
     override func makeFirstResponder(_ responder: NSResponder?) -> Bool {
@@ -166,11 +169,16 @@ final class AppLauncherPanel: NSPanelHud {
     }
 
     @MainActor
-    func dismiss() {
+    func dismiss(restoreFocus: Bool = true) {
+        // orderOut resigns key, which would dismiss again from resignKey
+        isDismissing = true
+        defer { isDismissing = false }
         removeEventMonitor()
         self.orderOut(nil)
-        // Restore focus to the previously focused window
-        focus.windowOrNil?.nativeFocus()
+        if restoreFocus {
+            // Restore focus to the previously focused window
+            focus.windowOrNil?.nativeFocus()
+        }
     }
 
     @MainActor
