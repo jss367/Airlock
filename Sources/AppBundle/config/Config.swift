@@ -72,7 +72,7 @@ enum DefaultContainerOrientation: String {
     case horizontal, vertical, auto
 }
 
-enum PreventFocusStealingMode: String {
+enum PreventFocusStealingMode: String, CaseIterable {
     /// Don't prevent focus stealing (original AeroSpace behavior)
     case off
     /// Prevent apps from stealing focus to a different workspace (default)
