@@ -84,9 +84,9 @@ final class Workspace: TreeNode, NonLeafTreeNodeObject, Hashable, Comparable {
     static func rename(_ workspace: Workspace, to newName: String) async throws -> Bool {
         guard case .success = WorkspaceName.parse(newName) else { return false }
         guard workspaceNameToWorkspace[newName] == nil else { return false }
-        // A quote or backslash can't be written into the config's command strings
-        guard !newName.contains(where: { $0 == "'" || $0 == "\"" || $0 == "\\" }) else { return false }
         let oldName = workspace.name
+        // A name with a quote or backslash can't be written into, or reliably found in, the config's command strings
+        guard ![oldName, newName].contains(where: { $0.contains(where: { $0 == "'" || $0 == "\"" || $0 == "\\" }) }) else { return false }
 
         // Update the config file on disk first, and reload it so keybindings and persistent
         // workspaces pick up the new name. Keep the old name if either step fails
