@@ -1,3 +1,4 @@
+import AppKit
 import Common
 
 @MainActor private var lastKnownNativeFocusedWindowId: UInt32? = nil
@@ -57,9 +58,14 @@ func focusChangeTrigger(sessionTrigger: String?, syncedFromMacOs: Bool) -> Strin
             _ = nativeFocused?.focusWindow()
             lastKnownNativeFocusedWindowId = nativeFocused?.windowId
         } else {
-            // Refocus the previously focused window to resist the steal
+            // Refocus the previously focused window to resist the steal. On an empty workspace there's
+            // no window to hand focus back to, so activate Airlock to take it from the stealer. Left
+            // key, the stealer would get the user's keystrokes, and the next user action's grace
+            // window would adopt the steal
             if let currentWindow = focus.windowOrNil {
                 currentWindow.nativeFocus()
+            } else if !isUnitTest && !serverArgs.isReadOnly {
+                NSApp.activate(ignoringOtherApps: true)
             }
             return false
         }

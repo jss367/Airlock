@@ -103,6 +103,22 @@ final class FocusCommandTest: XCTestCase {
         assertEquals(workspace.mostRecentWindowRecursive?.windowId, 1)
     }
 
+    /// Same-app cycling walks the tree order, so a focus call must leave the floating windows in the
+    /// order it found them, even when their frames tie
+    func testFocusOverFloatingWindowsKeepsTheirOrder() async throws {
+        let workspace = Workspace.get(byName: name)
+        let rect = Rect(topLeftX: 0, topLeftY: 0, width: 100, height: 100)
+        let window1 = TestWindow.new(id: 1, parent: workspace, rect: rect)
+        TestWindow.new(id: 2, parent: workspace, rect: rect)
+        TestWindow.new(id: 3, parent: workspace, rect: rect)
+        assertEquals(window1.focusWindow(), true)
+
+        for _ in 0 ..< 2 {
+            try await FocusCommand.new(direction: .right).run(.defaultEnv, .emptyStdin)
+            assertEquals(workspace.floatingWindows.map(\.windowId), [1, 2, 3])
+        }
+    }
+
     func testFocusAlongTheContainerOrientation() async throws {
         Workspace.get(byName: name).rootTilingContainer.apply {
             assertEquals(TestWindow.new(id: 1, parent: $0).focusWindow(), true)

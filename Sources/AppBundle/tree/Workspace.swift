@@ -122,6 +122,9 @@ final class Workspace: TreeNode, NonLeafTreeNodeObject, Hashable, Comparable {
         // Update focus tracking
         updateFocusWorkspaceName(from: oldName, to: newName)
 
+        // The cache stores workspaces by name. Restoring it would bring the old workspace back
+        resetClosedWindowsCache()
+
         return true
     }
 

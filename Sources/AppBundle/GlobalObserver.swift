@@ -68,6 +68,11 @@ enum GlobalObserver {
         nc.addObserver(forName: NSWorkspace.activeSpaceDidChangeNotification, object: nil, queue: .main, using: onSpaceChange)
         nc.addObserver(forName: NSWorkspace.didTerminateApplicationNotification, object: nil, queue: .main, using: onNotif)
 
+        // macOS activates the clicked app on mouse down, so the grace window has to open then. Opened
+        // only on mouse up, it arrives after the activation was already judged and blocked as a steal
+        NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]) { _ in
+            Task { @MainActor in markUserInitiatedFocusChange() }
+        }
         NSEvent.addGlobalMonitorForEvents(matching: .leftMouseUp) { _ in
             Task { @MainActor in
                 markUserInitiatedFocusChange()

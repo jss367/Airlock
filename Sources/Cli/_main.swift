@@ -84,8 +84,10 @@ struct Main {
                         """,
                 )
             }
+            // --no-stdin means behave as if there were no stdin, so don't wait on it
+            let useStdin = (parsedArgs as? WorkspaceCmdArgs)?.useStdin ?? (parsedArgs as? MoveNodeToWorkspaceCmdArgs)?.useStdin ?? false
             var index = 0
-            while let line = readLine(strippingNewline: false) {
+            while useStdin, let line = readLine(strippingNewline: false) {
                 stdin += line
                 index += 1
                 if index > 1000 {

@@ -525,6 +525,19 @@ final class ConfigTest: XCTestCase {
         XCTAssertTrue(config.modes[mainModeId]!.bindings.count == defaultBindings.count - 1)
     }
 
+    /// A mode with no defaults has nothing to remove, so 'disabled' must not register a hotkey
+    func testDisabledBindingInCustomModeRegistersNothing() {
+        let (config, errors) = parseConfig(
+            """
+            [mode.window.binding]
+                cmd-h = 'disabled'
+                esc = 'mode main'
+            """,
+        )
+        assertEquals(errors, [])
+        assertEquals(config.modes["window"]?.bindings.values.map(\.descriptionWithKeyNotation), ["esc"])
+    }
+
     func testNoModeSectionInheritsDefaults() {
         let (config, errors) = parseConfig(
             """
