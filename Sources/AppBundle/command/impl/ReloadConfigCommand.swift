@@ -32,7 +32,8 @@ struct ReloadConfigCommand: Command {
                 resetHotKeys()
                 config = parsedConfig
                 configUrl = url
-                try await activateMode(activeMode)
+                // The new config may have dropped the active mode. Staying in it would disable every hotkey
+                try await activateMode(activeMode.flatMap { config.modes[$0] != nil ? $0 : nil } ?? mainModeId)
                 registerQuickSwitcherHotkey()
                 syncStartAtLogin()
                 MessageModel.shared.message = nil

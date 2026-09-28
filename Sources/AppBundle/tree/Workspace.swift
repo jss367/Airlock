@@ -84,13 +84,13 @@ final class Workspace: TreeNode, NonLeafTreeNodeObject, Hashable, Comparable {
     static func rename(_ workspace: Workspace, to newName: String) async throws -> Bool {
         guard case .success = WorkspaceName.parse(newName) else { return false }
         guard workspaceNameToWorkspace[newName] == nil else { return false }
+        // A quote or backslash can't be written into the config's command strings
+        guard !newName.contains(where: { $0 == "'" || $0 == "\"" || $0 == "\\" }) else { return false }
         let oldName = workspace.name
 
-        // Update the config file on disk first
-        updateConfigFile(oldWorkspaceName: oldName, newWorkspaceName: newName)
-
-        // Reload config so keybindings and persistent workspaces pick up the new name
-        _ = try await reloadConfig()
+        // Update the config file on disk first, and reload it so keybindings and persistent
+        // workspaces pick up the new name. Keep the old name if either step fails
+        guard try await updateConfigFile(oldWorkspaceName: oldName, newWorkspaceName: newName) else { return false }
 
         // Now update the in-memory workspace object.
         // After config reload, a new workspace with newName may have been created by
@@ -122,20 +122,16 @@ final class Workspace: TreeNode, NonLeafTreeNodeObject, Hashable, Comparable {
         return true
     }
 
-    private static func updateConfigFile(oldWorkspaceName: String, newWorkspaceName: String) {
-        guard case .file(let url) = findCustomConfigUrl() else { return }
-        guard let contents = try? String(contentsOf: url, encoding: .utf8) else { return }
-        // Replace workspace name references:
-        // - In quotes: 'W1' or "W1"
-        // - As a bare argument: workspace W1, move-node-to-workspace W1
-        let updated = contents
-            .replacingOccurrences(of: "'\(oldWorkspaceName)'", with: "'\(newWorkspaceName)'")
-            .replacingOccurrences(of: "\"\(oldWorkspaceName)\"", with: "\"\(newWorkspaceName)\"")
-            .replacingOccurrences(of: "workspace \(oldWorkspaceName)'", with: "workspace \(newWorkspaceName)'")
-            .replacingOccurrences(of: "move-node-to-workspace \(oldWorkspaceName)'", with: "move-node-to-workspace \(newWorkspaceName)'")
-        if updated != contents {
-            try? updated.write(to: url, atomically: true, encoding: .utf8)
-        }
+    @MainActor
+    private static func updateConfigFile(oldWorkspaceName: String, newWorkspaceName: String) async throws -> Bool {
+        guard case .file(let url) = findCustomConfigUrl() else { return true }
+        guard let contents = try? String(contentsOf: url, encoding: .utf8) else { return false }
+        let updated = renameWorkspaceInConfig(contents, from: oldWorkspaceName, to: newWorkspaceName)
+        if updated == contents { return true }
+        // Check the rewrite before it reaches disk, so a rename never leaves a broken config behind
+        guard parseConfig(updated).errors.isEmpty else { return false }
+        try writeConfigFile(updated, to: url)
+        return try await reloadConfig()
     }
 
     @MainActor
