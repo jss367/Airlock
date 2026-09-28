@@ -19,12 +19,17 @@ func toggleMissionControl() {
     }
 }
 
+/// Pass `restoreFocus: false` when something else already took focus.
+/// Otherwise the panel activated Airlock, and nothing else hands focus back to a real window.
 @MainActor
-func dismissMissionControl() {
-    missionControlPanel?.close()
+func dismissMissionControl(restoreFocus: Bool = true) {
+    // Clear the global before closing: close() resigns key, and resignKey dismisses only the current panel
+    let panel = missionControlPanel
     missionControlPanel = nil
-    // The panel activated Airlock, and nothing else hands focus back to a real window
-    focus.windowOrNil?.nativeFocus()
+    panel?.close()
+    if restoreFocus {
+        focus.windowOrNil?.nativeFocus()
+    }
 }
 
 private final class MissionControlPanel: NSPanelHud {
@@ -51,6 +56,12 @@ private final class MissionControlPanel: NSPanelHud {
     override func close() {
         keyMonitor.remove()
         super.close()
+    }
+
+    override func resignKey() {
+        super.resignKey()
+        // The full-screen overlay would otherwise stay on top of the app the user switched to
+        if missionControlPanel === self { dismissMissionControl(restoreFocus: false) }
     }
 
     func show() {

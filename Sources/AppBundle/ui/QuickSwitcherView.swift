@@ -38,8 +38,10 @@ func toggleQuickSwitcher() {
 /// Otherwise the panel activated Airlock, and nothing else hands focus back to a real window.
 @MainActor
 func dismissQuickSwitcher(restoreFocus: Bool = true) {
-    quickSwitcherPanel?.close()
+    // Clear the global before closing: close() resigns key, and resignKey dismisses only the current panel
+    let panel = quickSwitcherPanel
     quickSwitcherPanel = nil
+    panel?.close()
     if restoreFocus {
         focus.windowOrNil?.nativeFocus()
     }
@@ -74,6 +76,12 @@ private final class QuickSwitcherPanel: NSPanelHud {
     override func close() {
         keyMonitor.remove()
         super.close()
+    }
+
+    override func resignKey() {
+        super.resignKey()
+        // The user moved focus elsewhere on purpose, so don't pull it back to Airlock's focused window
+        if quickSwitcherPanel === self { dismissQuickSwitcher(restoreFocus: false) }
     }
 
     func show() {
