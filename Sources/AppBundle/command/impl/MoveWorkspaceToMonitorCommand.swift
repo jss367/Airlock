@@ -9,6 +9,9 @@ struct MoveWorkspaceToMonitorCommand: Command {
         guard let target = args.resolveTargetOrReportError(env, io) else { return false }
         let focusedWorkspace = target.workspace
         let prevMonitor = focusedWorkspace.workspaceMonitor
+        // An invisible workspace's monitor is only where it was last shown, and that monitor is
+        // showing another workspace, which must stay
+        let wasVisible = focusedWorkspace.isVisible
 
         switch args.target.val.resolve(target.workspace.workspaceMonitor, wrapAround: args.wrapAround) {
             case .success(let targetMonitor):
@@ -16,6 +19,7 @@ struct MoveWorkspaceToMonitorCommand: Command {
                     return true
                 }
                 if targetMonitor.setActiveWorkspace(focusedWorkspace) {
+                    guard wasVisible else { return true }
                     let stubWorkspace = getStubWorkspace(for: prevMonitor)
                     check(
                         prevMonitor.setActiveWorkspace(stubWorkspace),

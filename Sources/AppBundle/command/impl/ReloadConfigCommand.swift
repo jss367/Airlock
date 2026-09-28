@@ -32,7 +32,9 @@ struct ReloadConfigCommand: Command {
                 resetHotKeys()
                 config = parsedConfig
                 configUrl = url
-                try await activateMode(activeMode)
+                // The new config may have dropped the active mode. Staying in it would disable every hotkey.
+                // nil means Airlock is disabled, which must stay that way
+                try await activateMode(activeMode.map { config.modes[$0] != nil ? $0 : mainModeId })
                 registerQuickSwitcherHotkey()
                 syncStartAtLogin()
                 MessageModel.shared.message = nil

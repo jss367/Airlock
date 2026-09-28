@@ -47,12 +47,13 @@ func dismissQuickSwitcher(restoreFocus: Bool = true) {
 
 private final class QuickSwitcherPanel: NSPanelHud {
     private var hostingView: NSHostingView<QuickSwitcherContent>?
+    private let keyMonitor = PanelKeyMonitor()
 
     override var canBecomeKey: Bool { true }
 
     override init() {
         super.init()
-        let content = QuickSwitcherContent()
+        let content = QuickSwitcherContent(keyMonitor: keyMonitor)
         let hosting = NSHostingView(rootView: content)
         self.contentView = hosting
         self.hostingView = hosting
@@ -68,6 +69,11 @@ private final class QuickSwitcherPanel: NSPanelHud {
         self.level = .floating
         self.backgroundColor = .clear
         self.isOpaque = false
+    }
+
+    override func close() {
+        keyMonitor.remove()
+        super.close()
     }
 
     func show() {
@@ -130,10 +136,10 @@ private struct IndexedItem {
 }
 
 struct QuickSwitcherContent: View {
+    let keyMonitor: PanelKeyMonitor
     @State private var query: String = ""
     @State private var items: [SwitcherItem] = []
     @State private var selectedIndex: Int = 0
-    @State private var keyMonitor: Any?
     @State private var discoveryTask: Task<Void, Never>?
     @FocusState private var isFocused: Bool
 
@@ -240,17 +246,11 @@ struct QuickSwitcherContent: View {
         .onAppear {
             loadItems()
             isFocused = true
-            keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-                return handleKeyEvent(event) ? nil : event
-            }
+            keyMonitor.install(handleKeyEvent)
         }
         .onDisappear {
             discoveryTask?.cancel()
             discoveryTask = nil
-            if let monitor = keyMonitor {
-                NSEvent.removeMonitor(monitor)
-                keyMonitor = nil
-            }
         }
         .onChange(of: query) { _ in
             selectedIndex = 0

@@ -24,7 +24,7 @@ func addBinding(key: String, appName: String, modifierPrefix: NSEvent.ModifierFl
     let (url, lines) = try loadOrCreateConfig()
     let content = addBindingToLines(lines, key: key, appName: appName, modifierPrefix: modifierPrefix)
     let output = content.joined(separator: "\n")
-    try output.write(to: url, atomically: true, encoding: .utf8)
+    try writeConfigFile(output, to: url)
 }
 
 /// Pure line-manipulation logic for adding a binding, separated from file I/O for testability.
@@ -74,7 +74,7 @@ func removeBinding(key: String, modifierPrefix: NSEvent.ModifierFlags) throws {
     lines = removeMatchingBindingLines(lines, sectionStart: sectionIndex, sectionEnd: sectionEnd, key: key, modifiers: modifierPrefix)
 
     let output = lines.joined(separator: "\n")
-    try output.write(to: url, atomically: true, encoding: .utf8)
+    try writeConfigFile(output, to: url)
 }
 
 /// `splitArgs()` has no escape sequences, so an app name containing both quote characters
@@ -143,7 +143,7 @@ private func bindingLineMatches(_ line: String, key: String, modifiers: NSEvent.
 // MARK: - TOML line scanning
 
 /// The table name of a `[table]` header line, ignoring a trailing comment. Nil for any other line
-private func tomlTableHeader(_ line: String) -> String? {
+func tomlTableHeader(_ line: String) -> String? {
     let code = line[..<tomlCommentStart(line)]
     let trimmed = code.trimmingCharacters(in: CharacterSet.whitespaces)
     guard trimmed.hasPrefix("[") && trimmed.hasSuffix("]") else { return nil }

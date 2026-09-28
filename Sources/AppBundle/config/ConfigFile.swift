@@ -22,6 +22,12 @@ func findCustomConfigUrl() -> ConfigFile {
     }
 }
 
+/// `atomically` puts a new file at the path, which would replace a symlinked config (e.g. one
+/// kept in a dotfiles repo) with a plain copy. Write to the link's target instead
+func writeConfigFile(_ contents: String, to url: URL) throws {
+    try contents.write(to: url.resolvingSymlinksInPath(), atomically: true, encoding: .utf8)
+}
+
 enum ConfigFile {
     case file(URL), ambiguousConfigError(_ candidates: [URL]), noCustomConfigExists
 
