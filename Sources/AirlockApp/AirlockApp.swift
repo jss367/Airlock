@@ -16,7 +16,7 @@ struct AirlockApp: App {
     var body: some Scene {
         menuBar(viewModel: viewModel)
         getMessageWindow(messageModel: messageModel)
-            .onChange(of: messageModel.message) { message in
+            .onChange(of: messageModel.message) { _, message in
                 if message != nil {
                     openWindow(id: messageWindowId)
                 }

@@ -25,11 +25,11 @@ struct WorkspacePreviewView: View {
                     .frame(width: 200, height: 50)
             }
         }
-        .onAppear { capturePreview() }
+        .task(id: workspaceName) { await capturePreview() }
     }
 
     @MainActor
-    private func capturePreview() {
+    private func capturePreview() async {
         let workspace = Workspace.get(byName: workspaceName)
         let windows = workspace.allLeafWindowsRecursive
 
@@ -41,8 +41,10 @@ struct WorkspacePreviewView: View {
         // Get window IDs for this workspace
         let windowIds = windows.map { CGWindowID($0.windowId) }
 
-        // Use CGWindowListCreateImage to capture all windows on this workspace
-        // We need to find the bounding rect of all windows
+        let images = await captureWindowImages(windowIds: Set(windowIds))
+        guard !Task.isCancelled else { return }
+
+        // Find the bounding rect of all windows on this workspace.
         guard let windowInfoList = CGWindowListCopyWindowInfo([.optionAll], kCGNullWindowID) as? [[CFString: Any]] else {
             return
         }
@@ -86,12 +88,7 @@ struct WorkspacePreviewView: View {
         NSBezierPath.fill(NSRect(origin: .zero, size: scaledSize))
 
         for wid in foundWindows {
-            if let cgImage = CGWindowListCreateImage(
-                .null,
-                .optionIncludingWindow,
-                wid,
-                [.boundsIgnoreFraming, .bestResolution],
-            ) {
+            if let cgImage = images[wid] {
                 // Get this window's bounds to position it correctly
                 if let info = windowInfoList.first(where: {
                     ($0[kCGWindowNumber] as? NSNumber)?.uint32Value == wid

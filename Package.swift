@@ -5,9 +5,8 @@ import PackageDescription
 
 let package = Package(
     name: "AirlockPackage",
-    // Runtime support for parameterized protocol types is only available in macOS 13.0.0 or newer
-    // And it specifies deploymentTarget for CLI
-    platforms: [.macOS(.v13)],
+    // Minimum supported macOS version for the app and command-line tool.
+    platforms: [.macOS(.v26)],
     // Products define the executables and libraries a package produces, making them visible to other packages.
     products: [
         .executable(name: "airlock", targets: ["Cli"]),

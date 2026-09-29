@@ -3,19 +3,23 @@ import Common
 import SwiftUI
 
 @MainActor private var missionControlPanel: MissionControlPanel?
+@MainActor private var missionControlCaptureTask: Task<Void, Never>?
 
 @MainActor
 func toggleMissionControl() {
-    if let panel = missionControlPanel, panel.isVisible {
+    if missionControlCaptureTask != nil || missionControlPanel?.isVisible == true {
         dismissMissionControl()
     } else {
         // Capture all thumbnails BEFORE showing the overlay panel,
         // otherwise the panel occludes windows and captures come back blank
-        let data = MissionControlContent.captureAllWorkspaces()
-
-        let panel = MissionControlPanel(preloadedData: data)
-        missionControlPanel = panel
-        panel.show()
+        missionControlCaptureTask = Task {
+            let data = await MissionControlContent.captureAllWorkspaces()
+            guard !Task.isCancelled else { return }
+            missionControlCaptureTask = nil
+            let panel = MissionControlPanel(preloadedData: data)
+            missionControlPanel = panel
+            panel.show()
+        }
     }
 }
 
@@ -23,6 +27,8 @@ func toggleMissionControl() {
 /// Otherwise the panel activated Airlock, and nothing else hands focus back to a real window.
 @MainActor
 func dismissMissionControl(restoreFocus: Bool = true) {
+    missionControlCaptureTask?.cancel()
+    missionControlCaptureTask = nil
     // Clear the global before closing: close() resigns key, and resignKey dismisses only the current panel
     let panel = missionControlPanel
     missionControlPanel = nil
@@ -193,7 +199,7 @@ struct MissionControlContent: View {
     }
 
     @MainActor
-    static func captureAllWorkspaces() -> [WorkspaceInfo] {
+    static func captureAllWorkspaces() async -> [WorkspaceInfo] {
         let persistentOrder = config.persistentWorkspaces
         let workspaces = Workspace.all.sorted { a, b in
             let ai = persistentOrder.firstIndex(of: a.name)
@@ -206,6 +212,9 @@ struct MissionControlContent: View {
             }
         }
 
+        let windowIds = Set(workspaces.flatMap { $0.allLeafWindowsRecursive.map { CGWindowID($0.windowId) } })
+        let images = await captureWindowImages(windowIds: windowIds)
+        guard !Task.isCancelled else { return [] }
         let focusedWorkspaceName = focus.workspace.name
         let windowInfoList = CGWindowListCopyWindowInfo([.optionAll], kCGNullWindowID) as? [[CFString: Any]] ?? []
 
@@ -217,7 +226,7 @@ struct MissionControlContent: View {
             var windowInfos: [WindowInfo] = []
             for window in leafWindows {
                 let wid = CGWindowID(window.windowId)
-                let thumbnail = captureWindowThumbnail(wid: wid, maxWidth: 350)
+                let thumbnail = captureWindowThumbnail(image: images[wid], maxWidth: 350)
                 windowInfos.append(WindowInfo(
                     id: window.windowId,
                     appName: window.app.name ?? "Unknown",
@@ -230,6 +239,7 @@ struct MissionControlContent: View {
             let compositeThumbnail = captureWorkspaceComposite(
                 windowsById: windowsById,
                 windowInfoList: windowInfoList,
+                images: images,
             )
 
             result.append(WorkspaceInfo(
@@ -244,13 +254,8 @@ struct MissionControlContent: View {
         return result
     }
 
-    private static func captureWindowThumbnail(wid: CGWindowID, maxWidth: CGFloat) -> NSImage? {
-        guard let cgImage = CGWindowListCreateImage(
-            .null,
-            .optionIncludingWindow,
-            wid,
-            [.boundsIgnoreFraming, .bestResolution],
-        ) else { return nil }
+    private static func captureWindowThumbnail(image: CGImage?, maxWidth: CGFloat) -> NSImage? {
+        guard let cgImage = image else { return nil }
 
         let srcWidth = CGFloat(cgImage.width)
         let srcHeight = CGFloat(cgImage.height)
@@ -270,6 +275,7 @@ struct MissionControlContent: View {
     private static func captureWorkspaceComposite(
         windowsById: [CGWindowID: Window],
         windowInfoList: [[CFString: Any]],
+        images: [CGWindowID: CGImage],
     ) -> NSImage? {
         if windowsById.isEmpty { return nil }
 
@@ -311,12 +317,7 @@ struct MissionControlContent: View {
         NSBezierPath.fill(NSRect(origin: .zero, size: scaledSize))
 
         for (wid, rect) in foundWindows {
-            if let cgImage = CGWindowListCreateImage(
-                .null,
-                .optionIncludingWindow,
-                wid,
-                [.boundsIgnoreFraming, .bestResolution],
-            ) {
+            if let cgImage = images[wid] {
                 let destRect = NSRect(
                     x: (rect.minX - minX) * scale,
                     y: (captureRect.height - (rect.minY - minY) - rect.height) * scale,
