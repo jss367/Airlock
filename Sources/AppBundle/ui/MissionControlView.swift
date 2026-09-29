@@ -4,17 +4,22 @@ import SwiftUI
 
 @MainActor private var missionControlPanel: MissionControlPanel?
 @MainActor private var missionControlCaptureTask: Task<Void, Never>?
+@MainActor private let missionControlCaptureMonitor = MissionControlCaptureMonitor()
 
 @MainActor
 func toggleMissionControl() {
     if missionControlCaptureTask != nil || missionControlPanel?.isVisible == true {
         dismissMissionControl()
     } else {
+        missionControlCaptureMonitor.start {
+            dismissMissionControl(restoreFocus: false)
+        }
         // Capture all thumbnails BEFORE showing the overlay panel,
         // otherwise the panel occludes windows and captures come back blank
         missionControlCaptureTask = Task {
             let data = await MissionControlContent.captureAllWorkspaces()
             guard !Task.isCancelled else { return }
+            missionControlCaptureMonitor.stop()
             missionControlCaptureTask = nil
             let panel = MissionControlPanel(preloadedData: data)
             missionControlPanel = panel
@@ -27,6 +32,7 @@ func toggleMissionControl() {
 /// Otherwise the panel activated Airlock, and nothing else hands focus back to a real window.
 @MainActor
 func dismissMissionControl(restoreFocus: Bool = true) {
+    missionControlCaptureMonitor.stop()
     missionControlCaptureTask?.cancel()
     missionControlCaptureTask = nil
     // Clear the global before closing: close() resigns key, and resignKey dismisses only the current panel
