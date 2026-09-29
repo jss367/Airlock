@@ -21,6 +21,7 @@ struct EnableCommand: Command {
         }
 
         TrayMenuModel.shared.isEnabled = newState
+        registerQuickSwitcherHotkey()
         if newState {
             for workspace in Workspace.all {
                 for window in workspace.allLeafWindowsRecursive where window.isFloating {

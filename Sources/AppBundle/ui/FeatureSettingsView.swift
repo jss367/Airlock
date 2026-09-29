@@ -36,7 +36,7 @@ private struct FeatureSettingsContent: View {
             Divider()
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    masterSwitch
+                    if !model.isEnabled { pausedBanner }
                     section("Behavior") {
                         FeatureRow(
                             title: "Prevent focus stealing",
@@ -91,32 +91,39 @@ private struct FeatureSettingsContent: View {
                     .foregroundStyle(.secondary)
             }
             Spacer()
+            runningStatus
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 16)
     }
 
-    private var masterSwitch: some View {
-        FeatureRow(
-            title: "Workspace isolation",
-            summary: model.isEnabled
-                ? "Each workspace shows only its own windows. Everything below builds on this, so turning it off pauses Airlock entirely. Your settings are kept."
-                : "Airlock is paused. Every window is visible and the features below are off until you turn this back on.",
-            titleFont: .title3.bold(),
-        ) {
-            Toggle("Workspace isolation", isOn: Binding(
-                get: { model.isEnabled },
-                set: { setAirlockEnabled($0) },
-            ))
-            .toggleStyle(.switch)
-            .labelsHidden()
+    private var runningStatus: some View {
+        HStack(spacing: 10) {
+            Label(
+                model.isEnabled ? "Running" : "Paused",
+                systemImage: model.isEnabled ? "circle.fill" : "pause.circle.fill",
+            )
+            .font(.callout.weight(.medium))
+            .foregroundStyle(model.isEnabled ? Color.green : Color.secondary)
+            Button(model.isEnabled ? "Pause Airlock" : "Resume Airlock") {
+                setAirlockEnabled(!model.isEnabled)
+            }
+            .controlSize(.large)
+        }
+    }
+
+    private var pausedBanner: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "pause.circle.fill")
+                .font(.title3)
+                .foregroundStyle(.secondary)
+            Text("Airlock is paused. Every window is visible and none of these features run. Changes you make here are saved and take effect when you resume.")
+                .font(.callout)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(14)
-        .background(Color.accentColor.opacity(model.isEnabled ? 0.12 : 0.04), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .strokeBorder(Color.accentColor.opacity(0.3), lineWidth: 1),
-        )
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.secondary.opacity(0.1), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
     private func section(_ title: String, @ViewBuilder content: () -> some View) -> some View {
@@ -134,9 +141,6 @@ private struct FeatureSettingsContent: View {
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1),
             )
-            // Config changes reload through a run session, which needs Airlock enabled
-            .disabled(!model.isEnabled)
-            .opacity(model.isEnabled ? 1 : 0.5)
         }
     }
 
