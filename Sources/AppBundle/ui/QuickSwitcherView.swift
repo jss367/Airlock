@@ -253,7 +253,7 @@ struct QuickSwitcherContent: View {
                         }
                     }
                 }
-                .onChange(of: selectedIndex) { newIndex in
+                .onChange(of: selectedIndex) { _, newIndex in
                     if let item = filteredItems[safe: newIndex] {
                         proxy.scrollTo(item.id, anchor: .center)
                     }
@@ -272,7 +272,7 @@ struct QuickSwitcherContent: View {
             discoveryTask?.cancel()
             discoveryTask = nil
         }
-        .onChange(of: query) { _ in
+        .onChange(of: query) {
             selectedIndex = 0
         }
     }

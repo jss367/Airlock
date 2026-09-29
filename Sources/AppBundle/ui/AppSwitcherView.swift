@@ -345,7 +345,7 @@ private struct AppSwitcherContent: View {
                     .padding(.horizontal, 16)
                     .padding(.vertical, 12)
                 }
-                .onChange(of: state.selectedAppIndex) { _ in
+                .onChange(of: state.selectedAppIndex) {
                     if let group = state.selectedGroup {
                         withAnimation(.easeInOut(duration: 0.15)) {
                             proxy.scrollTo(group.id, anchor: .center)

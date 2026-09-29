@@ -15,7 +15,7 @@ targets:
   Airlock:
     type: application
     platform: macOS
-    deploymentTarget: "13.0"
+    deploymentTarget: "26.0"
     sources:
       - "Sources/AirlockApp"
       - "resources"

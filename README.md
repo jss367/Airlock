@@ -15,7 +15,7 @@ Airlock is a workspace and tiling window manager for macOS, built around keeping
 
 Airlock is in early development. Configuration and behavior may change.
 
-Download the app and command-line tool from [GitHub Releases](https://github.com/jss367/Airlock/releases/latest). The release ZIP supports Apple Silicon and Intel Macs running macOS 13 or later. Extract it, move `Airlock.app` to `/Applications`, and copy `bin/airlock` to a directory on your `PATH`, such as `~/.local/bin`. Releases are ad-hoc signed and are not notarized by Apple; macOS may require you to explicitly allow the app before opening it. Grant Airlock access in **System Settings → Privacy & Security → Accessibility** when prompted.
+Download the app and command-line tool from [GitHub Releases](https://github.com/jss367/Airlock/releases/latest). The release ZIP supports Apple Silicon and Intel Macs running macOS 26 or later. Extract it, move `Airlock.app` to `/Applications`, and copy `bin/airlock` to a directory on your `PATH`, such as `~/.local/bin`. Releases are ad-hoc signed and are not notarized by Apple; macOS may require you to explicitly allow the app before opening it. Grant Airlock access in **System Settings → Privacy & Security → Accessibility** when prompted.
 
 To build from source, install Xcode with Swift 6.2 or later. From a checkout of this repository:
 
