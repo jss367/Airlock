@@ -55,7 +55,7 @@ public func menuBar(viewModel: TrayMenuModel) -> some Scene {
             }
             Divider()
         }
-        Button(viewModel.isEnabled ? "Disable" : "Enable") {
+        Button(viewModel.isEnabled ? "Pause Airlock" : "Resume Airlock") {
             Task {
                 try? await runLightSession(.menuBarButton, .forceRun) { () throws in
                     _ = try await EnableCommand(args: EnableCmdArgs(rawArgs: [], targetState: .toggle))
