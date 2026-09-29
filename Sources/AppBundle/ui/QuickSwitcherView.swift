@@ -405,7 +405,7 @@ struct QuickSwitcherContent: View {
                             }
                         }
                     } catch {
-                        // Cancellation or a failed AX call. Nothing to recover here.
+                        reportAppError(error, operation: "Selecting an item in Quick Switcher", userMessage: "Airlock could not switch to the selected item.")
                     }
                     dismissQuickSwitcher()
                 }

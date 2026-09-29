@@ -80,10 +80,12 @@ func dismissAppSwitcher(commit: Bool) {
     if commit, let group = selectedGroup {
         guard let token: RunSessionGuard = .isServerEnabled else { return }
         Task {
-            try? await runLightSession(.menuBarButton, token) {
-                let windowId = group.windows[safe: selectedWindowIndex]?.windowId ?? group.windows.first?.windowId
-                if let windowId, let window = Window.get(byId: windowId) {
-                    _ = window.focusWindow()
+            await withErrorReporting("Switching apps", userMessage: "Airlock could not switch apps.") {
+                try await runLightSession(.menuBarButton, token) {
+                    let windowId = group.windows[safe: selectedWindowIndex]?.windowId ?? group.windows.first?.windowId
+                    if let windowId, let window = Window.get(byId: windowId) {
+                        _ = window.focusWindow()
+                    }
                 }
             }
         }

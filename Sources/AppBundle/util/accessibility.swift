@@ -12,7 +12,11 @@ func checkAccessibilityPermissions() {
 }
 
 private func resetAccessibility() {
-    _ = try? Process.run(URL(filePath: "/usr/bin/tccutil"), arguments: ["reset", "Accessibility", airlockAppId])
+    do {
+        _ = try Process.run(URL(filePath: "/usr/bin/tccutil"), arguments: ["reset", "Accessibility", airlockAppId])
+    } catch {
+        logAppError(error, operation: "Resetting Accessibility permission")
+    }
 }
 
 protocol ReadableAttr: Sendable {

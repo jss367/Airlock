@@ -341,7 +341,7 @@ struct MissionControlContent: View {
                     _ = Workspace.get(byName: ws.name).focusWorkspace()
                 }
             } catch {
-                // Cancellation or a failed AX call. Nothing to recover here.
+                reportAppError(error, operation: "Switching workspace from Mission Control", userMessage: "Airlock could not switch workspace.")
             }
             dismissMissionControl()
         }
@@ -358,7 +358,7 @@ struct MissionControlContent: View {
                     }
                 }
             } catch {
-                // Cancellation or a failed AX call. Nothing to recover here.
+                reportAppError(error, operation: "Focusing a window from Mission Control", userMessage: "Airlock could not focus the window.")
             }
             dismissMissionControl()
         }

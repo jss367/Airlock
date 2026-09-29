@@ -42,16 +42,31 @@ private func checkAutoSwoosh() {
     }
 }
 
+@MainActor
 private func disableAutoSwoosh() {
     let task = Process()
     task.executableURL = URL(filePath: "/usr/bin/defaults")
     task.arguments = ["write", "com.apple.dock", "workspaces-auto-swoosh", "-bool", "NO"]
-    try? task.run()
-    task.waitUntilExit()
-
     let killDock = Process()
     killDock.executableURL = URL(filePath: "/usr/bin/killall")
     killDock.arguments = ["Dock"]
-    try? killDock.run()
-    killDock.waitUntilExit()
+    do {
+        try runSettingsProcess(task)
+        try runSettingsProcess(killDock)
+    } catch {
+        reportAppError(error, operation: "Updating macOS Space switching", userMessage: "Airlock could not finish updating the macOS setting. Check Desktop & Dock in System Settings.")
+    }
+}
+
+/// Only wait after a successful launch, and stop the sequence if a settings command fails.
+func runSettingsProcess(_ process: Process) throws {
+    try process.run()
+    process.waitUntilExit()
+    if process.terminationStatus != 0 {
+        throw NSError(
+            domain: "Airlock.SettingsProcess",
+            code: Int(process.terminationStatus),
+            userInfo: [NSLocalizedDescriptionKey: "\(process.executableURL?.lastPathComponent ?? "Settings command") exited with status \(process.terminationStatus)."],
+        )
+    }
 }

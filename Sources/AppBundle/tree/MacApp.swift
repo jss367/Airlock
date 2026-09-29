@@ -63,7 +63,13 @@ final class MacApp: AbstractApp {
                         (refreshObs, [kAXWindowCreatedNotification, kAXFocusedWindowChangedNotification]),
                     ]
                     let job = RunLoopJob()
-                    let subscriptions = (try? AxSubscription.bulkSubscribe(nsApp, axApp, job, handlers)) ?? []
+                    let subscriptions: [AxSubscription]
+                    do {
+                        subscriptions = try AxSubscription.bulkSubscribe(nsApp, axApp, job, handlers)
+                    } catch {
+                        logAppError(error, operation: "Subscribing to app window events")
+                        subscriptions = []
+                    }
                     let isGood = !subscriptions.isEmpty
                     let app = isGood ? MacApp(nsApp, axApp, subscriptions, Thread.current) : nil
                     Task { @MainActor in
@@ -321,7 +327,11 @@ final class MacApp: AbstractApp {
     private func withWindowAsync(_ windowId: UInt32, _ body: @Sendable @escaping (AXUIElement, RunLoopJob) throws -> ()) -> RunLoopJob {
         thread?.runInLoopAsync { [windows] job in
             guard let window = windows.threadGuarded[windowId] else { return }
-            try? body(window.ax, job)
+            do {
+                try body(window.ax, job)
+            } catch {
+                logAppError(error, operation: "Applying an asynchronous window operation")
+            }
         } ?? .cancelled
     }
 }

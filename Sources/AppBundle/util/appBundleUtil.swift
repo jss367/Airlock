@@ -13,8 +13,9 @@ func interceptTermination(_ _signal: Int32) {
         check(Thread.current.isMainThread)
         Task {
             defer { exit(signal) }
-            // The error is dropped on purpose. We are already terminating.
-            try? await terminationHandler.beforeTermination()
+            await withErrorReporting("Restoring windows before termination") {
+                try await terminationHandler.beforeTermination()
+            }
         }
     } as sig_t)
 }

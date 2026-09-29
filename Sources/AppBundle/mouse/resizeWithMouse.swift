@@ -2,7 +2,7 @@ import AppKit
 import Common
 
 @MainActor
-private var resizeWithMouseTask: Task<(), any Error>? = nil
+private var resizeWithMouseTask: Task<(), Never>? = nil
 
 func resizedObs(_: AXObserver, ax: AXUIElement, notif: CFString, _: UnsafeMutableRawPointer?) {
     let notif = notif as String
@@ -16,13 +16,15 @@ func resizedObs(_: AXObserver, ax: AXUIElement, notif: CFString, _: UnsafeMutabl
             }
             resizeWithMouseTask?.cancel()
             resizeWithMouseTask = Task {
-                try checkCancellation()
-                try await runLightSession(.ax(notif), token) {
-                    try await resizeWithMouse(window)
+                await withErrorReporting("Resizing a window with the mouse") {
+                    try checkCancellation()
+                    try await runLightSession(.ax(notif), token) {
+                        try await resizeWithMouse(window)
+                    }
                 }
             }
         } catch {
-            // Cancellation or a failed AX call. Nothing to recover here.
+            reportAppError(error, operation: "Handling a window resize event")
         }
     }
 }

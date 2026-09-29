@@ -7,7 +7,10 @@ private struct ConfigFileWatcher: ~Copyable {
 
     init?(url: URL, onChange: @escaping @MainActor () -> Void) {
         fd = open(url.path, O_EVTONLY)
-        if fd < 0 { return nil }
+        if fd < 0 {
+            logAppError(NSError(domain: NSPOSIXErrorDomain, code: Int(errno)), operation: "Watching the configuration file")
+            return nil
+        }
         source = DispatchSource.makeFileSystemObjectSource(
             fileDescriptor: fd,
             eventMask: [.write, .delete, .rename, .revoke],
@@ -24,7 +27,7 @@ private struct ConfigFileWatcher: ~Copyable {
 }
 
 @MainActor private var currentWatcher: ConfigFileWatcher? = nil
-@MainActor private var debounceTask: Task<Void, any Error>? = nil
+@MainActor private var debounceTask: Task<Void, Never>? = nil
 
 private let debounceDelay: Duration = .milliseconds(200)
 
@@ -34,10 +37,12 @@ private let debounceDelay: Duration = .milliseconds(200)
     currentWatcher = ConfigFileWatcher(url: configUrl) {
         debounceTask?.cancel()
         debounceTask = Task {
-            try await Task.sleep(for: debounceDelay)
-            if let token: RunSessionGuard = .isServerEnabled {
-                try await runLightSession(.configAutoReload, token) {
-                    _ = try await reloadConfig()
+            await withErrorReporting("Automatically reloading configuration", userMessage: "Airlock could not automatically reload the configuration.") {
+                try await Task.sleep(for: debounceDelay)
+                if let token: RunSessionGuard = .isServerEnabled {
+                    try await runLightSession(.configAutoReload, token) {
+                        _ = try await reloadConfig()
+                    }
                 }
             }
         }

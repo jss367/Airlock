@@ -76,7 +76,7 @@ final class FocusFlashController {
                 guard nsRect.width > 0, nsRect.height > 0 else { return }
                 self.flashAt(nsRect: nsRect, cfg: cfg)
             } catch {
-                // Window vanished or AX call failed — silently no-op.
+                reportAppError(error, operation: "Flashing the focused window")
             }
         }
     }

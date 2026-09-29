@@ -131,7 +131,7 @@ final class Workspace: TreeNode, NonLeafTreeNodeObject, Hashable, Comparable {
     @MainActor
     private static func updateConfigFile(oldWorkspaceName: String, newWorkspaceName: String) async throws -> Bool {
         guard case .file(let url) = findCustomConfigUrl() else { return true }
-        guard let contents = try? String(contentsOf: url, encoding: .utf8) else { return false }
+        let contents = try String(contentsOf: url, encoding: .utf8)
         let updated = renameWorkspaceInConfig(contents, from: oldWorkspaceName, to: newWorkspaceName)
         // Check the rewrite before it reaches disk. It must parse, and must not leave a reference it
         // couldn't reach (an inline table, a dotted key), which would bring the old workspace back
