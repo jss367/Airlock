@@ -28,7 +28,7 @@ func toggleReleaseServerIfDebug(_ state: EnableCmdArgs.State) async {
     }
 
     let req = ClientRequest(args: ["enable", state.rawValue], stdin: "", windowId: nil, workspace: nil)
-    _ = await connection.writeAtomic(req)
+    if await connection.writeAtomic(req).error != nil { return }
     _ = await connection.readNonAtomic()
 }
 
@@ -40,7 +40,8 @@ private func newConnection(_ connection: NWConnection) async {
         await answerToClient(ans)
     }
     func answerToClient(_ ans: ServerAnswer) async {
-        _ = await connection.writeAtomic(ans)
+        // A rejected/failed response must close the connection so the client doesn't wait forever.
+        if await connection.writeAtomic(ans).error != nil { connection.cancel() }
     }
     while true {
         let rawRequest: Data

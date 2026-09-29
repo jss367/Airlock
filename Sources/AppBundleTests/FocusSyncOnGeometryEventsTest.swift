@@ -14,7 +14,9 @@ import XCTest
 /// app with windows on two workspaces can drive this.
 @MainActor
 final class FocusSyncOnGeometryEventsTest: XCTestCase {
-    override func setUp() async throws { resetFocusCacheForTests() }
+    private var coordinator = FocusEventCoordinator()
+
+    override func setUp() async throws { coordinator = FocusEventCoordinator() }
 
     func testMoveAndResizeAreNotEvidenceThatFocusChanged() {
         XCTAssertFalse(RefreshSessionEvent.ax(kAXMovedNotification as String).mayHaveChangedFocus)
@@ -52,31 +54,31 @@ final class FocusSyncOnGeometryEventsTest: XCTestCase {
     /// change is lost outright — a same-app keyboard switch has no later event guaranteed to repair
     /// it.
     func testAGeometryEventAnswersFocusEvidenceItCancelled() {
-        noteFocusEvidence(of: .ax(kAXFocusedWindowChangedNotification as String))
-        noteFocusEvidence(of: .ax(kAXMovedNotification as String))
-        XCTAssertTrue(consumeFocusEvidence(), "the cancelled focus change must survive the move")
+        coordinator.note(.ax(kAXFocusedWindowChangedNotification as String))
+        coordinator.note(.ax(kAXMovedNotification as String))
+        XCTAssertTrue(coordinator.consumeEvidence(), "the cancelled focus change must survive the move")
     }
 
     /// Only a session that answers the evidence may spend it. A light session syncs focus on its own
     /// and cannot be cancelled by a refresh scheduled behind it, so if it consumed, it would consume
     /// on a stale snapshot and starve the refresh that recorded the evidence.
     func testEvidenceOutlivesSessionsThatDontAnswerIt() {
-        noteFocusEvidence(of: .hotkeyBinding)
-        noteFocusEvidence(of: .ax(kAXFocusedWindowChangedNotification as String))
-        XCTAssertTrue(consumeFocusEvidence(), "the newer focus change must still be there to sync")
+        coordinator.note(.hotkeyBinding)
+        coordinator.note(.ax(kAXFocusedWindowChangedNotification as String))
+        XCTAssertTrue(coordinator.consumeEvidence(), "the newer focus change must still be there to sync")
     }
 
     func testEvidenceIsSpentOnce() {
-        noteFocusEvidence(of: .ax(kAXFocusedWindowChangedNotification as String))
-        XCTAssertTrue(consumeFocusEvidence())
-        XCTAssertFalse(consumeFocusEvidence(), "a spent focus change must not sync twice")
+        coordinator.note(.ax(kAXFocusedWindowChangedNotification as String))
+        XCTAssertTrue(coordinator.consumeEvidence())
+        XCTAssertFalse(coordinator.consumeEvidence(), "a spent focus change must not sync twice")
     }
 
     /// The loop this whole change exists to break: Airlock parks a window, the park fires a move,
     /// and that move must not reach for macOS's focus on its own.
     func testMovesAloneNeverProduceEvidence() {
-        noteFocusEvidence(of: .ax(kAXMovedNotification as String))
-        noteFocusEvidence(of: .ax(kAXResizedNotification as String))
-        XCTAssertFalse(consumeFocusEvidence())
+        coordinator.note(.ax(kAXMovedNotification as String))
+        coordinator.note(.ax(kAXResizedNotification as String))
+        XCTAssertFalse(coordinator.consumeEvidence())
     }
 }

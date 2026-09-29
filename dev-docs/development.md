@@ -22,6 +22,10 @@ To run the Swift tests alone:
 swift test
 ```
 
+If a Swiftly build fails with `unknown argument: '-target-arch-variant'` after updating Xcode,
+the pinned compiler may be incompatible with the selected SDK. Run `/usr/bin/swift test` to
+use Xcode's matching compiler and SDK together. This does not change the repository's toolchain pin.
+
 ## Install and run locally
 
 ```sh

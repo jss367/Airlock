@@ -1,33 +1,11 @@
 import AppKit
 import Common
 
-@MainActor private var lastKnownNativeFocusedWindowId: UInt32? = nil
+/// The app's event coordinator owns refresh cancellation, pending evidence, and the native focus
+/// cache together. Independent instances let tests exercise asynchronous ordering without globals.
+@MainActor let focusEvents = FocusEventCoordinator()
 
-/// Whether some event that could have moved focus is still waiting to be answered by a focus sync.
-///
-/// Sessions coalesce: `scheduleRefreshSession` cancels the session in flight, and the session it
-/// cancels may be one that had a focus change to pick up and had not reached `updateFocusCache`
-/// yet. When the event doing the cancelling is a window move or resize, which carries no focus
-/// evidence of its own, the focus change would otherwise be dropped rather than merely
-/// re-attributed — and nothing guarantees a later event comes along to repair it. So the evidence
-/// outlives the session that carried it and is answered by whichever session gets there first.
-@MainActor private var pendingFocusEvidence = false
-
-@MainActor func noteFocusEvidence(of event: RefreshSessionEvent) {
-    if event.mayHaveChangedFocus { pendingFocusEvidence = true }
-}
-
-/// Reads the evidence and clears it in one step. Call it immediately before `updateFocusCache` with
-/// no suspension point in between, so a cancellation can't land between the two and lose it.
-@MainActor func consumeFocusEvidence() -> Bool {
-    defer { pendingFocusEvidence = false }
-    return pendingFocusEvidence
-}
-
-@MainActor func resetFocusCacheForTests() {
-    pendingFocusEvidence = false
-    lastKnownNativeFocusedWindowId = nil
-}
+@MainActor func resetFocusCacheForTests() { focusEvents.reset() }
 
 /// A refresh session syncs focus from macOS before it runs anything, so the session's own trigger
 /// would blame whatever woke Airlock up — including a query command that cannot move focus at all.
@@ -52,11 +30,11 @@ func focusChangeTrigger(sessionTrigger: String?, syncedFromMacOs: Bool) -> Strin
     // value lets MacApp.nativeFocus take its activate-only shortcut, which leaves a same-app stealer key
     (nativeFocused?.app as? MacApp)?.lastNativeFocusedWindowId = nativeFocused?.windowId
     var syncedFromMacOs = false
-    if nativeFocused?.windowId != lastKnownNativeFocusedWindowId {
+    if nativeFocused?.windowId != focusEvents.lastKnownNativeFocusedWindowId {
         if shouldAllowFocusChange(to: nativeFocused) {
             syncedFromMacOs = true
             _ = nativeFocused?.focusWindow()
-            lastKnownNativeFocusedWindowId = nativeFocused?.windowId
+            focusEvents.lastKnownNativeFocusedWindowId = nativeFocused?.windowId
         } else {
             // Refocus the previously focused window to resist the steal
             if let currentWindow = focus.windowOrNil {
