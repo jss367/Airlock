@@ -102,7 +102,15 @@ private func setFeature(table: String? = nil, key: String, value: String) {
     Task {
         do {
             try setConfigValue(table: table, key: key, value: value)
-            try await runLightSession(.menuBarButton, .forceRun) { _ = try await reloadConfig() }
+            if let token: RunSessionGuard = .isServerEnabled {
+                try await runLightSession(.menuBarButton, token) { _ = try await reloadConfig() }
+            } else {
+                // No session while paused. Its focus sync would trust the stale focus cache and
+                // pull focus back to whatever window was focused before the pause
+                _ = try await reloadConfig()
+                // The session would have republished TrayMenuModel. Do it here so the toggles redraw
+                TrayMenuModel.shared.objectWillChange.send()
+            }
         } catch {
             MessageModel.shared.message = Message(description: "Airlock Config Error", body: error.localizedDescription)
         }
