@@ -63,20 +63,18 @@ struct BoolFeature: Identifiable {
 /// republishes through `TrayMenuModel`, so the checkmarks follow edits made in the file too.
 @MainActor @ViewBuilder
 func featuresMenu() -> some View {
-    if RunSessionGuard.isServerEnabled != nil {
-        Menu("Features") {
-            Picker("Prevent focus stealing", selection: preventFocusStealingBinding()) {
-                ForEach(PreventFocusStealingMode.allCases, id: \.self) { mode in
-                    Text(mode.menuTitle).tag(mode)
-                }
+    Menu("Features") {
+        Picker("Prevent focus stealing", selection: preventFocusStealingBinding()) {
+            ForEach(PreventFocusStealingMode.allCases, id: \.self) { mode in
+                Text(mode.menuTitle).tag(mode)
             }
-            ForEach(behaviorFeatures) { feature in
-                Toggle(feature.title, isOn: binding(for: feature))
-            }
-            Divider()
-            ForEach(appFeatures) { feature in
-                Toggle(feature.title, isOn: binding(for: feature))
-            }
+        }
+        ForEach(behaviorFeatures) { feature in
+            Toggle(feature.title, isOn: binding(for: feature))
+        }
+        Divider()
+        ForEach(appFeatures) { feature in
+            Toggle(feature.title, isOn: binding(for: feature))
         }
     }
 }
@@ -97,14 +95,14 @@ func preventFocusStealingBinding() -> Binding<PreventFocusStealingMode> {
     )
 }
 
-/// Does nothing while Airlock is disabled, because reloading the config needs a running server.
+/// Works while Airlock is paused too. The reload keeps the paused state (see `reloadConfig`),
+/// so the new value lands in `config` and takes effect on resume.
 @MainActor
 private func setFeature(table: String? = nil, key: String, value: String) {
-    guard let token: RunSessionGuard = .isServerEnabled else { return }
     Task {
         do {
             try setConfigValue(table: table, key: key, value: value)
-            try await runLightSession(.menuBarButton, token) { _ = try await reloadConfig() }
+            try await runLightSession(.menuBarButton, .forceRun) { _ = try await reloadConfig() }
         } catch {
             MessageModel.shared.message = Message(description: "Airlock Config Error", body: error.localizedDescription)
         }
