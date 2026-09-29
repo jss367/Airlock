@@ -74,10 +74,17 @@ struct AppPickerView: View {
         do {
             try addBinding(key: keyNotation, appName: app.name, modifierPrefix: modifierPrefix, keyMapping: config.keyMapping.resolve())
             Task { @MainActor in
-                _ = try? await reloadConfig()
-                onDismiss()
+                do {
+                    if try await reloadConfig() { onDismiss() }
+                } catch is CancellationError {
+                    // A newer operation superseded this reload.
+                } catch {
+                    logAppError(error, operation: "Reloading configuration after adding a binding")
+                    errorMessage = error.localizedDescription
+                }
             }
         } catch {
+            logAppError(error, operation: "Adding an app binding")
             errorMessage = error.localizedDescription
         }
     }

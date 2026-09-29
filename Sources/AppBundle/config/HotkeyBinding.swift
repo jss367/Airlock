@@ -39,9 +39,11 @@ extension HotKey {
                         mode: activeMode,
                         binding: binding.descriptionWithKeyNotation,
                     ))
-                    try? await runLightSession(.hotkeyBinding, .checkServerIsEnabledOrDie()) { () throws in
-                        _ = try await config.modes[activeMode]?.bindings[binding.descriptionWithKeyCode]?.commands
-                            .runCmdSeq(.defaultEnv, .emptyStdin)
+                    await withErrorReporting("Running a keyboard shortcut", userMessage: "Airlock could not complete the keyboard shortcut.") {
+                        try await runLightSession(.hotkeyBinding, .checkServerIsEnabledOrDie()) { () throws in
+                            _ = try await config.modes[activeMode]?.bindings[binding.descriptionWithKeyCode]?.commands
+                                .runCmdSeq(.defaultEnv, .emptyStdin)
+                        }
                     }
                 }
             }

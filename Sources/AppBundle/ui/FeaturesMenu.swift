@@ -111,7 +111,10 @@ private func setFeature(table: String? = nil, key: String, value: String) {
                 // The session would have republished TrayMenuModel. Do it here so the toggles redraw
                 TrayMenuModel.shared.objectWillChange.send()
             }
+        } catch is CancellationError {
+            // A newer operation superseded this reload.
         } catch {
+            logAppError(error, operation: "Updating feature settings")
             MessageModel.shared.message = Message(description: "Airlock Config Error", body: error.localizedDescription)
         }
     }

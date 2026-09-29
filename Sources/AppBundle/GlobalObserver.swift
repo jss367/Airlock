@@ -24,20 +24,22 @@ enum GlobalObserver {
         let notifName = notification.name.rawValue
         Task { @MainActor in
             guard let token: RunSessionGuard = .isServerEnabled else { return }
-            try? await runLightSession(.globalObserver(notifName), token) {
-                if config.automaticallyUnhideMacosHiddenApps {
-                    if let w = prevFocus?.windowOrNil,
-                       w.macAppUnsafe.nsApp.isHidden,
-                       // "Hide others" (cmd-alt-h) -> don't force focus
-                       // "Hide app" (cmd-h) -> force focus
-                       MacApp.allAppsMap.values.count(where: { $0.nsApp.isHidden }) == 1
-                    {
-                        // Force focus
-                        _ = w.focusWindow()
-                        w.nativeFocus()
-                    }
-                    for app in MacApp.allAppsMap.values {
-                        app.nsApp.unhide()
+            await withErrorReporting("Handling an app visibility change") {
+                try await runLightSession(.globalObserver(notifName), token) {
+                    if config.automaticallyUnhideMacosHiddenApps {
+                        if let w = prevFocus?.windowOrNil,
+                           w.macAppUnsafe.nsApp.isHidden,
+                           // "Hide others" (cmd-alt-h) -> don't force focus
+                           // "Hide app" (cmd-h) -> force focus
+                           MacApp.allAppsMap.values.count(where: { $0.nsApp.isHidden }) == 1
+                        {
+                            // Force focus
+                            _ = w.focusWindow()
+                            w.nativeFocus()
+                        }
+                        for app in MacApp.allAppsMap.values {
+                            app.nsApp.unhide()
+                        }
                     }
                 }
             }
@@ -92,7 +94,7 @@ enum GlobalObserver {
                             scheduleRefreshSession(.globalObserverLeftMouseUp)
                     }
                 } catch {
-                    // Cancellation or a failed AX call. Nothing to recover here.
+                    reportAppError(error, operation: "Handling a mouse click")
                 }
             }
         }

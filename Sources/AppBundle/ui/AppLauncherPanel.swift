@@ -207,9 +207,11 @@ final class AppLauncherPanel: NSPanelHud {
                 // layout and Airlock's own focus get updated, not only macOS's
                 guard let token: RunSessionGuard = .isServerEnabled else { return }
                 Task {
-                    try? await runLightSession(.menuBarButton, token) {
-                        _ = windowToMove.bindAsFloatingWindow(to: currentWorkspace)
-                        _ = windowToMove.focusWindow()
+                    await withErrorReporting("Summoning an app window", userMessage: "Airlock could not bring the app window to this workspace.") {
+                        try await runLightSession(.menuBarButton, token) {
+                            _ = windowToMove.bindAsFloatingWindow(to: currentWorkspace)
+                            _ = windowToMove.focusWindow()
+                        }
                     }
                 }
             } else {

@@ -75,6 +75,8 @@ struct MessageView: View {
                         case .config:
                             reloadConfigButton(showShortcutGroup: true)
                             openConfigButton(showShortcutGroup: true)
+                        case .runtime:
+                            EmptyView()
                     }
                 }
                 let closeButton = Button("Close") { model.message = nil }.keyboardShortcut(.defaultAction)
@@ -108,6 +110,7 @@ public final class MessageModel: ObservableObject {
 
 public enum MessageType {
     case config
+    case runtime
 }
 
 public struct Message: Hashable, Equatable {

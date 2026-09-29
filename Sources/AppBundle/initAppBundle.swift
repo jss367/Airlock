@@ -4,10 +4,8 @@ import Foundation
 
 @MainActor public func initAppBundle() {
     Task {
-        do {
+        await withErrorReporting("Starting Airlock", userMessage: "Airlock could not finish starting. Try quitting and reopening it.") {
             try await initAppBundleImpl()
-        } catch {
-            // Cancellation or a failed AX call during startup. Nothing to recover here.
         }
     }
 }

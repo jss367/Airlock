@@ -48,6 +48,22 @@ The package-based debug scripts are also available:
 
 The debug app uses its own bundle identifier, `dev.airlock.debug`, and needs its own Accessibility permission. Avoid running the debug app and installed app at the same time when testing window management.
 
+Unexpected errors at asynchronous task boundaries are recorded in the macOS unified log under
+the app's bundle identifier, in the `errors` category. Startup and user-action failures also show
+a message with the operation and underlying error. Background window events log without opening
+a message window; cancellation caused by a newer event is ignored.
+
+In Console, filter by subsystem `dev.airlock` (or `dev.airlock.debug`) and category `errors`.
+To inspect recent entries from Terminal:
+
+```sh
+log show --last 15m --style compact --predicate '(subsystem == "dev.airlock" OR subsystem == "dev.airlock.debug") AND category == "errors"'
+```
+
+The operation, error domain, and error code are visible in unified logs. Error descriptions are
+private because they can contain file paths or window titles. The on-screen error message includes
+the full description, domain, and error code.
+
 ## Documentation and generated files
 
 - `./build-docs.sh`: renders the AsciiDoc sources into `.site/` HTML and `.man/` manpages. Requires Ruby 3 or later and Bundler; dependencies are in [`Gemfile`](../Gemfile).

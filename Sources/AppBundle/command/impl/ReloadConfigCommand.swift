@@ -36,8 +36,8 @@ struct ReloadConfigCommand: Command {
                 // nil means Airlock is disabled, which must stay that way
                 try await activateMode(activeMode.map { config.modes[$0] != nil ? $0 : mainModeId })
                 registerQuickSwitcherHotkey()
-                syncStartAtLogin()
                 MessageModel.shared.message = nil
+                syncStartAtLogin()
             }
             result = true
         case .failure(let msg):

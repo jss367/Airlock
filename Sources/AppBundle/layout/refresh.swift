@@ -7,7 +7,9 @@ func scheduleRefreshSession(
     optimisticallyPreLayoutWorkspaces: Bool = false,
 ) {
     focusEvents.schedule(event) {
-        try await runRefreshSessionBlocking(event, optimisticallyPreLayoutWorkspaces: optimisticallyPreLayoutWorkspaces)
+        await withErrorReporting("Refreshing windows (\(event.trigger))") {
+            try await runRefreshSessionBlocking(event, optimisticallyPreLayoutWorkspaces: optimisticallyPreLayoutWorkspaces)
+        }
     }
 }
 

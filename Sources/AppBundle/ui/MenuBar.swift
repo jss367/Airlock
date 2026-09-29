@@ -28,20 +28,22 @@ public func menuBar(viewModel: TrayMenuModel) -> some Scene {
                     Divider()
                     Button("Focus") {
                         Task {
-                            try? await runLightSession(.menuBarButton, token) { _ = Workspace.get(byName: workspace.name).focusWorkspace() }
+                            await withErrorReporting("Switching workspace", userMessage: "Airlock could not switch workspace.") {
+                                try await runLightSession(.menuBarButton, token) { _ = Workspace.get(byName: workspace.name).focusWorkspace() }
+                            }
                         }
                     }
                     Button("Rename...") {
                         Task {
                             if let newName = showRenameDialog(currentName: workspace.name) {
-                                try? await runLightSession(.menuBarButton, token) {
-                                    // A failed config write throws. Report it like any other failure
-                                    let renamed = (try? await Workspace.rename(Workspace.get(byName: workspace.name), to: newName)) ?? false
-                                    if !renamed {
-                                        MessageModel.shared.message = Message(
-                                            description: "Can't Rename Workspace",
-                                            body: "Can't rename workspace '\(workspace.name)' to '\(newName)'. The name may be invalid or taken, or the config couldn't be updated",
-                                        )
+                                await withErrorReporting("Renaming workspace", userMessage: "Airlock could not rename the workspace.") {
+                                    try await runLightSession(.menuBarButton, token) {
+                                        if try await !Workspace.rename(Workspace.get(byName: workspace.name), to: newName) {
+                                            MessageModel.shared.message = Message(
+                                                description: "Can't Rename Workspace",
+                                                body: "Can't rename workspace '\(workspace.name)' to '\(newName)'. The name may be invalid or taken, or the config couldn't be updated",
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -57,9 +59,11 @@ public func menuBar(viewModel: TrayMenuModel) -> some Scene {
         }
         Button(viewModel.isEnabled ? "Pause Airlock" : "Resume Airlock") {
             Task {
-                try? await runLightSession(.menuBarButton, .forceRun) { () throws in
-                    _ = try await EnableCommand(args: EnableCmdArgs(rawArgs: [], targetState: .toggle))
-                        .run(.defaultEnv, .emptyStdin)
+                await withErrorReporting("Pausing or resuming Airlock", userMessage: "Airlock could not change its running state.") {
+                    try await runLightSession(.menuBarButton, .forceRun) { () throws in
+                        _ = try await EnableCommand(args: EnableCmdArgs(rawArgs: [], targetState: .toggle))
+                            .run(.defaultEnv, .emptyStdin)
+                    }
                 }
             }
         }.keyboardShortcut("E", modifiers: .command)
@@ -85,8 +89,9 @@ public func menuBar(viewModel: TrayMenuModel) -> some Scene {
         Button("Quit \(airlockAppName)") {
             Task {
                 defer { terminateApp() }
-                // The error is dropped on purpose. We are already terminating.
-                try? await terminationHandler.beforeTermination()
+                await withErrorReporting("Restoring windows before quitting") {
+                    try await terminationHandler.beforeTermination()
+                }
             }
         }.keyboardShortcut("Q", modifiers: .command)
     } label: {
@@ -109,8 +114,12 @@ func openConfigButton(showShortcutGroup: Bool = false) -> some View {
             case .file(let url):
                 url.open(with: editor)
             case .noCustomConfigExists:
-                _ = try? FileManager.default.copyItem(atPath: defaultConfigUrl.path, toPath: fallbackConfig.path)
-                fallbackConfig.open(with: editor)
+                do {
+                    try FileManager.default.copyItem(atPath: defaultConfigUrl.path, toPath: fallbackConfig.path)
+                    fallbackConfig.open(with: editor)
+                } catch {
+                    reportAppError(error, operation: "Creating the configuration file", userMessage: "Airlock could not create your configuration file.")
+                }
             case .ambiguousConfigError:
                 fallbackConfig.open(with: editor)
         }
@@ -127,7 +136,9 @@ func reloadConfigButton(showShortcutGroup: Bool = false) -> some View {
     if let token: RunSessionGuard = .isServerEnabled {
         let button = Button("Reload config") {
             Task {
-                try? await runLightSession(.menuBarButton, token) { _ = try await reloadConfig() }
+                await withErrorReporting("Reloading configuration", userMessage: "Airlock could not reload the configuration.") {
+                    try await runLightSession(.menuBarButton, token) { _ = try await reloadConfig() }
+                }
             }
         }.keyboardShortcut("R", modifiers: .command)
         if showShortcutGroup {

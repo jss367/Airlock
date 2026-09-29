@@ -2,7 +2,7 @@ import AppKit
 import Common
 
 @MainActor
-private var moveWithMouseTask: Task<(), any Error>? = nil
+private var moveWithMouseTask: Task<(), Never>? = nil
 
 func movedObs(_: AXObserver, ax: AXUIElement, notif: CFString, _: UnsafeMutableRawPointer?) {
     let windowId = ax.containingWindowId()
@@ -16,13 +16,15 @@ func movedObs(_: AXObserver, ax: AXUIElement, notif: CFString, _: UnsafeMutableR
             }
             moveWithMouseTask?.cancel()
             moveWithMouseTask = Task {
-                try checkCancellation()
-                try await runLightSession(.ax(notif), token) {
-                    try await moveWithMouse(window)
+                await withErrorReporting("Moving a window with the mouse") {
+                    try checkCancellation()
+                    try await runLightSession(.ax(notif), token) {
+                        try await moveWithMouse(window)
+                    }
                 }
             }
         } catch {
-            // Cancellation or a failed AX call. Nothing to recover here.
+            reportAppError(error, operation: "Handling a window move event")
         }
     }
 }
