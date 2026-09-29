@@ -347,7 +347,7 @@ struct AppLauncherView: View {
                             panel.launchApp(app)
                         }
                     }
-                    .onChange(of: viewModel.searchText) { _ in
+                    .onChange(of: viewModel.searchText) {
                         viewModel.selectedIndex = 0
                     }
             }
@@ -370,7 +370,7 @@ struct AppLauncherView: View {
                         }
                     }
                 }
-                .onChange(of: viewModel.selectedIndex) { newIndex in
+                .onChange(of: viewModel.selectedIndex) { _, newIndex in
                     withAnimation {
                         scrollProxy.scrollTo(newIndex, anchor: .center)
                     }

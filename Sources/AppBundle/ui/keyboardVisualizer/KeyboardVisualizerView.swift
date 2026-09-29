@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import Common
 import HotKey
 import SwiftUI
@@ -125,7 +126,7 @@ private struct KeyboardVisualizerContent: View {
         .padding(.top, 12)
         .frame(minWidth: 960, minHeight: 380)
         .onAppear { refreshModifierOptions(); refreshBindings() }
-        .onChange(of: selectedRawModifier) { _ in refreshBindings() }
+        .onChange(of: selectedRawModifier) { refreshBindings() }
         .onReceive(refreshTimer) { _ in refreshBindings() }
         .sheet(item: $selectedKey) { key in
             AppPickerView(
