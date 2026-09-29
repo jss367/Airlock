@@ -2,43 +2,46 @@ import AppKit
 import Common
 import Foundation
 
-/// Tracks whether the current focus change was initiated by the user (hotkey, mouse click, CLI command)
-/// vs. an app stealing focus on its own (e.g. a timer firing, a notification activating an app).
+/// Owns the two independent grace windows. A monotonic clock keeps wall-clock adjustments from
+/// extending or truncating them; tests can advance time without sleeping.
 @MainActor
-private var _userInitiatedFocusChangeDeadline: Date = .distantPast
+final class FocusStealingPreventionState {
+    private let now: () -> ContinuousClock.Instant
+    private var userInitiatedDeadline: ContinuousClock.Instant?
+    private var appActivationDeadline: ContinuousClock.Instant?
 
-/// Call this when a user-initiated action occurs that should allow focus to change freely.
-/// The grace period allows the resulting macOS notifications to flow through without being blocked.
-@MainActor
-func markUserInitiatedFocusChange() {
-    _userInitiatedFocusChangeDeadline = Date().addingTimeInterval(1.0)
+    init(now: @escaping () -> ContinuousClock.Instant = { ContinuousClock().now }) {
+        self.now = now
+    }
+
+    func markUserInitiatedFocusChange() {
+        userInitiatedDeadline = now().advanced(by: .seconds(1))
+    }
+
+    func markRecentAppActivation() {
+        appActivationDeadline = now().advanced(by: .milliseconds(500))
+    }
+
+    var isUserInitiatedFocusChange: Bool { userInitiatedDeadline.map { now() < $0 } ?? false }
+    var hadRecentAppActivation: Bool { appActivationDeadline.map { now() < $0 } ?? false }
+
+    func reset() {
+        userInitiatedDeadline = nil
+        appActivationDeadline = nil
+    }
 }
 
-@MainActor
-var isUserInitiatedFocusChange: Bool {
-    Date() < _userInitiatedFocusChangeDeadline
-}
+@MainActor private let focusStealingPrevention = FocusStealingPreventionState()
 
-/// Tracks whether an app activation recently occurred, so we can distinguish
-/// app-initiated space changes from user-initiated ones (trackpad swipe, Ctrl+arrow).
-@MainActor
-private var _recentAppActivationDeadline: Date = .distantPast
+/// Allow notifications caused by a user action to arrive before protecting focus again.
+@MainActor func markUserInitiatedFocusChange() { focusStealingPrevention.markUserInitiatedFocusChange() }
+@MainActor var isUserInitiatedFocusChange: Bool { focusStealingPrevention.isUserInitiatedFocusChange }
 
-@MainActor
-func markRecentAppActivation() {
-    _recentAppActivationDeadline = Date().addingTimeInterval(0.5)
-}
+/// An app activation helps identify app-initiated space changes, but is not itself user intent.
+@MainActor func markRecentAppActivation() { focusStealingPrevention.markRecentAppActivation() }
+@MainActor var hadRecentAppActivation: Bool { focusStealingPrevention.hadRecentAppActivation }
 
-@MainActor
-var hadRecentAppActivation: Bool {
-    Date() < _recentAppActivationDeadline
-}
-
-@MainActor
-func resetFocusStealingPreventionForTests() {
-    _userInitiatedFocusChangeDeadline = .distantPast
-    _recentAppActivationDeadline = .distantPast
-}
+@MainActor func resetFocusStealingPreventionForTests() { focusStealingPrevention.reset() }
 
 /// Determines whether a focus change to `newWindow` should be blocked based on the
 /// `prevent-focus-stealing` config setting.

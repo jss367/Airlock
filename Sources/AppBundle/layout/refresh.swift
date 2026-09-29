@@ -2,18 +2,11 @@ import AppKit
 import Common
 
 @MainActor
-private var activeRefreshTask: Task<(), any Error>? = nil
-
-@MainActor
 func scheduleRefreshSession(
     _ event: RefreshSessionEvent,
     optimisticallyPreLayoutWorkspaces: Bool = false,
 ) {
-    // Before the cancellation, so evidence carried by the session being cancelled isn't lost with it
-    noteFocusEvidence(of: event)
-    activeRefreshTask?.cancel()
-    activeRefreshTask = Task { @MainActor in
-        try checkCancellation()
+    focusEvents.schedule(event) {
         try await runRefreshSessionBlocking(event, optimisticallyPreLayoutWorkspaces: optimisticallyPreLayoutWorkspaces)
     }
 }
@@ -27,21 +20,14 @@ func runRefreshSessionBlocking(
     let state = signposter.beginInterval(#function, "event: \(event) axTaskLocalAppThreadToken: \(axTaskLocalAppThreadToken?.idForDebug)")
     defer { signposter.endInterval(#function, state) }
     if !TrayMenuModel.shared.isEnabled { return }
-    noteFocusEvidence(of: event)
+    focusEvents.note(event)
     try await $refreshSessionEvent.withValue(event) {
         try await $_isStartup.withValue(event.isStartup) {
-            let nativeFocused = try await getNativeFocusedWindow()
-            if let nativeFocused { try await debugWindowsIfRecording(nativeFocused) }
-            // A cancelled session can still resume here, because an AX query already running on the
-            // app thread resumes with a value rather than throwing. Its nativeFocused is stale by
-            // then, and consuming the evidence would hand that stale answer to the cache and leave
-            // the replacement session with nothing to sync.
-            try checkCancellation()
-            // A window move or resize must not take focus from macOS on its own: the move is usually
-            // Airlock's own layout, and following the focus it reports feeds straight back into
-            // another layout. It still answers focus evidence left behind by a session it cancelled.
-            // See RefreshSessionEvent.mayHaveChangedFocus and pendingFocusEvidence.
-            let focusSyncedFromMacOs = consumeFocusEvidence() ? updateFocusCache(nativeFocused) : false
+            let focusSyncedFromMacOs = try await focusEvents.syncFocus(
+                consumingEvidence: true,
+                query: queryNativeFocusForSession,
+                apply: updateFocusCache,
+            )
 
             if shouldLayoutWorkspaces && optimisticallyPreLayoutWorkspaces { try await layoutWorkspaces() }
 
@@ -72,18 +58,14 @@ func runLightSession<T>(
 ) async throws -> T {
     let state = signposter.beginInterval(#function, "event: \(event) axTaskLocalAppThreadToken: \(axTaskLocalAppThreadToken?.idForDebug)")
     defer { signposter.endInterval(#function, state) }
-    activeRefreshTask?.cancel() // Give priority to runSession
-    activeRefreshTask = nil
+    focusEvents.cancelRefresh() // Give priority to runSession
     return try await $refreshSessionEvent.withValue(event) {
         try await $_isStartup.withValue(event.isStartup) {
-            let nativeFocused = try await getNativeFocusedWindow()
-            if let nativeFocused { try await debugWindowsIfRecording(nativeFocused) }
-            // A light session syncs unconditionally and never consumes the shared evidence. It clears
-            // activeRefreshTask, so a refresh scheduled while it awaits its focus query can't cancel
-            // it; if it spent the evidence it would spend it on this stale nativeFocused and leave
-            // that newer refresh nothing to sync. Not consuming costs at most one redundant sync,
-            // which no-ops when macOS still reports the window the cache already knows about.
-            let focusSyncedFromMacOs = updateFocusCache(nativeFocused)
+            let focusSyncedFromMacOs = try await focusEvents.syncFocus(
+                consumingEvidence: false,
+                query: queryNativeFocusForSession,
+                apply: updateFocusCache,
+            )
             let focusBefore = focus.windowOrNil
 
             refreshModel(focusSyncedFromMacOs: focusSyncedFromMacOs)
@@ -103,6 +85,13 @@ func runLightSession<T>(
             return result
         }
     }
+}
+
+@MainActor
+private func queryNativeFocusForSession() async throws -> Window? {
+    let nativeFocused = try await getNativeFocusedWindow()
+    if let nativeFocused { try await debugWindowsIfRecording(nativeFocused) }
+    return nativeFocused
 }
 
 struct RunSessionGuard: Sendable {

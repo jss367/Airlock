@@ -2,17 +2,15 @@ import Common
 import Foundation
 
 let configDotfileName = ".airlock.toml"
-func findCustomConfigUrl() -> ConfigFile {
+func findCustomConfigUrl(configLocation: String? = serverArgs.configLocation) -> ConfigFile {
+    // An explicit path must be read or reported as an error, even when it doesn't exist.
+    if let configLocation { return .file(URL(filePath: configLocation)) }
     let xdgConfigHome = ProcessInfo.processInfo.environment["XDG_CONFIG_HOME"].map { URL(filePath: $0) }
         ?? FileManager.default.homeDirectoryForCurrentUser.appending(path: ".config/")
-    let candidates: [URL] = if let configLocation = serverArgs.configLocation {
-        [URL(filePath: configLocation)]
-    } else {
-        [
-            FileManager.default.homeDirectoryForCurrentUser.appending(path: configDotfileName),
-            xdgConfigHome.appending(path: "airlock").appending(path: "airlock.toml"),
-        ]
-    }
+    let candidates: [URL] = [
+        FileManager.default.homeDirectoryForCurrentUser.appending(path: configDotfileName),
+        xdgConfigHome.appending(path: "airlock").appending(path: "airlock.toml"),
+    ]
     let existingCandidates: [URL] = candidates.filter { (candidate: URL) in FileManager.default.fileExists(atPath: candidate.path) }
     let count = existingCandidates.count
     return switch count {

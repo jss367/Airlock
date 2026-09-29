@@ -23,6 +23,11 @@
 4. The app returns standard output, standard error, and an exit code.
 5. The client prints the response and exits with that code.
 
+Messages use a four-byte native-endian length followed by JSON, with a 16 MiB maximum JSON payload
+in each direction (including CLI stdin and command output). Truncated messages fail on disconnect;
+oversized messages are rejected before reading their payload. A failed response write closes the
+connection so clients do not wait for a response that cannot be sent.
+
 ## Adding or changing commands
 
 Command implementations live in [`Sources/AppBundle/command/`](../Sources/AppBundle/command/) and argument definitions in [`Sources/Common/cmdArgs/`](../Sources/Common/cmdArgs/).
@@ -40,3 +45,14 @@ Command implementations live in [`Sources/AppBundle/command/`](../Sources/AppBun
 - [`layout/`](../Sources/AppBundle/layout/): layout calculation and refresh.
 - [`focusStealingPrevention.swift`](../Sources/AppBundle/focusStealingPrevention.swift): workspace isolation when another app attempts to take focus.
 - [`ui/`](../Sources/AppBundle/ui/): menu bar, switchers, launcher, workspace overview, keyboard visualizer, and overlays.
+
+`FocusEventCoordinator` owns the refresh task, pending focus evidence, and cached native window ID.
+Replacing a refresh cancels its task but retains its evidence. After querying macOS, a refresh checks
+cancellation before consuming evidence and applying focus, with no suspension between those steps.
+Light command sessions synchronize focus without consuming evidence needed by a newer refresh.
+`FocusStealingPreventionState` owns the user-action and app-activation grace windows, using an
+injectable monotonic clock so expiry tests do not depend on sleeps or wall-clock changes.
+
+Configuration read and parse failures are reported without replacing the active configuration.
+An explicitly selected file that is missing is an error; defaults are used when no custom file
+was selected or discovered.
