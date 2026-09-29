@@ -11,7 +11,8 @@ func registerQuickSwitcherHotkey() {
     quickSwitcherHotkey?.isEnabled = false
     quickSwitcherHotkey = nil
 
-    guard config.quickSwitcher.enabled else { return }
+    // Paused Airlock must release the key so other apps can use it
+    guard config.quickSwitcher.enabled, TrayMenuModel.shared.isEnabled else { return }
 
     let parsed = parseBinding(config.quickSwitcher.binding, .emptyRoot, config.keyMapping.resolve())
     guard case .success(let (modifiers, key)) = parsed else { return }
@@ -22,6 +23,8 @@ func registerQuickSwitcherHotkey() {
         }
     })
 }
+
+@MainActor var isQuickSwitcherHotkeyRegistered: Bool { quickSwitcherHotkey != nil }
 
 @MainActor
 func toggleQuickSwitcher() {

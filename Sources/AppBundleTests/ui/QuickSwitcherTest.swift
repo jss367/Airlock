@@ -12,4 +12,27 @@ final class QuickSwitcherTest: XCTestCase {
         }
         assertEquals(webSearchUrl(query: "c++")?.absoluteString, "https://google.com/search?q=c%2B%2B")
     }
+
+    @MainActor
+    func testPausingReleasesHotkey() async throws {
+        setUpWorkspacesForTests()
+        config.quickSwitcher.enabled = true
+        registerQuickSwitcherHotkey()
+        defer {
+            TrayMenuModel.shared.isEnabled = true
+            config.quickSwitcher.enabled = false
+            registerQuickSwitcherHotkey()
+        }
+        assertEquals(isQuickSwitcherHotkeyRegistered, true)
+
+        _ = try await parseCommand("enable off").cmdOrDie.run(.defaultEnv, .emptyStdin)
+        assertEquals(isQuickSwitcherHotkeyRegistered, false)
+
+        // Reloading config while paused must not re-register it
+        registerQuickSwitcherHotkey()
+        assertEquals(isQuickSwitcherHotkeyRegistered, false)
+
+        _ = try await parseCommand("enable on").cmdOrDie.run(.defaultEnv, .emptyStdin)
+        assertEquals(isQuickSwitcherHotkeyRegistered, true)
+    }
 }

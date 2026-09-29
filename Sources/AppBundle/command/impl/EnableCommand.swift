@@ -30,7 +30,9 @@ struct EnableCommand: Command {
             try await activateMode(mainModeId)
         } else {
             try await activateMode(nil)
+            dismissQuickSwitcher(restoreFocus: false)
         }
+        registerQuickSwitcherHotkey()
         return true
     }
 }
