@@ -24,6 +24,9 @@ func registerQuickSwitcherHotkey() {
     })
 }
 
+@MainActor var isQuickSwitcherHotkeyRegistered: Bool { quickSwitcherHotkey != nil }
+@MainActor var isQuickSwitcherOpen: Bool { quickSwitcherPanel?.isVisible == true }
+
 @MainActor
 func toggleQuickSwitcher() {
     if let panel = quickSwitcherPanel, panel.isVisible {

@@ -30,6 +30,9 @@ struct EnableCommand: Command {
             }
             try await activateMode(mainModeId)
         } else {
+            // Before activateMode, whose on-mode-changed callbacks may be slow or throw.
+            // The panel activated Airlock, so hand focus back to the real window
+            if isQuickSwitcherOpen { dismissQuickSwitcher() }
             try await activateMode(nil)
         }
         return true
