@@ -21,8 +21,7 @@ struct EnableCommand: Command {
         }
 
         TrayMenuModel.shared.isEnabled = newState
-        // Deferred so a throw below can't leave the hotkey out of sync with isEnabled
-        defer { registerQuickSwitcherHotkey() }
+        registerQuickSwitcherHotkey()
         if newState {
             for workspace in Workspace.all {
                 for window in workspace.allLeafWindowsRecursive where window.isFloating {
