@@ -84,7 +84,7 @@ enum GlobalObserver {
                     let clickedMonitor = mouseLocation.monitorApproximation
                     switch true {
                         // Detect clicks on desktop of different monitors, if enabled.
-                        case config.focusWorkspaceOnMouseClick && clickedMonitor.activeWorkspace != focus.workspace:
+                        case config.enableWindowManagement && config.focusWorkspaceOnMouseClick && clickedMonitor.activeWorkspace != focus.workspace:
                             _ = try await runLightSession(.globalObserverLeftMouseUp, token) {
                                 clickedMonitor.activeWorkspace.focusWorkspace()
                             }

@@ -92,7 +92,12 @@ func runLightSession<T>(
 @MainActor
 private func queryNativeFocusForSession() async throws -> Window? {
     let nativeFocused = try await getNativeFocusedWindow()
-    if let nativeFocused { try await debugWindowsIfRecording(nativeFocused) }
+    if let nativeFocused {
+        if !config.enableWindowManagement {
+            try await syncUnmanagedWindow(nativeFocused)
+        }
+        try await debugWindowsIfRecording(nativeFocused)
+    }
     return nativeFocused
 }
 
@@ -157,7 +162,14 @@ enum OptimalHideCorner {
 }
 
 @MainActor
-private func layoutWorkspaces() async throws {
+func layoutWorkspaces() async throws {
+    if !config.enableWindowManagement {
+        for window in Workspace.all.flatMap(\.allLeafWindowsRecursive) {
+            (window as? MacWindow)?.unhideFromCorner(restoreTilingPosition: true)
+            try await syncUnmanagedWindow(window)
+        }
+        return
+    }
     if !TrayMenuModel.shared.isEnabled {
         for workspace in Workspace.all {
             workspace.allLeafWindowsRecursive.forEach { ($0 as? MacWindow)?.unhideFromCorner() }

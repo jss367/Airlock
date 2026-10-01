@@ -76,9 +76,9 @@ extension HotKey {
 }
 
 /// Drops the bindings whose feature is switched off, so their keys go back to macOS.
-/// App switching bindings belong to `enable-workspace-app-switching`, the rest to `enable-keyboard-shortcuts`
+/// Workspace app switching requires window management; other bindings use `enable-keyboard-shortcuts`.
 func activeBindings(_ bindings: [String: HotkeyBinding], _ config: Config) -> [String: HotkeyBinding] {
-    bindings.filter { $0.value.isAppSwitching ? config.enableWorkspaceAppSwitching : config.enableKeyboardShortcuts }
+    bindings.filter { $0.value.isAppSwitching ? config.enableWindowManagement && config.enableWorkspaceAppSwitching : config.enableKeyboardShortcuts }
 }
 
 struct HotkeyBinding: Equatable, Sendable {

@@ -122,6 +122,7 @@ private let configParser: [String: any ParserProtocol<Config>] = [
     "focus-workspace-on-mouse-click": Parser(\.focusWorkspaceOnMouseClick, parseBool),
     "enable-workspace-app-switching": Parser(\.enableWorkspaceAppSwitching, parseBool),
     "enable-keyboard-shortcuts": Parser(\.enableKeyboardShortcuts, parseBool),
+    "enable-window-management": Parser(\.enableWindowManagement, parseBool),
     "prevent-focus-stealing": Parser(\.preventFocusStealing, parsePreventFocusStealing),
     "accordion-padding": Parser(\.accordionPadding, parseInt),
     persistentWorkspacesKey: Parser(\.persistentWorkspaces, parsePersistentWorkspaces),

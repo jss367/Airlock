@@ -49,6 +49,7 @@ final class FocusStealingPreventionState {
 /// Returns `true` if the focus change should be allowed, `false` if it should be blocked.
 @MainActor
 func shouldAllowFocusChange(to newWindow: Window?) -> Bool {
+    guard config.enableWindowManagement else { return true }
     let mode = config.preventFocusStealing
     guard mode != .off else { return true }
     guard !isUserInitiatedFocusChange else { return true }

@@ -41,11 +41,13 @@ final class ConfigTest: XCTestCase {
     func testParseFeatureSwitchesForBindings() {
         let (config, errors) = parseConfig(
             """
+            enable-window-management = false
             enable-workspace-app-switching = false
             enable-keyboard-shortcuts = false
             """,
         )
         assertEquals(errors, [])
+        assertEquals(config.enableWindowManagement, false)
         assertEquals(config.enableWorkspaceAppSwitching, false)
         assertEquals(config.enableKeyboardShortcuts, false)
     }
@@ -64,6 +66,18 @@ final class ConfigTest: XCTestCase {
         assertEquals(activeKeys(appSwitching: true, shortcuts: false), appSwitching)
         assertEquals(activeKeys(appSwitching: false, shortcuts: true), all.subtracting(appSwitching))
         assertEquals(activeKeys(appSwitching: false, shortcuts: false), [])
+    }
+
+    func testShortcutsWithoutWindowManagement() {
+        let (config, errors) = parseConfig("enable-window-management = false")
+        assertEquals(errors, [])
+        XCTAssertFalse(config.enableWindowManagement)
+        XCTAssertTrue(config.enableKeyboardShortcuts)
+        let bindings = defaultConfig.modes[mainModeId]!.bindings
+        let active = activeBindings(bindings, config)
+        XCTAssertFalse(active.values.contains { $0.isAppSwitching })
+        assertEquals(active.count, bindings.values.count(where: { !$0.isAppSwitching }))
+        XCTAssertTrue(defaultConfig.enableWindowManagement)
     }
 
     func testDuplicatedPersistentWorkspaces() {

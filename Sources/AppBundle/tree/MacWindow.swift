@@ -22,7 +22,7 @@ final class MacWindow: Window {
         let data = try await unbindAndGetBindingDataForNewWindow(
             windowId,
             macApp,
-            isStartup
+            isStartup || !config.enableWindowManagement
                 ? (rect?.center.monitorApproximation ?? mainMonitor).activeWorkspace
                 : focus.workspace,
             window: nil,
@@ -34,7 +34,10 @@ final class MacWindow: Window {
         allWindowsMap[windowId] = window
 
         try await debugWindowsIfRecording(window)
-        if try await !restoreClosedWindowsCacheIfNeeded(newlyDetectedWindow: window) {
+        let restored = config.enableWindowManagement
+            ? try await restoreClosedWindowsCacheIfNeeded(newlyDetectedWindow: window)
+            : false
+        if !restored {
             try await tryOnWindowDetected(window)
         }
         return window
@@ -83,7 +86,7 @@ final class MacWindow: Window {
         let parent = unbindFromParent().parent
         let deadWindowWorkspace = parent.nodeWorkspace
         let focus = focus
-        if let deadWindowWorkspace, deadWindowWorkspace == focus.workspace ||
+        if config.enableWindowManagement, let deadWindowWorkspace, deadWindowWorkspace == focus.workspace ||
             deadWindowWorkspace == prevFocusedWorkspace && prevFocusedWorkspaceDate.distance(to: .now) < 1
         {
             switch parent.cases {
@@ -147,7 +150,7 @@ final class MacWindow: Window {
     }
 
     @MainActor
-    func unhideFromCorner() {
+    func unhideFromCorner(restoreTilingPosition: Bool = false) {
         guard let prevUnhiddenProportionalPositionInsideWorkspaceRect else { return }
         guard let nodeWorkspace else { return } // hiding only makes sense for workspace windows
         guard let parent else { return }
@@ -157,8 +160,14 @@ final class MacWindow: Window {
             // Tiling windows should be unhidden with layoutRecursive anyway
             case .floatingWindow:
                 setAxFrame(unhiddenFloatingTopLeft(prevUnhiddenProportionalPositionInsideWorkspaceRect, nodeWorkspace), nil)
+            case .tiling:
+                if restoreTilingPosition {
+                    let point = lastAppliedLayoutPhysicalRect?.topLeftCorner
+                        ?? unhiddenFloatingTopLeft(prevUnhiddenProportionalPositionInsideWorkspaceRect, nodeWorkspace)
+                    setAxFrame(point, nil)
+                }
             case .macosNativeFullscreenWindow, .macosNativeHiddenAppWindow, .macosNativeMinimizedWindow,
-                 .macosPopupWindow, .tiling, .rootTilingContainer, .shimContainerRelation: break
+                 .macosPopupWindow, .rootTilingContainer, .shimContainerRelation: break
         }
 
         self.prevUnhiddenProportionalPositionInsideWorkspaceRect = nil
@@ -269,6 +278,7 @@ private func onWindowDetected(_ window: Window) async throws {
         appBundleId: window.app.rawAppBundleId,
         appName: window.app.name,
     ))
+    guard config.enableWindowManagement else { return }
     for callback in config.onWindowDetected where try await callback.matches(window) {
         // The callback runs inside whichever session detected the window, so a focus-changing command
         // here would report that session (an ax notification, say) as what moved the focus. Name the
