@@ -14,8 +14,13 @@ struct BoolFeature: Identifiable {
 
 @MainActor let behaviorFeatures: [BoolFeature] = [
     BoolFeature(
+        title: "Window management",
+        summary: "Automatically tiles windows and hides windows in other workspaces. Turn this off to leave windows where you put them while keeping keyboard shortcuts for moving them between monitors.",
+        key: "enable-window-management", isOn: { config.enableWindowManagement },
+    ),
+    BoolFeature(
         title: "Workspace app switching",
-        summary: "Your app switching keys (⌘Tab and ⌘` by default) cycle only the apps and windows in the current workspace. Turn this off to give those keys back to macOS.",
+        summary: "Your app switching keys (⌘Tab and ⌘` by default) cycle only the apps and windows in the current workspace. Turn this off to give those keys back to macOS. Requires Window management.",
         key: "enable-workspace-app-switching", isOn: { config.enableWorkspaceAppSwitching },
     ),
     BoolFeature(

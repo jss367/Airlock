@@ -40,8 +40,13 @@ on-focused-monitor-changed = ['move-mouse monitor-lazy-center']
 # Disable this if the first click on a control only focuses its window.
 focus-workspace-on-mouse-click = true
 
+# Automatically tile windows and hide windows in other workspaces.
+# Turn off to keep native macOS window behavior and monitor-moving shortcuts.
+enable-window-management = true
+
 # Register the bindings that run 'focus app-next/prev' and 'focus same-app-next/prev'
-# (cmd-tab and cmd-backtick below). Set to false to give those keys back to macOS.
+# (cmd-tab and cmd-backtick below). Requires enable-window-management.
+# Set to false to give those keys back to macOS.
 enable-workspace-app-switching = true
 
 # Register every other binding in the [mode.*.binding] tables.

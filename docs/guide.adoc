@@ -37,6 +37,24 @@ Airlock also blocks attempts by apps on other workspaces to steal focus. Use an 
 
 The menu bar provides *Mission Control*, *Show Keybindings*, and *Keyboard Visualizer*. The keyboard visualizer can edit bindings in your configuration. For app launching and summoning, see xref:commands.adoc#app-launcher[app-launcher] and xref:commands.adoc#summon-app[summon-app].
 
+=== Use shortcuts without automatic window management
+
+In *Feature Settings* (or the menu bar's *Features* menu), turn off *Window management* and leave *Keyboard shortcuts* on. Airlock stops tiling windows, hiding other workspaces, intercepting workspace app-switching keys, and enforcing workspace focus. Windows stay where you place them. Window-detection and focus callbacks are suspended while management is off.
+
+To move the focused window between monitors, bind `move-node-to-monitor` in your config. This moves the window directly while preserving its size:
+
+[source,toml]
+----
+enable-window-management = false
+enable-keyboard-shortcuts = true
+
+[mode.main.binding]
+    option-ctrl-left = 'move-node-to-monitor left'
+    option-ctrl-right = 'move-node-to-monitor right'
+----
+
+Turn *Window management* back on to resume tiling and workspace hiding.
+
 [#configuring-airlock]
 == Configuring Airlock
 

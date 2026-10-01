@@ -34,6 +34,7 @@ private struct AppServerTerminationHandler: TerminationHandler {
 
 @MainActor
 private func makeAllWindowsVisibleAndRestoreSize() async throws {
+    guard config.enableWindowManagement else { return }
     // Make all windows fullscreen before Quit
     for (_, window) in MacWindow.allWindowsMap {
         // makeAllWindowsVisibleAndRestoreSize may be invoked when something went wrong (e.g. some windows are unbound)
