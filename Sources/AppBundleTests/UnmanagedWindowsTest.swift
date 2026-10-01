@@ -40,6 +40,28 @@ final class UnmanagedWindowsTest: XCTestCase {
         assertEquals(window._rect?.height, rect.height)
     }
 
+    func testNativeRebindInvalidatesClosedWindowSnapshot() async throws {
+        resetClosedWindowsCache()
+        defer { resetClosedWindowsCache() }
+        config.enableWindowManagement = false
+        let visibleWorkspace = mainMonitor.activeWorkspace
+        let oldWorkspace = Workspace.get(byName: "old")
+        let window = TestWindow.new(id: 1, parent: oldWorkspace,
+                                    rect: Rect(topLeftX: 100, topLeftY: 120, width: 600, height: 400))
+        let closedWindow = TestWindow.new(id: 2, parent: oldWorkspace)
+        cacheClosedWindowIfNeeded()
+        closedWindow.closeAxWindow()
+
+        try await syncUnmanagedWindow(window)
+        config.enableWindowManagement = true
+        let reopenedWindow = TestWindow.new(id: 2, parent: visibleWorkspace)
+        let restored = try await restoreClosedWindowsCacheIfNeeded(newlyDetectedWindow: reopenedWindow)
+
+        XCTAssertFalse(restored)
+        XCTAssertTrue(window.nodeWorkspace === visibleWorkspace)
+        XCTAssertTrue(reopenedWindow.nodeWorkspace === visibleWorkspace)
+    }
+
     func testFloatingWindowStaysFloating() async throws {
         let visibleWorkspace = mainMonitor.activeWorkspace
         let window = TestWindow.new(id: 1, parent: Workspace.get(byName: "old"),

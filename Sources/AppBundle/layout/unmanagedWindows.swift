@@ -12,6 +12,7 @@ func syncUnmanagedWindow(_ window: Window) async throws {
     else { return }
     let workspace = rect.center.monitorApproximation.activeWorkspace
     if window.nodeWorkspace != workspace {
+        resetClosedWindowsCache()
         let wasFocused = focus.windowOrNil == window
         let container: NonLeafTreeNodeObject = window.isFloating ? workspace : workspace.rootTilingContainer
         window.bind(to: container, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
