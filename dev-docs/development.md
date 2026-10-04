@@ -33,7 +33,9 @@ designated code-signing requirement; ad-hoc signing changes that identity on eve
 permission again.
 
 The release and deployment scripts prefer an installed `Developer ID Application` certificate. You can select a
-specific certificate by setting `AIRLOCK_CODE_SIGN_IDENTITY` to its name or SHA-1 hash.
+specific certificate by setting `AIRLOCK_CODE_SIGN_IDENTITY` to its name or SHA-1 hash. Airlock's release Team ID is
+preferred automatically; if several certificates for other teams are installed, local deployment requires an explicit
+selection. Public release packaging rejects certificates that do not belong to Airlock's release team.
 
 If you don't have a Developer ID certificate and only need local builds, create a self-signed certificate:
 

@@ -117,24 +117,36 @@ check-contains-hash .release/airlock
 codesign -v .release/Airlock.app
 codesign -v .release/airlock
 
+app_codesign_info="$(codesign -dvv .release/Airlock.app 2>&1)"
+cli_codesign_info="$(codesign -dvv .release/airlock 2>&1)"
+
 if test "$allow_adhoc_signing" != 1; then
-    if codesign -dvv .release/Airlock.app 2>&1 | grep -q '^Signature=adhoc$'; then
+    if grep '^Signature=adhoc$' > /dev/null <<< "$app_codesign_info"; then
         echo "Refusing to package an ad-hoc-signed Airlock.app" > /dev/stderr
         exit 1
     fi
-    if codesign -dvv .release/airlock 2>&1 | grep -q '^Signature=adhoc$'; then
+    if grep '^Signature=adhoc$' > /dev/null <<< "$cli_codesign_info"; then
         echo "Refusing to package an ad-hoc-signed airlock CLI" > /dev/stderr
         exit 1
     fi
 fi
 
 if test "$require_developer_id" = 1; then
-    if ! codesign -dvv .release/Airlock.app 2>&1 | grep -q '^Authority=Developer ID Application:'; then
+    airlock_developer_team_id="$(./script/find-code-signing-identity.sh --print-airlock-team-id)"
+    if ! grep '^Authority=Developer ID Application:' > /dev/null <<< "$app_codesign_info"; then
         echo "Refusing to package a public release without a Developer ID Application signature" > /dev/stderr
         exit 1
     fi
-    if ! codesign -dvv .release/airlock 2>&1 | grep -q '^Authority=Developer ID Application:'; then
+    if ! grep '^Authority=Developer ID Application:' > /dev/null <<< "$cli_codesign_info"; then
         echo "Refusing to package a public CLI release without a Developer ID Application signature" > /dev/stderr
+        exit 1
+    fi
+    if ! grep "^TeamIdentifier=$airlock_developer_team_id$" > /dev/null <<< "$app_codesign_info"; then
+        echo "Refusing to package a public release for a team other than $airlock_developer_team_id" > /dev/stderr
+        exit 1
+    fi
+    if ! grep "^TeamIdentifier=$airlock_developer_team_id$" > /dev/null <<< "$cli_codesign_info"; then
+        echo "Refusing to package a public CLI release for a team other than $airlock_developer_team_id" > /dev/stderr
         exit 1
     fi
 fi
