@@ -49,7 +49,8 @@ jobs:
       - name: './build-release.sh'
         run: |
           # "-" means "Sign to run locally". There is no airlock-codesign-certificate on GH Actions
-          ./build-release.sh --codesign-identity -
+          # This artifact is only exercised by CI and is never distributed.
+          ./build-release.sh --codesign-identity - --allow-adhoc-signing
           ./install-from-sources.sh --dont-rebuild
       - name: cat ./.release/xcodebuild.log
         if: ${{ always() }}

@@ -13,7 +13,8 @@ macOS window manager that enforces workspace isolation. Cmd+Tab cycles apps with
 
 - Swift project built with Xcode (`Airlock.xcodeproj`).
 - Use `-derivedDataPath .xcode-build` to keep build artifacts local to the repo.
-- Use `CODE_SIGN_IDENTITY="-" CODE_SIGNING_REQUIRED=NO` since signing is not set up.
+- `build.sh` may use ad-hoc signing because it does not install an artifact. `deploy.sh` must use a stable signing
+  identity so macOS preserves Accessibility permission across rebuilds.
 
 ## Project-specific PR notes
 

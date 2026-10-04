@@ -26,15 +26,28 @@ If a Swiftly build fails with `unknown argument: '-target-arch-variant'` after u
 the pinned compiler may be incompatible with the selected SDK. Run `/usr/bin/swift test` to
 use Xcode's matching compiler and SDK together. This does not change the repository's toolchain pin.
 
+## Code signing
+
+Airlock.app must be signed with the same identity across rebuilds. macOS ties Accessibility permission to the app's
+designated code-signing requirement; ad-hoc signing changes that identity on every build and forces users to grant
+permission again.
+
+The release and deployment scripts prefer an installed `Developer ID Application` certificate. You can select a
+specific certificate by setting `AIRLOCK_CODE_SIGN_IDENTITY` to its name or SHA-1 hash.
+
+If you don't have a Developer ID certificate and only need local builds, create a self-signed certificate:
+
+1. Open Keychain Access.
+2. Choose Keychain Access → Certificate Assistant → Create a Certificate.
+3. Name it `airlock-codesign-certificate`, select `Self Signed Root`, and use the `Code Signing` certificate type.
+
 ## Install and run locally
 
 ```sh
 ./deploy.sh
 ```
 
-This stops the running Airlock app, builds and tests, replaces `/Applications/Airlock.app`, copies the command-line tool to `~/.local/bin/airlock`, and launches the app. Add `~/.local/bin` to your `PATH`. Grant Accessibility access to Airlock when prompted.
-
-No custom signing certificate is required for `build.sh` or `deploy.sh`.
+This stops the running Airlock app, builds and tests, replaces `/Applications/Airlock.app`, copies the command-line tool to `~/.local/bin/airlock`, and launches the app. Add `~/.local/bin` to your `PATH`. Grant Accessibility access to Airlock when prompted. `deploy.sh` requires one of the stable signing identities described above; `build.sh` continues to use local ad-hoc signing because it does not install its build.
 
 ## Debugging
 
@@ -77,14 +90,14 @@ Generated command help comes from `docs/airlock-*.adoc`. Update those sources ra
 
 [GitHub Actions](https://github.com/jss367/Airlock/actions/workflows/build.yml) runs debug and release builds. The full `./run-tests.sh` also checks formatting, generated files, command-line smoke tests, and a clean Git working tree. Commit your changes before running it; it is stricter than `./build.sh`.
 
-`./build-release.sh --codesign-identity -` creates a locally signed release archive in `.release/`, including the app, command-line tool, manpages, and shell completions. It requires the documentation and completion dependencies above; `xcbeautify` is optional. Without the signing flag, it expects a certificate named `airlock-codesign-certificate`.
+`./build-release.sh` creates a signed release archive in `.release/`, including the app, command-line tool, manpages, and shell completions. It automatically selects a stable signing identity and requires the documentation and completion dependencies above; `xcbeautify` is optional. Ad-hoc signing is rejected unless `--allow-adhoc-signing` is passed explicitly for a non-distributed CI build.
 
 Run release packaging from a clean checkout: it regenerates files and restores tracked files with `git checkout .`. Packaging an archive does not publish a GitHub release. Published archives are available on [GitHub Releases](https://github.com/jss367/Airlock/releases). Airlock has no maintained public Homebrew tap.
 
 To publish a release:
 
 1. Fetch the latest `origin/main`. Update `VERSION`, run `./generate.sh`, and commit the version and generated files through a pull request to `main`.
-2. From the clean release commit on `main`, run `./run-tests.sh` and `./build-release.sh --codesign-identity -`. The archive contains universal Apple Silicon/Intel binaries with the release version and Git commit embedded. Ad-hoc signing does not provide Apple notarization; mention this in the release notes.
+2. From the clean release commit on `main`, run `./run-tests.sh` and `./build-release.sh --require-developer-id`. The archive contains universal Apple Silicon/Intel binaries with the release version and Git commit embedded. Developer ID signing gives Airlock a stable identity but does not notarize the archive; mention the lack of notarization in the release notes.
 3. Create a checksum and publish the archive with the GitHub CLI:
 
    ```sh

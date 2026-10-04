@@ -6,16 +6,7 @@ import PrivateApi
 func checkAccessibilityPermissions() {
     let options = [axTrustedCheckOptionPrompt: true]
     if !AXIsProcessTrustedWithOptions(options as CFDictionary) {
-        resetAccessibility() // Because macOS doesn't reset it for us when the app signature changes...
         terminateApp()
-    }
-}
-
-private func resetAccessibility() {
-    do {
-        _ = try Process.run(URL(filePath: "/usr/bin/tccutil"), arguments: ["reset", "Accessibility", airlockAppId])
-    } catch {
-        logAppError(error, operation: "Resetting Accessibility permission")
     }
 }
 

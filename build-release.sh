@@ -3,14 +3,27 @@ cd "$(dirname "$0")"
 source ./script/setup.sh
 
 build_version="$(cat VERSION)"
-codesign_identity="airlock-codesign-certificate"
+codesign_identity=""
+allow_adhoc_signing=0
+require_developer_id=0
 while test $# -gt 0; do
     case $1 in
         --build-version) build_version="$2"; shift 2;;
         --codesign-identity) codesign_identity="$2"; shift 2;;
+        --allow-adhoc-signing) allow_adhoc_signing=1; shift;;
+        --require-developer-id) require_developer_id=1; shift;;
         *) echo "Unknown option $1" > /dev/stderr; exit 1 ;;
     esac
 done
+
+if test -z "$codesign_identity"; then
+    codesign_identity="$(./script/find-code-signing-identity.sh)"
+fi
+if test "$codesign_identity" = "-" && test "$allow_adhoc_signing" != 1; then
+    echo "Refusing to package an ad-hoc-signed release. Use a stable signing identity." > /dev/stderr
+    echo "Pass --allow-adhoc-signing only for a non-distributed CI build." > /dev/stderr
+    exit 1
+fi
 
 #############
 ### BUILD ###
@@ -52,7 +65,7 @@ cp -r .build/apple/Products/Release/airlock .release
 ### SIGN CLI ###
 ################
 
-codesign -s "$codesign_identity" .release/airlock
+codesign --options runtime -s "$codesign_identity" .release/airlock
 
 ################
 ### VALIDATE ###
@@ -103,6 +116,28 @@ check-contains-hash .release/airlock
 
 codesign -v .release/Airlock.app
 codesign -v .release/airlock
+
+if test "$allow_adhoc_signing" != 1; then
+    if codesign -dvv .release/Airlock.app 2>&1 | grep -q '^Signature=adhoc$'; then
+        echo "Refusing to package an ad-hoc-signed Airlock.app" > /dev/stderr
+        exit 1
+    fi
+    if codesign -dvv .release/airlock 2>&1 | grep -q '^Signature=adhoc$'; then
+        echo "Refusing to package an ad-hoc-signed airlock CLI" > /dev/stderr
+        exit 1
+    fi
+fi
+
+if test "$require_developer_id" = 1; then
+    if ! codesign -dvv .release/Airlock.app 2>&1 | grep -q '^Authority=Developer ID Application:'; then
+        echo "Refusing to package a public release without a Developer ID Application signature" > /dev/stderr
+        exit 1
+    fi
+    if ! codesign -dvv .release/airlock 2>&1 | grep -q '^Authority=Developer ID Application:'; then
+        echo "Refusing to package a public CLI release without a Developer ID Application signature" > /dev/stderr
+        exit 1
+    fi
+fi
 
 ############
 ### PACK ###
