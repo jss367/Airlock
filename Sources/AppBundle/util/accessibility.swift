@@ -7,17 +7,16 @@ private let accessibilitySigningRequirementKey = "airlock-accessibility-signing-
 
 @MainActor
 func checkAccessibilityPermissions() {
-    let requirement = currentDesignatedRequirement()
-    if !AXIsProcessTrusted(), let requirement,
+    if let requirement = currentDesignatedRequirement(),
        UserDefaults.standard.string(forKey: accessibilitySigningRequirementKey) != requirement
     {
         // macOS keeps the Accessibility record of the previous signature (e.g. after moving from
         // ad-hoc to certificate signing), so the toggle looks enabled but no longer applies.
         // Reset it once per signing identity; same-identity updates keep their grant.
-        resetAccessibility()
-    }
-    if let requirement {
-        UserDefaults.standard.set(requirement, forKey: accessibilitySigningRequirementKey)
+        // Record the identity only after a successful reset so a failed one is retried next launch.
+        if AXIsProcessTrusted() || resetAccessibility() {
+            UserDefaults.standard.set(requirement, forKey: accessibilitySigningRequirementKey)
+        }
     }
     let options = [axTrustedCheckOptionPrompt: true]
     if !AXIsProcessTrustedWithOptions(options as CFDictionary) {
@@ -38,12 +37,19 @@ private func currentDesignatedRequirement() -> String? {
     return requirementString as String?
 }
 
-private func resetAccessibility() {
+private func resetAccessibility() -> Bool {
+    let operation = "Resetting Accessibility permission"
     do {
         let process = try Process.run(URL(filePath: "/usr/bin/tccutil"), arguments: ["reset", "Accessibility", airlockAppId])
         process.waitUntilExit()
+        guard process.terminationStatus == 0 else {
+            logAppError(NSError(domain: "tccutil", code: Int(process.terminationStatus)), operation: operation)
+            return false
+        }
+        return true
     } catch {
-        logAppError(error, operation: "Resetting Accessibility permission")
+        logAppError(error, operation: operation)
+        return false
     }
 }
 
