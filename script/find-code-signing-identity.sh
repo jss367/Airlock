@@ -44,7 +44,17 @@ EOF
 fi
 
 if test -z "$identity"; then
-    identity="$(awk '/"airlock-codesign-certificate"/ { print $2; exit }' <<< "$identities")"
+    local_identities="$(awk '/"airlock-codesign-certificate"/ { print $2 }' <<< "$identities")"
+    local_identity_count="$(awk 'NF { count += 1 } END { print count + 0 }' <<< "$local_identities")"
+    if test "$local_identity_count" -gt 1; then
+        cat > /dev/stderr <<'EOF'
+Multiple 'airlock-codesign-certificate' identities are installed. Set
+AIRLOCK_CODE_SIGN_IDENTITY to the SHA-1 hash of the certificate that should be
+used for local deployments, or delete the stale certificate from the keychain.
+EOF
+        exit 1
+    fi
+    identity="$local_identities"
 fi
 
 if test -z "$identity"; then
