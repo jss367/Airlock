@@ -1,12 +1,49 @@
 import AppKit
 import Common
 import PrivateApi
+import Security
+
+private let accessibilitySigningRequirementKey = "airlock-accessibility-signing-requirement"
 
 @MainActor
 func checkAccessibilityPermissions() {
+    let requirement = currentDesignatedRequirement()
+    if !AXIsProcessTrusted(), let requirement,
+       UserDefaults.standard.string(forKey: accessibilitySigningRequirementKey) != requirement
+    {
+        // macOS keeps the Accessibility record of the previous signature (e.g. after moving from
+        // ad-hoc to certificate signing), so the toggle looks enabled but no longer applies.
+        // Reset it once per signing identity; same-identity updates keep their grant.
+        resetAccessibility()
+    }
+    if let requirement {
+        UserDefaults.standard.set(requirement, forKey: accessibilitySigningRequirementKey)
+    }
     let options = [axTrustedCheckOptionPrompt: true]
     if !AXIsProcessTrustedWithOptions(options as CFDictionary) {
         terminateApp()
+    }
+}
+
+private func currentDesignatedRequirement() -> String? {
+    var code: SecCode?
+    var staticCode: SecStaticCode?
+    var requirement: SecRequirement?
+    var requirementString: CFString?
+    guard SecCodeCopySelf([], &code) == errSecSuccess, let code,
+          SecCodeCopyStaticCode(code, [], &staticCode) == errSecSuccess, let staticCode,
+          SecCodeCopyDesignatedRequirement(staticCode, [], &requirement) == errSecSuccess, let requirement,
+          SecRequirementCopyString(requirement, [], &requirementString) == errSecSuccess
+    else { return nil }
+    return requirementString as String?
+}
+
+private func resetAccessibility() {
+    do {
+        let process = try Process.run(URL(filePath: "/usr/bin/tccutil"), arguments: ["reset", "Accessibility", airlockAppId])
+        process.waitUntilExit()
+    } catch {
+        logAppError(error, operation: "Resetting Accessibility permission")
     }
 }
 
