@@ -19,7 +19,7 @@ final class ConfigWriterTest: XCTestCase {
 
     // MARK: - addBindingToLines / removeMatchingBindingLines
 
-    func testAddBindingReplacesExistingRegardlessOfModifierOrder() {
+    func testAddBindingReplacesExistingRegardlessOfModifierOrder() throws {
         // "shift-cmd-k" should be replaced when adding "cmd-shift-k" (same modifiers, different text order)
         let lines = [
             "[mode.main.binding]",
@@ -27,7 +27,7 @@ final class ConfigWriterTest: XCTestCase {
             "    option-h = 'focus left'",
         ]
 
-        let result = addBindingToLines(lines, key: "k", appName: "NewApp", modifierPrefix: [.command, .shift])
+        let result = try addBindingToLines(lines, key: "k", appName: "NewApp", modifierPrefix: [.command, .shift])
 
         // The old shift-cmd-k line should be gone
         let hasOldBinding = result.contains { $0.contains("OldApp") }
@@ -49,13 +49,13 @@ final class ConfigWriterTest: XCTestCase {
         assertEquals(kBindings.count, 1)
     }
 
-    func testAddBindingAppendsWhenNoMatchingKeyExists() {
+    func testAddBindingAppendsWhenNoMatchingKeyExists() throws {
         let lines = [
             "[mode.main.binding]",
             "    option-h = 'focus left'",
         ]
 
-        let result = addBindingToLines(lines, key: "s", appName: "Spotify", modifierPrefix: [.option, .control, .command, .shift])
+        let result = try addBindingToLines(lines, key: "s", appName: "Spotify", modifierPrefix: [.option, .control, .command, .shift])
 
         let hasSpotify = result.contains { $0.contains("Spotify") }
         assertTrue(hasSpotify)
@@ -65,12 +65,12 @@ final class ConfigWriterTest: XCTestCase {
         assertTrue(hasOptionH)
     }
 
-    func testAddBindingCreatesSection() {
+    func testAddBindingCreatesSection() throws {
         let lines = [
             "start-at-login = true",
         ]
 
-        let result = addBindingToLines(lines, key: "s", appName: "Spotify", modifierPrefix: .option)
+        let result = try addBindingToLines(lines, key: "s", appName: "Spotify", modifierPrefix: .option)
 
         let hasSectionHeader = result.contains { $0.contains("[mode.main.binding]") }
         assertTrue(hasSectionHeader)
@@ -79,7 +79,7 @@ final class ConfigWriterTest: XCTestCase {
         assertTrue(hasBinding)
     }
 
-    func testAddBindingUnderColemakWritesKeyThatResolvesToClickedPhysicalKey() {
+    func testAddBindingUnderColemakWritesKeyThatResolvesToClickedPhysicalKey() throws {
         let colemak = KeyMapping(preset: .colemak).resolve()
         // Under colemak, "e" is the physical K key and "k" is the physical N key
         let lines = [
@@ -88,7 +88,7 @@ final class ConfigWriterTest: XCTestCase {
             "    option-k = 'focus left'",
         ]
 
-        let result = addBindingToLines(lines, key: "k", appName: "NewApp", modifierPrefix: .option, keyMapping: colemak)
+        let result = try addBindingToLines(lines, key: "k", appName: "NewApp", modifierPrefix: .option, keyMapping: colemak)
 
         assertEquals(result, [
             "[mode.main.binding]",
@@ -99,27 +99,27 @@ final class ConfigWriterTest: XCTestCase {
         assertEquals(parsed?.1, .k)
     }
 
-    func testAddBindingQuotesAMappedKeyNameThatIsNotABareKey() {
+    func testAddBindingQuotesAMappedKeyNameThatIsNotABareKey() throws {
         var mapping = keyNotationToKeyCode
         mapping["k"] = .n
         mapping["foo.bar"] = .k
 
-        let once = addBindingToLines(["[mode.main.binding]"], key: "k", appName: "NewApp", modifierPrefix: .option, keyMapping: mapping)
+        let once = try addBindingToLines(["[mode.main.binding]"], key: "k", appName: "NewApp", modifierPrefix: .option, keyMapping: mapping)
         assertEquals(once, ["[mode.main.binding]", "    \"option-foo.bar\" = 'summon-app \"NewApp\"'"])
         assertEquals(parseBinding("option-foo.bar", .emptyRoot, mapping).getOrNil()?.1, .k)
 
         // Binding the same key again replaces the quoted line instead of adding a second one
-        let twice = addBindingToLines(once, key: "k", appName: "OtherApp", modifierPrefix: .option, keyMapping: mapping)
+        let twice = try addBindingToLines(once, key: "k", appName: "OtherApp", modifierPrefix: .option, keyMapping: mapping)
         assertEquals(twice, ["[mode.main.binding]", "    \"option-foo.bar\" = 'summon-app \"OtherApp\"'"])
     }
 
-    func testAddBindingReplacesAQuotedKeyContainingEquals() {
+    func testAddBindingReplacesAQuotedKeyContainingEquals() throws {
         var mapping = keyNotationToKeyCode
         mapping["k"] = .n
         mapping["foo=bar"] = .k
 
-        let once = addBindingToLines(["[mode.main.binding]"], key: "k", appName: "NewApp", modifierPrefix: .option, keyMapping: mapping)
-        let twice = addBindingToLines(once, key: "k", appName: "OtherApp", modifierPrefix: .option, keyMapping: mapping)
+        let once = try addBindingToLines(["[mode.main.binding]"], key: "k", appName: "NewApp", modifierPrefix: .option, keyMapping: mapping)
+        let twice = try addBindingToLines(once, key: "k", appName: "OtherApp", modifierPrefix: .option, keyMapping: mapping)
         assertEquals(twice, ["[mode.main.binding]", "    \"option-foo=bar\" = 'summon-app \"OtherApp\"'"])
     }
 
@@ -147,20 +147,20 @@ final class ConfigWriterTest: XCTestCase {
         assertEquals((binding?.commands.first?.args as? SummonAppCmdArgs)?.appName.val, "Spotify")
     }
 
-    func testBindingLineWithApostropheInAppName() {
-        assertBindingRoundTrips(appName: "Test's App")
+    func testBindingLineWithApostropheInAppName() throws {
+        try assertBindingRoundTrips(appName: "Test's App")
     }
 
-    func testBindingLineWithDoubleQuoteInAppName() {
-        assertBindingRoundTrips(appName: "Say \"Hi\"")
+    func testBindingLineWithDoubleQuoteInAppName() throws {
+        try assertBindingRoundTrips(appName: "Say \"Hi\"")
     }
 
-    func testBindingLineWithBackslashInAppName() {
-        assertBindingRoundTrips(appName: "Back\\slash's App")
+    func testBindingLineWithBackslashInAppName() throws {
+        try assertBindingRoundTrips(appName: "Back\\slash's App")
     }
 
-    func testBindingLineWithPlainAppName() {
-        assertBindingRoundTrips(appName: "Google Chrome")
+    func testBindingLineWithPlainAppName() throws {
+        try assertBindingRoundTrips(appName: "Google Chrome")
     }
 
     func testAppNameWithBothQuoteCharactersIsRejected() {
@@ -172,8 +172,8 @@ final class ConfigWriterTest: XCTestCase {
 
     /// Writes a binding for `appName`, then parses the resulting config and checks that
     /// the config is valid and the app name survived unchanged.
-    private func assertBindingRoundTrips(appName: String) {
-        let result = addBindingToLines(["[mode.main.binding]"], key: "t", appName: appName, modifierPrefix: .option)
+    private func assertBindingRoundTrips(appName: String) throws {
+        let result = try addBindingToLines(["[mode.main.binding]"], key: "t", appName: appName, modifierPrefix: .option)
 
         let (config, errors) = parseConfig(result.joined(separator: "\n"))
         assertEquals(errors, [], additionalMsg: "Config with app name \(appName) failed to parse:\n\(result.joined(separator: "\n"))")
@@ -260,7 +260,7 @@ final class ConfigWriterTest: XCTestCase {
 
     // MARK: - Line manipulation edge cases
 
-    func testAddBindingBeforeNextSection() {
+    func testAddBindingBeforeNextSection() throws {
         // Config has [mode.main.binding] followed by [mode.service.binding].
         // New binding should be inserted before the service section, not at end of file.
         let lines = [
@@ -269,7 +269,7 @@ final class ConfigWriterTest: XCTestCase {
             "[mode.service.binding]",
             "    esc = 'mode main'",
         ]
-        let result = addBindingToLines(lines, key: "s", appName: "Spotify", modifierPrefix: .option)
+        let result = try addBindingToLines(lines, key: "s", appName: "Spotify", modifierPrefix: .option)
         // The new binding should appear before [mode.service.binding]
         let serviceIndex = result.firstIndex(of: "[mode.service.binding]")!
         let newBindingIndex = result.firstIndex(where: { $0.contains("summon-app") && $0.contains("Spotify") })!
@@ -278,21 +278,21 @@ final class ConfigWriterTest: XCTestCase {
         XCTAssertTrue(result.contains("    esc = 'mode main'"))
     }
 
-    func testAddBindingReplacesExistingWithDifferentCommand() {
+    func testAddBindingReplacesExistingWithDifferentCommand() throws {
         // Config has option-s = 'workspace S'. Adding binding for same key/modifier
         // with new app should replace it.
         let lines = [
             "[mode.main.binding]",
             "    option-s = 'workspace S'",
         ]
-        let result = addBindingToLines(lines, key: "s", appName: "Spotify", modifierPrefix: .option)
+        let result = try addBindingToLines(lines, key: "s", appName: "Spotify", modifierPrefix: .option)
         // Old binding should be gone
         XCTAssertFalse(result.contains { $0.contains("workspace S") })
         // New binding should be present
         XCTAssertTrue(result.contains { $0.contains("summon-app") && $0.contains("Spotify") })
     }
 
-    func testAddBindingPreservesComments() {
+    func testAddBindingPreservesComments() throws {
         // Config has comments in the binding section. Adding a binding should not remove comment lines.
         let lines = [
             "[mode.main.binding]",
@@ -301,7 +301,7 @@ final class ConfigWriterTest: XCTestCase {
             "    # Workspace bindings",
             "    option-1 = 'workspace 1'",
         ]
-        let result = addBindingToLines(lines, key: "s", appName: "Spotify", modifierPrefix: .option)
+        let result = try addBindingToLines(lines, key: "s", appName: "Spotify", modifierPrefix: .option)
         // Both comments should still be present
         XCTAssertTrue(result.contains("    # Focus bindings"))
         XCTAssertTrue(result.contains("    # Workspace bindings"))
@@ -312,7 +312,7 @@ final class ConfigWriterTest: XCTestCase {
         XCTAssertTrue(result.contains { $0.contains("summon-app") && $0.contains("Spotify") })
     }
 
-    func testAddBindingReplacesMultiLineBinding() {
+    func testAddBindingReplacesMultiLineBinding() throws {
         let lines = [
             "[mode.main.binding]",
             "    option-enter = '''exec-and-forget osascript -e '",
@@ -323,7 +323,7 @@ final class ConfigWriterTest: XCTestCase {
             "    '''",
             "    option-h = 'focus left'",
         ]
-        let result = addBindingToLines(lines, key: "enter", appName: "Ghostty", modifierPrefix: .option)
+        let result = try addBindingToLines(lines, key: "enter", appName: "Ghostty", modifierPrefix: .option)
         assertEquals(result, [
             "[mode.main.binding]",
             "    option-h = 'focus left'",
@@ -332,7 +332,7 @@ final class ConfigWriterTest: XCTestCase {
         assertEquals(parseConfig(result.joined(separator: "\n")).errors.descriptions, [])
     }
 
-    func testAddBindingInsertsAfterMultiLineValue() {
+    func testAddBindingInsertsAfterMultiLineValue() throws {
         // A multi-line value that is kept must stay whole, and its contents must not be read as a header
         let lines = [
             "[mode.main.binding]",
@@ -341,12 +341,12 @@ final class ConfigWriterTest: XCTestCase {
             "        'exec-and-forget echo \"[not a header]\"',",
             "    ]",
         ]
-        let result = addBindingToLines(lines, key: "s", appName: "Spotify", modifierPrefix: .option)
+        let result = try addBindingToLines(lines, key: "s", appName: "Spotify", modifierPrefix: .option)
         assertEquals(result, lines + ["    option-s = 'summon-app \"Spotify\"'"])
         assertEquals(parseConfig(result.joined(separator: "\n")).errors.descriptions, [])
     }
 
-    func testAddBindingSkipsBracketInsideMultiLineStringInArray() {
+    func testAddBindingSkipsBracketInsideMultiLineStringInArray() throws {
         // The `[` inside the multi-line string is not array syntax, so the array still ends at its `]`
         let mainSection = [
             "[mode.main.binding]",
@@ -361,19 +361,19 @@ final class ConfigWriterTest: XCTestCase {
             "[mode.service.binding]",
             "    option-s = 'mode main'",
         ]
-        let result = addBindingToLines(mainSection + serviceSection, key: "s", appName: "Spotify", modifierPrefix: .option)
+        let result = try addBindingToLines(mainSection + serviceSection, key: "s", appName: "Spotify", modifierPrefix: .option)
         assertEquals(result, mainSection + ["    option-s = 'summon-app \"Spotify\"'"] + serviceSection)
         assertEquals(parseConfig(result.joined(separator: "\n")).errors.descriptions, [])
     }
 
-    func testAddBindingWithCommentedSectionHeaders() {
+    func testAddBindingWithCommentedSectionHeaders() throws {
         let lines = [
             "[mode.main.binding] # my keys",
             "    option-s = 'workspace S'",
             "[mode.service.binding] # service keys",
             "    option-s = 'mode main'",
         ]
-        let result = addBindingToLines(lines, key: "s", appName: "Spotify", modifierPrefix: .option)
+        let result = try addBindingToLines(lines, key: "s", appName: "Spotify", modifierPrefix: .option)
         assertEquals(result, [
             "[mode.main.binding] # my keys",
             "    option-s = 'summon-app \"Spotify\"'",
@@ -382,14 +382,14 @@ final class ConfigWriterTest: XCTestCase {
         ])
     }
 
-    func testAddBindingStopsAtHeaderWithHashInQuotedKey() {
+    func testAddBindingStopsAtHeaderWithHashInQuotedKey() throws {
         let lines = [
             "[mode.main.binding]",
             "    option-h = 'focus left'",
             "[mode.\"foo#bar\".binding]",
             "    option-s = 'mode main'",
         ]
-        let result = addBindingToLines(lines, key: "s", appName: "Spotify", modifierPrefix: .option)
+        let result = try addBindingToLines(lines, key: "s", appName: "Spotify", modifierPrefix: .option)
         assertEquals(result, [
             "[mode.main.binding]",
             "    option-h = 'focus left'",
@@ -399,12 +399,12 @@ final class ConfigWriterTest: XCTestCase {
         ])
     }
 
-    func testAddBindingToEmptyConfig() {
+    func testAddBindingToEmptyConfig() throws {
         // When there's no [mode.main.binding] section, it should be created
         let lines = [
             "enable-normalization-flatten-containers = true",
         ]
-        let result = addBindingToLines(lines, key: "s", appName: "Spotify", modifierPrefix: .option)
+        let result = try addBindingToLines(lines, key: "s", appName: "Spotify", modifierPrefix: .option)
         XCTAssertTrue(result.contains("[mode.main.binding]"))
         XCTAssertTrue(result.contains { $0.contains("summon-app") && $0.contains("Spotify") })
     }
@@ -531,6 +531,50 @@ final class ConfigWriterTest: XCTestCase {
     func testSetTableValueRefusesInlineTable() {
         let lines = ["quick-switcher = { enabled = true }"]
         XCTAssertThrowsError(try setTomlValueInLines(lines, table: "quick-switcher", key: "enabled", value: "false"))
+    }
+
+    // MARK: - Edit verification
+
+    func testSetTableValueRefusesArrayOfTables() {
+        // The line edit reads `[[focus-flash]]` as a table header, so the result parses but means something else
+        let lines = ["[[focus-flash]]", "    enabled = true"]
+        XCTAssertThrowsError(try setTomlValueInLines(lines, table: "focus-flash", key: "enabled", value: "false")) {
+            assertEquals($0.localizedDescription, ConfigWriterError.unsupportedEdit("focus-flash.enabled").localizedDescription)
+        }
+    }
+
+    func testAddBindingRefusesBindingsWrittenAsDottedKeys() {
+        // Appending a [mode.main.binding] header would redefine the table the dotted key already created
+        let lines = ["[mode.main]", "    binding.option-s = 'workspace S'"]
+        XCTAssertThrowsError(try addBindingToLines(lines, key: "s", appName: "Spotify", modifierPrefix: .option)) {
+            assertEquals($0.localizedDescription, ConfigWriterError.unsupportedEdit("mode.main.binding.option-s").localizedDescription)
+        }
+    }
+
+    func testAddBindingRefusesInlineBindingTable() {
+        let lines = ["[mode.main]", "    binding = { option-h = 'focus left' }"]
+        XCTAssertThrowsError(try addBindingToLines(lines, key: "s", appName: "Spotify", modifierPrefix: .option))
+    }
+
+    func testEditRefusesConfigWithSyntaxError() {
+        let lines = ["start-at-login = ", "[focus-flash]"]
+        XCTAssertThrowsError(try setTomlValueInLines(lines, table: "focus-flash", key: "enabled", value: "false")) {
+            guard case ConfigWriterError.invalidConfig = $0 else { return XCTFail("Unexpected error \($0)") }
+        }
+    }
+
+    func testAddBindingToDefaultConfigIsVerified() throws {
+        let lines = try readConfigLines(from: defaultConfigUrl).lines
+        let result = try addBindingToLines(lines, key: "h", appName: "Spotify", modifierPrefix: .option)
+        let binding = parseConfig(result.joined(separator: "\n")).config.modes[mainModeId]?.bindings[HotkeyBinding(.option, .h, []).descriptionWithKeyCode]
+        assertEquals((binding?.commands.first?.args as? SummonAppCmdArgs)?.appName.val, "Spotify")
+    }
+
+    func testSetValueInDefaultConfigIsVerified() throws {
+        let lines = try readConfigLines(from: defaultConfigUrl).lines
+        for (table, key) in [(nil, "start-at-login"), ("quick-switcher", "enabled"), ("focus-flash", "enabled")] {
+            _ = try setTomlValueInLines(lines, table: table, key: key, value: "true")
+        }
     }
 
     func testSetTableValueIgnoresKeysInOtherSections() throws {
