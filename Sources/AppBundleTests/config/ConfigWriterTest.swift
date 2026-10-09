@@ -535,6 +535,26 @@ final class ConfigWriterTest: XCTestCase {
 
     // MARK: - Edit verification
 
+    func testSetValueReplacesInlineTableAndPreservesSibling() throws {
+        let lines = [
+            "start-at-login = { old = false, nested = { value = nan } } # repair",
+            "start-at-login-extra = { keep = true }",
+        ]
+        let result = try setTomlValueInLines(lines, table: nil, key: "start-at-login", value: "true")
+        assertEquals(result, ["start-at-login = true # repair", lines[1]])
+    }
+
+    func testSetTableValueReplacesInlineTableAndPreservesSibling() throws {
+        let lines = ["[focus-flash]", "enabled = { old = false, nested = { value = 1 } }", "width = nan"]
+        let result = try setTomlValueInLines(lines, table: "focus-flash", key: "enabled", value: "true")
+        assertEquals(result, ["[focus-flash]", "enabled = true", "width = nan"])
+    }
+
+    func testSetValueReplacesInlineTableWithArray() throws {
+        let result = try setTomlValueInLines(["value = { old = false }"], table: nil, key: "value", value: "[nan, true]")
+        assertEquals(result, ["value = [nan, true]"])
+    }
+
     func testSetTableValueRefusesArrayOfTables() {
         // The line edit reads `[[focus-flash]]` as a table header, so the result parses but means something else
         let lines = ["[[focus-flash]]", "    enabled = true"]

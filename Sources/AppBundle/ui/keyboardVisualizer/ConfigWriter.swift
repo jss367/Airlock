@@ -312,6 +312,8 @@ private struct ParsedTomlEntries: Equatable {
 
     /// Sets the value at `path`, creating the tables above it as a TOML parser would.
     mutating func set(_ path: [String], _ value: TomlData) {
+        // Replacing a table replaces its entire subtree, not just its table entry.
+        values = values.filter { !($0.key.count > path.count && $0.key.starts(with: path)) }
         for depth in 1 ..< path.count where values[Array(path.prefix(depth))] == nil {
             values[Array(path.prefix(depth))] = .table([:])
         }
