@@ -276,7 +276,8 @@ private indirect enum TomlData: Equatable {
     case array([TomlData])
     case string(String)
     case int(Int)
-    case double(Double)
+    /// A bit pattern, with every NaN made the same one, because NaN never equals itself as a `Double`
+    case double(bitPattern: UInt64)
     case bool(Bool)
     case dateOrTime(String)
 
@@ -286,7 +287,7 @@ private indirect enum TomlData: Equatable {
             case .array: .array((value.array ?? TOMLArray()).map { TomlData($0) })
             case .string: .string(value.string ?? "")
             case .int: .int(value.int ?? 0)
-            case .double: .double(value.double ?? 0)
+            case .double: .double(bitPattern: (value.double.map { $0.isNaN ? .nan : $0 } ?? 0).bitPattern)
             case .bool: .bool(value.bool ?? false)
             case .date, .time, .dateTime: .dateOrTime(value.tomlValue.debugDescription)
         }

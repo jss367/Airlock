@@ -594,6 +594,12 @@ final class ConfigWriterTest: XCTestCase {
         ])
     }
 
+    func testEditSucceedsWhenConfigContainsNan() throws {
+        let lines = ["[focus-flash]", "    width = nan", "    enabled = true"]
+        let result = try setTomlValueInLines(lines, table: "focus-flash", key: "enabled", value: "false")
+        assertEquals(result, ["[focus-flash]", "    width = nan", "    enabled = false"])
+    }
+
     func testSetConfigValueWritesThroughSymlink() throws {
         let target = tempDir.appending(component: "real.toml")
         let link = tempDir.appending(component: "link.toml")
