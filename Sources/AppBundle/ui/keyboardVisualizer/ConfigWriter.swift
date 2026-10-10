@@ -2,12 +2,15 @@ import AppKit
 import Common
 import Foundation
 import HotKey
+import TOMLKit
 
 enum ConfigWriterError: LocalizedError {
     case ambiguousConfig([URL])
     case writeError(String)
     case unrepresentableAppName(String)
     case inlineTable(String)
+    case invalidConfig(String)
+    case unsupportedEdit(String)
 
     var errorDescription: String? {
         switch self {
@@ -19,6 +22,10 @@ enum ConfigWriterError: LocalizedError {
                 return "Cannot bind '\(name)': app names containing both ' and \" are not supported"
             case .inlineTable(let table):
                 return "'\(table)' is written as an inline table. Edit it in the config file instead"
+            case .invalidConfig(let msg):
+                return "The config file has a syntax error. Fix it before changing settings here: \(msg)"
+            case .unsupportedEdit(let path):
+                return "Can't safely set '\(path)' in this config file. Edit it in the config file instead"
         }
     }
 }
@@ -27,9 +34,9 @@ enum ConfigWriterError: LocalizedError {
 /// active `[key-mapping]`, which the config parser uses to turn the written key name back into a key code.
 func addBinding(key: String, appName: String, modifierPrefix: NSEvent.ModifierFlags, keyMapping: [String: Key]) throws {
     guard canRepresentAppName(appName) else { throw ConfigWriterError.unrepresentableAppName(appName) }
-    let (url, config) = try loadOrCreateConfig()
-    let content = addBindingToLines(config.lines, key: key, appName: appName, modifierPrefix: modifierPrefix, keyMapping: keyMapping)
-    try writeConfigLines(content, to: url, separator: config.separator)
+    let file = try configFileForEditing(contentIfMissing: ["[mode.main.binding]", ""])
+    let content = try addBindingToLines(file.lines, key: key, appName: appName, modifierPrefix: modifierPrefix, keyMapping: keyMapping)
+    try writeConfigLines(content, to: file.url, separator: file.separator)
 }
 
 /// Pure line-manipulation logic for adding a binding, separated from file I/O for testability.
@@ -39,14 +46,14 @@ func addBindingToLines(
     appName: String,
     modifierPrefix: NSEvent.ModifierFlags,
     keyMapping: [String: Key] = keyNotationToKeyCode,
-) -> [String] {
+) throws -> [String] {
     var content = lines
 
-    let modStr = modifierPrefix.toString()
     let physicalKey = keyNotationToKeyCode[key]
     let configKey = physicalKey.flatMap { configKeyNotation(for: $0, in: keyMapping) } ?? key
+    let bindingKey = "\(modifierPrefix.toString())-\(configKey)"
     // A mapped key name can need quoting, e.g. one with a dot would otherwise read as a dotted key
-    let bindingLine = "    \(tomlKey("\(modStr)-\(configKey)")) = \(summonAppTomlValue(appName: appName))"
+    let bindingLine = "    \(tomlKey(bindingKey)) = \(summonAppTomlValue(appName: appName))"
 
     // Find [mode.main.binding] section
     if let sectionIndex = content.firstIndex(where: { tomlTableHeader($0) == "mode.main.binding" }) {
@@ -65,29 +72,15 @@ func addBindingToLines(
         content.append(bindingLine)
     }
 
+    let bindingTable = ["mode", "main", "binding"]
+    try verifyTomlEdit(from: lines, to: content, path: bindingTable + [bindingKey]) { entries in
+        entries.values = entries.values.filter { path, _ in
+            !(path.count > bindingTable.count && path.starts(with: bindingTable) &&
+                bindingKeyMatches(path[bindingTable.count], key: key, modifiers: modifierPrefix, keyMapping: keyMapping))
+        }
+        entries.set(bindingTable + [bindingKey], .string(summonAppCommand(appName: appName)))
+    }
     return content
-}
-
-// periphery:ignore
-func removeBinding(key: String, modifierPrefix: NSEvent.ModifierFlags, keyMapping: [String: Key]) throws {
-    let configFile = findCustomConfigUrl()
-
-    guard case .file(let url) = configFile else {
-        return
-    }
-
-    let config = try readConfigLines(from: url)
-    var lines = config.lines
-
-    // Find [mode.main.binding] section
-    guard let sectionIndex = lines.firstIndex(where: { tomlTableHeader($0) == "mode.main.binding" }) else {
-        return
-    }
-    let sectionEnd = tomlSectionEnd(lines, sectionStart: sectionIndex)
-
-    lines = removeMatchingBindingLines(lines, sectionStart: sectionIndex, sectionEnd: sectionEnd, key: key, modifiers: modifierPrefix, keyMapping: keyMapping)
-
-    try writeConfigLines(lines, to: url, separator: config.separator)
 }
 
 /// `splitArgs()` has no escape sequences, so an app name containing both quote characters
@@ -106,8 +99,7 @@ func canRepresentAppName(_ appName: String) -> Bool {
 ///
 /// Requires `canRepresentAppName(appName)`.
 func summonAppTomlValue(appName: String) -> String {
-    let argQuote = appName.contains("\"") ? "'" : "\""
-    let command = "summon-app \(argQuote)\(appName)\(argQuote)"
+    let command = summonAppCommand(appName: appName)
     if !command.contains("'") {
         return "'\(command)'" // TOML literal string, no escaping needed
     }
@@ -118,29 +110,36 @@ func summonAppTomlValue(appName: String) -> String {
     return "\"\(escaped)\""
 }
 
+/// `summon-app <appName>`, quoted for `splitArgs()`. Requires `canRepresentAppName(appName)`.
+private func summonAppCommand(appName: String) -> String {
+    let argQuote = appName.contains("\"") ? "'" : "\""
+    return "summon-app \(argQuote)\(appName)\(argQuote)"
+}
+
 // MARK: - Config values
 
 /// Sets `key` to `value` (already TOML-encoded, e.g. `true` or `'off'`) inside `[table]`, or at
 /// the top level when `table` is nil, and writes the config file. With no config file yet, it
 /// starts from a copy of the default config, so defaults like `persistent-workspaces` survive.
 func setConfigValue(table: String?, key: String, value: String) throws {
-    let url: URL
-    switch findCustomConfigUrl() {
-        case .file(let existing):
-            url = existing
-        case .noCustomConfigExists:
-            url = FileManager.default.homeDirectoryForCurrentUser.appending(path: configDotfileName)
-            try FileManager.default.copyItem(at: defaultConfigUrl, to: url)
-        case .ambiguousConfigError(let urls):
-            throw ConfigWriterError.ambiguousConfig(urls)
-    }
-    let config = try readConfigLines(from: url)
-    try writeConfigLines(setTomlValueInLines(config.lines, table: table, key: key, value: value), to: url, separator: config.separator)
+    let file = try configFileForEditing(contentIfMissing: readConfigLines(from: defaultConfigUrl).lines)
+    try writeConfigLines(setTomlValueInLines(file.lines, table: table, key: key, value: value), to: file.url, separator: file.separator)
 }
 
 /// Pure line-manipulation logic for `setConfigValue`, separated from file I/O for testability.
 /// Replaces the existing entry (keeping its indentation and trailing comment) or adds a new one.
+/// `table` and `key` are bare keys; `table` may be dotted.
 func setTomlValueInLines(_ lines: [String], table: String?, key: String, value: String) throws -> [String] {
+    let content = try setTomlValueInLinesUnverified(lines, table: table, key: key, value: value)
+    let path = (table?.split(separator: ".").map(String.init) ?? []) + [key]
+    guard let parsedValue = (try? TOMLTable(string: "value = \(value)"))?["value"].map(TomlData.init) else {
+        throw ConfigWriterError.unsupportedEdit(path.joined(separator: "."))
+    }
+    try verifyTomlEdit(from: lines, to: content, path: path) { $0.set(path, parsedValue) }
+    return content
+}
+
+private func setTomlValueInLinesUnverified(_ lines: [String], table: String?, key: String, value: String) throws -> [String] {
     let topLevel = 0 ..< tomlSectionEnd(lines, sectionStart: -1)
     guard let table else {
         return setTomlEntry(lines, in: topLevel, key: key, value: value, defaultIndent: "")
@@ -248,6 +247,11 @@ private func bindingLineMatches(_ line: String, key: String, modifiers: NSEvent.
     guard let eqIndex = trimmed[keyEnd...].firstIndex(of: "=") else { return false }
     let bindingKey = trimmed[trimmed.startIndex ..< eqIndex].trimmingCharacters(in: CharacterSet.whitespaces)
         .trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
+    return bindingKeyMatches(bindingKey, key: key, modifiers: modifiers, keyMapping: keyMapping)
+}
+
+/// Whether the binding key `bindingKey` (e.g. `cmd-shift-k`) binds `key` with exactly `modifiers`.
+private func bindingKeyMatches(_ bindingKey: String, key: String, modifiers: NSEvent.ModifierFlags, keyMapping: [String: Key]) -> Bool {
     // Parse the binding key into parts: the last part is the key, everything before is modifiers
     let parts = bindingKey.split(separator: "-")
     guard let lastPart = parts.last else { return false }
@@ -262,6 +266,81 @@ private func bindingLineMatches(_ line: String, key: String, modifiers: NSEvent.
         return flags
     }
     return lineMods == modifiers
+}
+
+// MARK: - Edit verification
+
+/// A copy of a parsed TOML value. TOMLKit values point into their parent table's memory.
+private indirect enum TomlData: Equatable {
+    case table([String: TomlData])
+    case array([TomlData])
+    case string(String)
+    case int(Int)
+    /// A bit pattern, with every NaN made the same one, because NaN never equals itself as a `Double`
+    case double(bitPattern: UInt64)
+    case bool(Bool)
+    case dateOrTime(String)
+
+    init(_ value: TOMLValueConvertible) {
+        self = switch value.type {
+            case .table: .table(Dictionary(uniqueKeysWithValues: (value.table ?? TOMLTable()).map { ($0, TomlData($1)) }))
+            case .array: .array((value.array ?? TOMLArray()).map { TomlData($0) })
+            case .string: .string(value.string ?? "")
+            case .int: .int(value.int ?? 0)
+            case .double: .double(bitPattern: (value.double.map { $0.isNaN ? .nan : $0 } ?? 0).bitPattern)
+            case .bool: .bool(value.bool ?? false)
+            case .date, .time, .dateTime: .dateOrTime(value.tomlValue.debugDescription)
+        }
+    }
+}
+
+/// Every table and value in a parsed config, keyed by its path. Each table is present too, as an empty
+/// table, so comparing two configs entry by entry also compares which tables they define.
+private struct ParsedTomlEntries: Equatable {
+    var values: [[String]: TomlData] = [:]
+
+    init(_ table: TOMLTable, at path: [String] = []) {
+        if !path.isEmpty { values[path] = .table([:]) }
+        for (key, value) in table {
+            if let subtable = value.table {
+                values.merge(ParsedTomlEntries(subtable, at: path + [key]).values) { $1 }
+            } else {
+                values[path + [key]] = TomlData(value)
+            }
+        }
+    }
+
+    /// Sets the value at `path`, creating the tables above it as a TOML parser would.
+    mutating func set(_ path: [String], _ value: TomlData) {
+        // Replacing a table replaces its entire subtree, not just its table entry.
+        values = values.filter { !($0.key.count > path.count && $0.key.starts(with: path)) }
+        for depth in 1 ..< path.count where values[Array(path.prefix(depth))] == nil {
+            values[Array(path.prefix(depth))] = .table([:])
+        }
+        values[path] = value
+    }
+}
+
+/// Edits go through the line functions so comments and formatting survive, which no TOML serializer
+/// preserves. The line functions only understand common config shapes, so the TOML parser checks every
+/// edit: `edited` must parse to exactly `original` with `expectedChange` applied. Any other result is
+/// refused, so a config shape the line functions misread produces an error instead of a damaged file.
+private func verifyTomlEdit(
+    from original: [String],
+    to edited: [String],
+    path: [String],
+    expectedChange: (inout ParsedTomlEntries) -> Void,
+) throws {
+    var expected: ParsedTomlEntries
+    do {
+        expected = ParsedTomlEntries(try TOMLTable(string: original.joined(separator: "\n")))
+    } catch let e as TOMLParseError {
+        throw ConfigWriterError.invalidConfig(e.debugDescription)
+    }
+    expectedChange(&expected)
+    guard let actual = try? TOMLTable(string: edited.joined(separator: "\n")), ParsedTomlEntries(actual) == expected else {
+        throw ConfigWriterError.unsupportedEdit(path.joined(separator: "."))
+    }
 }
 
 // MARK: - TOML line scanning
@@ -412,19 +491,16 @@ func writeConfigLines(_ lines: [String], to url: URL, separator: String = "\n") 
     try writeConfigFile(lines.joined(separator: separator), to: url)
 }
 
-private func loadOrCreateConfig() throws -> (URL, (lines: [String], separator: String)) {
-    let configFile = findCustomConfigUrl()
-
-    switch configFile {
+/// The config file to edit and its current lines. With no config file yet, it is `~/.airlock.toml` with
+/// `contentIfMissing`, created only when the edit is written, so a refused edit leaves no file behind.
+private func configFileForEditing(contentIfMissing: @autoclosure () throws -> [String]) throws -> (url: URL, lines: [String], separator: String) {
+    switch findCustomConfigUrl() {
         case .file(let url):
-            return (url, try readConfigLines(from: url))
-
+            let config = try readConfigLines(from: url)
+            return (url, config.lines, config.separator)
         case .noCustomConfigExists:
             let url = FileManager.default.homeDirectoryForCurrentUser.appending(path: configDotfileName)
-            let initial = "[mode.main.binding]\n"
-            try initial.write(to: url, atomically: true, encoding: .utf8)
-            return (url, (initial.components(separatedBy: "\n"), "\n"))
-
+            return (url, try contentIfMissing(), "\n")
         case .ambiguousConfigError(let urls):
             throw ConfigWriterError.ambiguousConfig(urls)
     }
