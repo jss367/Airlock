@@ -100,22 +100,13 @@ func preventFocusStealingBinding() -> Binding<PreventFocusStealingMode> {
     )
 }
 
-/// Works while Airlock is paused too. The reload keeps the paused state (see `reloadConfig`),
-/// so the new value lands in `config` and takes effect on resume.
+/// Works while Airlock is paused too, see `reloadConfigFromUi`.
 @MainActor
 private func setFeature(table: String? = nil, key: String, value: String) {
     Task {
         do {
             try setConfigValue(table: table, key: key, value: value)
-            if let token: RunSessionGuard = .isServerEnabled {
-                try await runLightSession(.menuBarButton, token) { _ = try await reloadConfig() }
-            } else {
-                // No session while paused. Its focus sync would trust the stale focus cache and
-                // pull focus back to whatever window was focused before the pause
-                _ = try await reloadConfig()
-                // The session would have republished TrayMenuModel. Do it here so the toggles redraw
-                TrayMenuModel.shared.objectWillChange.send()
-            }
+            try await reloadConfigFromUi(.menuBarButton)
         } catch is CancellationError {
             // A newer operation superseded this reload.
         } catch {

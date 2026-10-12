@@ -640,4 +640,51 @@ final class ConfigWriterTest: XCTestCase {
         try writeConfigLines(result, to: url, separator: config.separator)
         assertEquals(try String(contentsOf: url, encoding: .utf8), "[quick-switcher]\r\n    enabled = false\r\n")
     }
+
+    // MARK: - writeConfigEdit
+
+    func testBindingOnQuickSwitcherKeyIsNotWritten() throws {
+        // What addBinding starts from with no config file. The default quick switcher is on option-space
+        let original = ["[mode.main.binding]", ""]
+        let edited = try addBindingToLines(original, key: "space", appName: "Safari", modifierPrefix: .option)
+        let url = tempDir.appending(component: "airlock.toml")
+        XCTAssertThrowsError(try writeConfigEdit(from: original, to: edited, url: url)) {
+            guard case ConfigWriterError.rejectedConfig(let msg) = $0 else { return XCTFail("Unexpected error \($0)") }
+            assertTrue(msg.contains("'option-space' is already bound in mode 'main'"))
+        }
+        XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
+    }
+
+    func testFeatureToggleThatBreaksConfigIsNotWritten() throws {
+        let text = """
+            enable-keyboard-shortcuts = false
+            [quick-switcher]
+                binding = 'option-space'
+            [mode.main.binding]
+                option-space = 'exec-and-forget open -a Terminal'
+            """
+        let url = tempDir.appending(component: "airlock.toml")
+        try text.write(to: url, atomically: true, encoding: .utf8)
+        let original = try readConfigLines(from: url).lines
+        let edited = try setTomlValueInLines(original, table: nil, key: "enable-keyboard-shortcuts", value: "true")
+        XCTAssertThrowsError(try writeConfigEdit(from: original, to: edited, url: url)) {
+            guard case ConfigWriterError.rejectedConfig = $0 else { return XCTFail("Unexpected error \($0)") }
+        }
+        assertEquals(try String(contentsOf: url, encoding: .utf8), text)
+    }
+
+    func testEditOfConfigWithErrorsBlamesTheConfig() throws {
+        let original = ["[mode.main.binding]", "    option-h = 'no-such-command'"]
+        let edited = try setTomlValueInLines(original, table: nil, key: "start-at-login", value: "true")
+        XCTAssertThrowsError(try writeConfigEdit(from: original, to: edited, url: tempDir.appending(component: "airlock.toml"))) {
+            guard case ConfigWriterError.configHasErrors = $0 else { return XCTFail("Unexpected error \($0)") }
+        }
+    }
+
+    func testValidEditIsWritten() throws {
+        let url = tempDir.appending(component: "airlock.toml")
+        let original = ["start-at-login = false"]
+        try writeConfigEdit(from: original, to: setTomlValueInLines(original, table: nil, key: "start-at-login", value: "true"), url: url)
+        assertEquals(try String(contentsOf: url, encoding: .utf8), "start-at-login = true")
+    }
 }

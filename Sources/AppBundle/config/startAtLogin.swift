@@ -2,8 +2,15 @@ import AppKit
 import Common
 import ServiceManagement
 
+/// Tests count the syncs instead of changing the test runner's login item
+@MainActor var startAtLoginSyncCountForTests = 0
+
 @MainActor
 func syncStartAtLogin() {
+    if isUnitTest {
+        startAtLoginSyncCountForTests += 1
+        return
+    }
     let service = SMAppService.mainApp
     do {
         if config.startAtLogin {

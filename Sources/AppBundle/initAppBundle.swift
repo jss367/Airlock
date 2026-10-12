@@ -22,7 +22,7 @@ import Foundation
     if try await !reloadConfig() {
         var out = ""
         check(
-            try await reloadConfig(forceConfigUrl: defaultConfigUrl, stdout: &out),
+            try await loadDefaultConfigAfterFailure(userConfigUrl: findCustomConfigUrl().urlOrNil, stdout: &out),
             """
             Can't load default config. Your installation is probably corrupted.
             Please don't modify '\(defaultConfigUrl)'
