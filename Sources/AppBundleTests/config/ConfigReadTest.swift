@@ -1,4 +1,5 @@
 @testable import AppBundle
+import Carbon
 import Common
 import XCTest
 
@@ -56,6 +57,81 @@ final class ConfigReadTest: XCTestCase {
             return XCTFail("Expected a syntax error")
         }
         XCTAssertTrue(message.contains("Failed to parse"))
+    }
+
+    func testFallbackAfterFailureKeepsLoginItemAndWatchesUserConfig() async throws {
+        // Paused, so the reloads register no global hotkeys
+        TrayMenuModel.shared.isEnabled = false
+        activeMode = nil
+        defer {
+            TrayMenuModel.shared.isEnabled = true
+            activeMode = mainModeId
+            failedUserConfigUrl = nil
+            syncConfigFileWatcher()
+        }
+        let userUrl = directory.appending(path: "airlock.toml")
+        try "accordion-padding = [".write(to: userUrl, atomically: true, encoding: .utf8)
+        config.accordionPadding = 123
+        let syncs = startAtLoginSyncCountForTests
+        var args = ReloadConfigCmdArgs(rawArgs: [])
+        args.noGui = true
+        var output = ""
+
+        let fallbackLoaded = try await loadDefaultConfigAfterFailure(userConfigUrl: userUrl, stdout: &output)
+        XCTAssertTrue(fallbackLoaded)
+        XCTAssertEqual(config.accordionPadding, defaultConfig.accordionPadding)
+        XCTAssertFalse(config.autoReloadConfig)
+        XCTAssertEqual(startAtLoginSyncCountForTests, syncs)
+        XCTAssertEqual(watchedConfigUrl, userUrl)
+
+        // Still broken: keep watching it
+        let brokenLoaded = try await reloadConfig(args: args, forceConfigUrl: userUrl, stdout: &output)
+        XCTAssertFalse(brokenLoaded)
+        XCTAssertEqual(watchedConfigUrl, userUrl)
+
+        // Once a config loads, its own settings decide. A separate file, so the watcher doesn't fire
+        let fixedUrl = directory.appending(path: "fixed.toml")
+        try "accordion-padding = 42".write(to: fixedUrl, atomically: true, encoding: .utf8)
+        let fixedLoaded = try await reloadConfig(args: args, forceConfigUrl: fixedUrl, stdout: &output)
+        XCTAssertTrue(fixedLoaded)
+        XCTAssertEqual(config.accordionPadding, 42)
+        XCTAssertEqual(startAtLoginSyncCountForTests, syncs + 1)
+        XCTAssertNil(watchedConfigUrl)
+    }
+
+    func testQuickSwitcherKeyMovedToBindingWorksAfterReload() async throws {
+        TrayMenuModel.shared.isEnabled = true
+        activeMode = mainModeId
+        config.quickSwitcher.enabled = true
+        config.quickSwitcher.binding = "option-space"
+        registerQuickSwitcherHotkey()
+        defer {
+            resetHotKeys()
+            config.quickSwitcher.enabled = false
+            registerQuickSwitcherHotkey()
+        }
+        assertEquals(isQuickSwitcherHotkeyRegistered, true)
+        let url = directory.appending(path: "airlock.toml")
+        try """
+            [quick-switcher]
+                enabled = false
+            [mode.main.binding]
+                option-space = 'workspace 1'
+            """.write(to: url, atomically: true, encoding: .utf8)
+        var args = ReloadConfigCmdArgs(rawArgs: [])
+        args.noGui = true
+        var output = ""
+        let loaded = try await reloadConfig(args: args, forceConfigUrl: url, stdout: &output)
+        XCTAssertTrue(loaded, output)
+
+        // macOS refuses a second registration of a key this process holds. The probe only gets
+        // option-space if the binding's registration failed
+        var probe: EventHotKeyRef?
+        let status = RegisterEventHotKey(
+            UInt32(kVK_Space), UInt32(optionKey), EventHotKeyID(signature: 0x5052_4F42, id: 1), GetEventDispatcherTarget(), 0, &probe,
+        )
+        if let probe { UnregisterEventHotKey(probe) }
+        XCTAssertEqual(status, OSStatus(eventHotKeyExistsErr))
     }
 
     private func assertReadFailure(_ url: URL, file: StaticString = #filePath, line: UInt = #line) {

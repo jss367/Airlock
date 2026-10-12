@@ -11,6 +11,8 @@ enum ConfigWriterError: LocalizedError {
     case inlineTable(String)
     case invalidConfig(String)
     case unsupportedEdit(String)
+    case rejectedConfig(String)
+    case configHasErrors(String)
 
     var errorDescription: String? {
         switch self {
@@ -26,17 +28,22 @@ enum ConfigWriterError: LocalizedError {
                 return "The config file has a syntax error. Fix it before changing settings here: \(msg)"
             case .unsupportedEdit(let path):
                 return "Can't safely set '\(path)' in this config file. Edit it in the config file instead"
+            case .rejectedConfig(let msg):
+                return "Airlock couldn't load the config with this change, so it wasn't saved:\n\n\(msg)"
+            case .configHasErrors(let msg):
+                return "The config file has errors. Fix them before changing settings here:\n\n\(msg)"
         }
     }
 }
 
 /// `key` is the physical key as the visualizer names it (qwerty notation). `keyMapping` is the
 /// active `[key-mapping]`, which the config parser uses to turn the written key name back into a key code.
+@MainActor
 func addBinding(key: String, appName: String, modifierPrefix: NSEvent.ModifierFlags, keyMapping: [String: Key]) throws {
     guard canRepresentAppName(appName) else { throw ConfigWriterError.unrepresentableAppName(appName) }
     let file = try configFileForEditing(contentIfMissing: ["[mode.main.binding]", ""])
     let content = try addBindingToLines(file.lines, key: key, appName: appName, modifierPrefix: modifierPrefix, keyMapping: keyMapping)
-    try writeConfigLines(content, to: file.url, separator: file.separator)
+    try writeConfigEdit(from: file.lines, to: content, url: file.url, separator: file.separator)
 }
 
 /// Pure line-manipulation logic for adding a binding, separated from file I/O for testability.
@@ -121,9 +128,11 @@ private func summonAppCommand(appName: String) -> String {
 /// Sets `key` to `value` (already TOML-encoded, e.g. `true` or `'off'`) inside `[table]`, or at
 /// the top level when `table` is nil, and writes the config file. With no config file yet, it
 /// starts from a copy of the default config, so defaults like `persistent-workspaces` survive.
+@MainActor
 func setConfigValue(table: String?, key: String, value: String) throws {
     let file = try configFileForEditing(contentIfMissing: readConfigLines(from: defaultConfigUrl).lines)
-    try writeConfigLines(setTomlValueInLines(file.lines, table: table, key: key, value: value), to: file.url, separator: file.separator)
+    let content = try setTomlValueInLines(file.lines, table: table, key: key, value: value)
+    try writeConfigEdit(from: file.lines, to: content, url: file.url, separator: file.separator)
 }
 
 /// Pure line-manipulation logic for `setConfigValue`, separated from file I/O for testability.
@@ -489,6 +498,24 @@ func readConfigLines(from url: URL) throws -> (lines: [String], separator: Strin
 
 func writeConfigLines(_ lines: [String], to url: URL, separator: String = "\n") throws {
     try writeConfigFile(lines.joined(separator: separator), to: url)
+}
+
+/// `verifyTomlEdit` checks that an edit made the intended TOML change, not that Airlock accepts the result.
+/// A valid TOML change can still be a config the parser rejects, e.g. a binding on the quick-switcher key.
+/// Written anyway, every later reload would fail and the next launch would fall back to the defaults,
+/// so `edited` goes through the same parse as `reloadConfig` and is only written when it parses cleanly.
+@MainActor
+func writeConfigEdit(from original: [String], to edited: [String], url: URL, separator: String = "\n") throws {
+    let errors = parseConfig(edited.joined(separator: "\n")).errors
+    if !errors.isEmpty {
+        let description = errors.map(\.description).joined(separator: "\n\n")
+        // Blaming the edit would mislead when the file was already broken before it
+        if !parseConfig(original.joined(separator: "\n")).errors.isEmpty {
+            throw ConfigWriterError.configHasErrors(description)
+        }
+        throw ConfigWriterError.rejectedConfig(description)
+    }
+    try writeConfigLines(edited, to: url, separator: separator)
 }
 
 /// The config file to edit and its current lines. With no config file yet, it is `~/.airlock.toml` with

@@ -28,22 +28,25 @@ private struct ConfigFileWatcher: ~Copyable {
 
 @MainActor private var currentWatcher: ConfigFileWatcher? = nil
 @MainActor private var debounceTask: Task<Void, Never>? = nil
+@MainActor private(set) var watchedConfigUrl: URL? = nil
+/// The user's config file while Airlock runs on the defaults because that file failed to load at startup.
+/// It is watched until it loads, see `loadDefaultConfigAfterFailure`
+@MainActor var failedUserConfigUrl: URL? = nil
 
 private let debounceDelay: Duration = .milliseconds(200)
 
 @MainActor func syncConfigFileWatcher() {
     currentWatcher = nil
-    if !config.autoReloadConfig { return }
-    currentWatcher = ConfigFileWatcher(url: configUrl) {
+    watchedConfigUrl = failedUserConfigUrl ?? (config.autoReloadConfig ? configUrl : nil)
+    guard let watchedConfigUrl else { return }
+    currentWatcher = ConfigFileWatcher(url: watchedConfigUrl) {
         debounceTask?.cancel()
         debounceTask = Task {
             await withErrorReporting("Automatically reloading configuration", userMessage: "Airlock could not automatically reload the configuration.") {
                 try await Task.sleep(for: debounceDelay)
-                if let token: RunSessionGuard = .isServerEnabled {
-                    try await runLightSession(.configAutoReload, token) {
-                        _ = try await reloadConfig()
-                    }
-                }
+                // Reload while paused too. Each reload re-arms the watcher, and editors that replace the file (vim)
+                // leave it on the deleted file, so a skipped reload would stop auto-reload until a manual one
+                try await reloadConfigFromUi(.configAutoReload)
             }
         }
     }
