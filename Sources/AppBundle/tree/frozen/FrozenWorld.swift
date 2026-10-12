@@ -7,8 +7,8 @@ struct FrozenWorld {
 @MainActor
 func collectAllWindowIds(workspace: Workspace) -> [UInt32] {
     workspace.floatingWindows.map { $0.windowId } +
-        workspace.macOsNativeFullscreenWindowsContainer.children.map { ($0 as! Window).windowId } +
-        workspace.macOsNativeHiddenAppsWindowsContainer.children.map { ($0 as! Window).windowId } +
+        (workspace.existingMacOsNativeFullscreenWindowsContainer?.children ?? []).map { ($0 as! Window).windowId } +
+        (workspace.existingMacOsNativeHiddenAppsWindowsContainer?.children ?? []).map { ($0 as! Window).windowId } +
         collectAllWindowIdsRecursive(workspace.rootTilingContainer)
 }
 

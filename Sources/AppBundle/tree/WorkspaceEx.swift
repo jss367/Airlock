@@ -22,22 +22,24 @@ extension Workspace {
         children.filterIsInstance(of: Window.self)
     }
 
+    /// Creates the container if it doesn't exist. Read-only callers should use ``existingMacOsNativeFullscreenWindowsContainer``
     @MainActor var macOsNativeFullscreenWindowsContainer: MacosFullscreenWindowsContainer {
-        let containers = children.filterIsInstance(of: MacosFullscreenWindowsContainer.self)
-        return switch containers.count {
-            case 0: MacosFullscreenWindowsContainer(parent: self)
-            case 1: containers.singleOrNil().orDie()
-            default: dieT("Workspace must contain zero or one MacosFullscreenWindowsContainer")
-        }
+        existingMacOsNativeFullscreenWindowsContainer ?? MacosFullscreenWindowsContainer(parent: self)
     }
 
+    @MainActor var existingMacOsNativeFullscreenWindowsContainer: MacosFullscreenWindowsContainer? {
+        let containers = children.filterIsInstance(of: MacosFullscreenWindowsContainer.self)
+        return containers.count <= 1 ? containers.first : dieT("Workspace must contain zero or one MacosFullscreenWindowsContainer")
+    }
+
+    /// Creates the container if it doesn't exist. Read-only callers should use ``existingMacOsNativeHiddenAppsWindowsContainer``
     @MainActor var macOsNativeHiddenAppsWindowsContainer: MacosHiddenAppsWindowsContainer {
+        existingMacOsNativeHiddenAppsWindowsContainer ?? MacosHiddenAppsWindowsContainer(parent: self)
+    }
+
+    @MainActor var existingMacOsNativeHiddenAppsWindowsContainer: MacosHiddenAppsWindowsContainer? {
         let containers = children.filterIsInstance(of: MacosHiddenAppsWindowsContainer.self)
-        return switch containers.count {
-            case 0: MacosHiddenAppsWindowsContainer(parent: self)
-            case 1: containers.singleOrNil().orDie()
-            default: dieT("Workspace must contain zero or one MacosHiddenAppsWindowsContainer")
-        }
+        return containers.count <= 1 ? containers.first : dieT("Workspace must contain zero or one MacosHiddenAppsWindowsContainer")
     }
 
     @MainActor var forceAssignedMonitor: Monitor? {
