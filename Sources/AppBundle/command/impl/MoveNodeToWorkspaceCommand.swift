@@ -5,6 +5,9 @@ struct MoveNodeToWorkspaceCommand: Command {
     /*conforms*/ let shouldResetClosedWindowsCache: Bool = true
 
     func run(_ env: CmdEnv, _ io: CmdIo) -> Bool {
+        if !config.enableWindowManagement {
+            return reportWindowManagementIsOff(io, "Moving a window to another workspace")
+        }
         guard let target = args.resolveTargetOrReportError(env, io) else { return false }
         guard let window = target.windowOrNil else { return io.err(noWindowIsFocused) }
         let subjectWs = window.nodeWorkspace

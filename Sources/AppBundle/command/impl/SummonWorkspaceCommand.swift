@@ -14,6 +14,9 @@ struct SummonWorkspaceCommand: Command {
             }
             return !args.failIfNoop
         }
+        if !config.enableWindowManagement {
+            return reportWindowManagementIsOff(io, "Summoning a workspace")
+        }
         let prevMonitor = workspace.isVisible ? workspace.workspaceMonitor : nil
         if monitor.setActiveWorkspace(workspace) {
             if let prevMonitor {

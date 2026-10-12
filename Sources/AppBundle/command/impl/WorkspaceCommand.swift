@@ -33,7 +33,9 @@ struct WorkspaceCommand: Command {
             }
             return !args.failIfNoop
         } else {
-            return Workspace.get(byName: workspaceName).focusWorkspace()
+            let workspace = Workspace.get(byName: workspaceName)
+            guard checkWorkspaceCanBeFocused(workspace, io) else { return false }
+            return workspace.focusWorkspace()
         }
     }
 }

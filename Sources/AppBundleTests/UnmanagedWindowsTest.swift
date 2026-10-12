@@ -96,6 +96,52 @@ final class UnmanagedWindowsTest: XCTestCase {
         assertEquals(windowPositionOnMonitor(oversized, from: source, to: destination), CGPoint(x: 2000, y: 0))
     }
 
+    func testMoveNodeToWorkspaceFailsInsteadOfBeingUndone() async throws {
+        config.enableWindowManagement = false
+        let workspace = focus.workspace
+        let window = TestWindow.new(id: 1, parent: workspace.rootTilingContainer,
+                                    rect: Rect(topLeftX: 100, topLeftY: 120, width: 600, height: 400))
+        XCTAssertTrue(window.focusWindow())
+
+        for command in ["move-node-to-workspace b", "move-node-to-workspace --focus-follows-window b"] {
+            let result = try await parseCommand(command).cmdOrDie.run(.defaultEnv, .emptyStdin)
+            assertEquals(result.exitCode, 1)
+            XCTAssertTrue(result.stderr.joined().contains("requires window management"), "\(result.stderr)")
+            XCTAssertTrue(window.nodeWorkspace === workspace)
+            XCTAssertTrue(focus.workspace === workspace)
+        }
+    }
+
+    func testSwitchingToHiddenWorkspaceFailsInsteadOfPullingWindowsIntoIt() async throws {
+        config.enableWindowManagement = false
+        config.persistentWorkspaces = ["z"] // Gives `workspace next` a hidden workspace to switch to
+        Workspace.garbageCollectUnusedWorkspaces()
+        let workspace = focus.workspace
+        let window = TestWindow.new(id: 1, parent: workspace.rootTilingContainer,
+                                    rect: Rect(topLeftX: 100, topLeftY: 120, width: 600, height: 400))
+        XCTAssertTrue(window.focusWindow())
+
+        for command in ["workspace b", "workspace next", "summon-workspace b"] {
+            let result = try await parseCommand(command).cmdOrDie.run(.defaultEnv, .emptyStdin)
+            try await layoutWorkspaces()
+            assertEquals(result.exitCode, 1)
+            XCTAssertTrue(result.stderr.joined().contains("requires window management"), "\(command): \(result.stderr)")
+            XCTAssertTrue(mainMonitor.activeWorkspace === workspace, command)
+            XCTAssertTrue(window.nodeWorkspace === workspace, command)
+        }
+    }
+
+    func testWorkspaceBackAndForthFailsForHiddenWorkspace() async throws {
+        let workspace = focus.workspace
+        XCTAssertTrue(Workspace.get(byName: "b").focusWorkspace())
+        XCTAssertTrue(workspace.focusWorkspace())
+        config.enableWindowManagement = false
+
+        let result = try await parseCommand("workspace-back-and-forth").cmdOrDie.run(.defaultEnv, .emptyStdin)
+        assertEquals(result.exitCode, 1)
+        XCTAssertTrue(focus.workspace === workspace)
+    }
+
     func testSameMonitorCommandDoesNotResizeUnmanagedWindow() async throws {
         config.enableWindowManagement = false
         let rect = Rect(topLeftX: 120, topLeftY: 140, width: 500, height: 300)

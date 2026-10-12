@@ -53,6 +53,8 @@ enable-keyboard-shortcuts = true
     option-ctrl-right = 'move-node-to-monitor right'
 ----
 
+Without window management, each monitor's workspace holds the windows that are on that monitor. Windows from hidden workspaces join the workspace of the monitor they appear on, and stay there when you turn management back on. Commands that would move a window to another workspace or show a different workspace on a monitor fail with an error: `move-node-to-workspace`, `summon-workspace`, `move-workspace-to-monitor`, and `workspace` or `workspace-back-and-forth` when the target workspace isn't already shown on a monitor.
+
 Turn *Window management* back on to resume tiling and workspace hiding.
 
 [#configuring-airlock]

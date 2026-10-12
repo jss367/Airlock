@@ -18,6 +18,9 @@ struct MoveWorkspaceToMonitorCommand: Command {
                 if targetMonitor.monitorId_oneBased == prevMonitor.monitorId_oneBased {
                     return true
                 }
+                if !config.enableWindowManagement {
+                    return reportWindowManagementIsOff(io, "Moving a workspace to another monitor")
+                }
                 if targetMonitor.setActiveWorkspace(focusedWorkspace) {
                     guard wasVisible else { return true }
                     let stubWorkspace = getStubWorkspace(for: prevMonitor)
