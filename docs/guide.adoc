@@ -19,7 +19,7 @@ Alternatively, build it from a checkout of https://github.com/jss367/Airlock[the
 ./build.sh
 ----
 
-To install and launch the app, run `./deploy.sh`. This stops any running Airlock instance, rebuilds and tests, replaces `/Applications/Airlock.app`, installs `~/.local/bin/airlock`, and launches the app. Add `~/.local/bin` to your `PATH` to use the command-line tool.
+To install and launch the app, run `./deploy.sh`. This rebuilds and tests the app and builds the command-line tool before stopping any running Airlock instance. After those steps succeed, it stops Airlock, replaces `/Applications/Airlock.app`, installs `~/.local/bin/airlock`, and launches the app. A failed build or test leaves the running app untouched. Add `~/.local/bin` to your `PATH` to use the command-line tool.
 
 Grant Airlock access in *System Settings → Privacy & Security → Accessibility* when prompted. See https://github.com/jss367/Airlock/blob/main/dev-docs/development.md[development instructions] for setup and build options.
 
