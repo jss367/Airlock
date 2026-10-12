@@ -49,7 +49,7 @@ If you don't have a Developer ID certificate and only need local builds, create 
 ./deploy.sh
 ```
 
-This stops the running Airlock app, builds and tests, replaces `/Applications/Airlock.app`, copies the command-line tool to `~/.local/bin/airlock`, and launches the app. Add `~/.local/bin` to your `PATH`. Grant Accessibility access to Airlock when prompted. `deploy.sh` requires one of the stable signing identities described above; `build.sh` continues to use local ad-hoc signing because it does not install its build.
+This builds and tests, stops the running Airlock app only after those succeed, replaces `/Applications/Airlock.app`, copies the command-line tool to `~/.local/bin/airlock`, and launches the app. Add `~/.local/bin` to your `PATH`. Grant Accessibility access to Airlock when prompted. `deploy.sh` requires one of the stable signing identities described above; `build.sh` continues to use local ad-hoc signing because it does not install its build.
 
 ## Debugging
 

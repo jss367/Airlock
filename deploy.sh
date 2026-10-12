@@ -4,9 +4,6 @@ set -euo pipefail
 cd "$(dirname "$0")"
 codesign_identity="$(./script/find-code-signing-identity.sh)"
 
-echo "Killing Airlock..."
-pkill -f Airlock || true
-
 echo "Building with stable code-signing identity $codesign_identity..."
 xcodebuild -project Airlock.xcodeproj -scheme Airlock -configuration Release build \
   CODE_SIGN_IDENTITY="$codesign_identity" CODE_SIGNING_REQUIRED=YES \
@@ -18,6 +15,10 @@ swift test --quiet
 
 echo "Building CLI..."
 swift build --product airlock -c release --quiet
+
+# Stop the running app only after everything above succeeded, so a failed build or test leaves it running.
+echo "Killing Airlock..."
+pkill -f Airlock || true
 
 echo "Deploying to /Applications..."
 rm -rf /Applications/Airlock.app
