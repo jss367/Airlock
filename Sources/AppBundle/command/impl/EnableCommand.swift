@@ -49,6 +49,11 @@ struct EnableCommand: Command {
 func runEnableCommandFromUi(_ targetState: EnableCmdArgs.State) async throws {
     markUserInitiatedFocusChange()
     try await runLightSession(.menuBarButton, .forceRun) { () throws in
+        if !TrayMenuModel.shared.isEnabled && targetState != .off {
+            let window = try await uiResumeFocus.windowToResume(nativeFocus: getNativeFocusedWindow)
+            // Another UI action can finish resuming while the query is suspended.
+            if !TrayMenuModel.shared.isEnabled, let window, window.isBound { _ = window.focusWindow() }
+        }
         _ = try await EnableCommand(args: EnableCmdArgs(rawArgs: [], targetState: targetState))
             .run(.defaultEnv, .emptyStdin)
     }

@@ -3,6 +3,7 @@ import SwiftUI
 
 @MainActor
 func showFeatureSettings() {
+    rememberExternalAppForUiResume(NSWorkspace.shared.frontmostApplication)
     let window = FeatureSettingsWindowController.shared
     window.showWindow(nil)
     NSApp.activate(ignoringOtherApps: true)

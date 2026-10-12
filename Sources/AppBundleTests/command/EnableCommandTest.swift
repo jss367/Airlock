@@ -4,11 +4,17 @@ import XCTest
 
 @MainActor
 final class EnableCommandTest: XCTestCase {
-    override func setUp() async throws { setUpWorkspacesForTests() }
+    override func setUp() async throws {
+        setUpWorkspacesForTests()
+        config.quickSwitcher.enabled = false
+        config.focusFlash.enabled = false
+        uiResumeFocus.reset()
+    }
 
     override func tearDown() async throws {
         TrayMenuModel.shared.isEnabled = true
         resetFocusCacheForTests() // Also cancels the refresh the session scheduled
+        uiResumeFocus.reset()
     }
 
     /// Pause on workspace "a" with window 1 focused, then work in window 2 on workspace "b", which is
@@ -32,5 +38,87 @@ final class EnableCommandTest: XCTestCase {
         assertTrue(focus.windowOrNil === whilePaused)
         assertEquals(focus.workspace.name, "b")
         assertTrue(TestApp.shared.focusedWindow === whilePaused)
+    }
+
+    func testResumeFromSettingsFollowsLastExternalWindowAcrossRepeatedResumes() async throws {
+        config.preventFocusStealing = .always
+        let beforePause = TestWindow.new(id: 1, parent: Workspace.get(byName: "before").rootTilingContainer)
+        check(beforePause.focusWindow())
+        beforePause.nativeFocus()
+        _ = updateFocusCache(beforePause)
+        for id in 2 ... 4 {
+            let external = TestWindow.new(id: UInt32(id), parent: Workspace.get(byName: "external\(id)").rootTilingContainer)
+            _ = try await parseCommand("enable off").cmdOrDie.run(.defaultEnv, .emptyStdin)
+            external.nativeFocus()
+            uiResumeFocus.remember { external }
+            appForTests = nil // Airlock's own frontmost settings app is excluded from native focus.
+            try await runEnableCommandFromUi(.on)
+            resetFocusCacheForTests()
+            assertTrue(focus.windowOrNil === external)
+            assertTrue(external.nodeWorkspace?.isVisible == true)
+            assertEquals(focus.workspace.name, "external\(id)")
+            try await runEnableCommandFromUi(.on) // Repeated resume is a no-op.
+            resetFocusCacheForTests()
+            assertTrue(focus.windowOrNil === external)
+        }
+    }
+
+    func testResumeDiscardsRememberedAppChangedDuringQuery() async throws {
+        let state = UiResumeFocusState()
+        let old = TestWindow.new(id: 1, parent: Workspace.get(byName: "old").rootTilingContainer)
+        let latest = TestWindow.new(id: 2, parent: Workspace.get(byName: "latest").rootTilingContainer)
+        state.remember {
+            await Task.yield()
+            state.remember { latest }
+            return old
+        }
+        let result = try await state.windowToResume(nativeFocus: { nil })
+        assertTrue(result === latest)
+    }
+
+    func testResumePrefersNativeFocusChangedDuringRememberedQuery() async throws {
+        let state = UiResumeFocusState()
+        let old = TestWindow.new(id: 1, parent: Workspace.get(byName: "old").rootTilingContainer)
+        let latest = TestWindow.new(id: 2, parent: Workspace.get(byName: "latest").rootTilingContainer)
+        var native: Window?
+        state.remember {
+            await Task.yield()
+            native = latest
+            return old
+        }
+        let result = try await state.windowToResume(nativeFocus: { native })
+        assertTrue(result === latest)
+    }
+
+    func testResumeDoesNotRebindWindowClosedDuringQuery() async throws {
+        let state = UiResumeFocusState()
+        let closed = TestWindow.new(id: 1, parent: Workspace.get(byName: "closed").rootTilingContainer)
+        state.remember {
+            closed.closeAxWindow()
+            return closed
+        }
+        let result = try await state.windowToResume(nativeFocus: { nil })
+        XCTAssertNil(result)
+        XCTAssertFalse(closed.isBound)
+    }
+
+    func testInterruptedResumeDoesNotOverrideAnAlreadyCompletedResume() async throws {
+        let old = TestWindow.new(id: 1, parent: Workspace.get(byName: "old").rootTilingContainer)
+        let stale = TestWindow.new(id: 2, parent: Workspace.get(byName: "stale").rootTilingContainer)
+        let newer = TestWindow.new(id: 3, parent: Workspace.get(byName: "newer").rootTilingContainer)
+        check(old.focusWindow())
+        _ = try await parseCommand("enable off").cmdOrDie.run(.defaultEnv, .emptyStdin)
+        appForTests = nil
+        uiResumeFocus.remember {
+            await Task.yield()
+            // A later action completed while the earlier resume was querying the old external app.
+            TrayMenuModel.shared.isEnabled = true
+            check(newer.focusWindow())
+            return stale
+        }
+        try await runEnableCommandFromUi(.on)
+        resetFocusCacheForTests()
+        assertTrue(focus.windowOrNil === newer)
+        assertTrue(TrayMenuModel.shared.isEnabled)
     }
 }

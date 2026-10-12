@@ -9,6 +9,12 @@ enum GlobalObserver {
             return
         }
         let notifName = notification.name.rawValue
+        if notifName == NSWorkspace.didActivateApplicationNotification.rawValue {
+            // These observers are delivered on the main queue. Remember external apps even while
+            // paused, before a UI resume can query the app that was active before Settings.
+            let activatedApp = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
+            MainActor.assumeIsolated { rememberExternalAppForUiResume(activatedApp) }
+        }
         Task { @MainActor in
             if !TrayMenuModel.shared.isEnabled { return }
             if notifName == NSWorkspace.didActivateApplicationNotification.rawValue {
