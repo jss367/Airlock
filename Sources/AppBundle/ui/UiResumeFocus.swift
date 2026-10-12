@@ -19,14 +19,20 @@ final class UiResumeFocusState {
     }
 
     func windowToResume(nativeFocus: @MainActor () async throws -> Window?) async throws -> Window? {
-        if let native = try await nativeFocus() { return native.isBound ? native : nil }
-        while let query = externalFocusQuery {
+        // If focus keeps changing, leave the current model alone rather than apply a stale answer.
+        for _ in 0 ..< 3 {
             let version = generation
-            let remembered = try await query()
-            // The user can leave Settings while the AX query is suspended. Prefer that newer focus.
-            if let native = try await nativeFocus() { return native.isBound ? native : nil }
-            // Or visit another app and return to Settings. Don't apply the older app's answer.
+            let native = try await nativeFocus()
             if version != generation { continue }
+            if let native { return native.isBound ? native : nil }
+            guard let query = externalFocusQuery else { return nil }
+            let remembered = try await query()
+            if version != generation { continue }
+            // The user can leave Settings while the AX query is suspended. Prefer that newer focus.
+            let currentNative = try await nativeFocus()
+            // Or activate another app while either query is suspended. Reject even nonnil stale answers.
+            if version != generation { continue }
+            if let currentNative { return currentNative.isBound ? currentNative : nil }
             return remembered?.isBound == true ? remembered : nil
         }
         return nil
