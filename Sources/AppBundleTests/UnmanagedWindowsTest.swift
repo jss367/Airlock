@@ -62,6 +62,20 @@ final class UnmanagedWindowsTest: XCTestCase {
         XCTAssertTrue(reopenedWindow.nodeWorkspace === visibleWorkspace)
     }
 
+    // Regression: a window closed (and garbage-collected by a refresh) while its frame was being queried was bound
+    // back into the tree, where it stayed as a ghost
+    func testWindowClosedDuringQueryIsNotRebound() async throws {
+        config.enableWindowManagement = false
+        let window = TestWindow.new(id: 1, parent: Workspace.get(byName: "old").rootTilingContainer,
+                                    rect: Rect(topLeftX: 100, topLeftY: 120, width: 600, height: 400))
+        window.duringGetAxRect = { [unowned window] in window.closeAxWindow() }
+
+        try await syncUnmanagedWindow(window)
+
+        XCTAssertFalse(window.isBound)
+        XCTAssertFalse(mainMonitor.activeWorkspace.allLeafWindowsRecursive.contains(window))
+    }
+
     func testFloatingWindowStaysFloating() async throws {
         let visibleWorkspace = mainMonitor.activeWorkspace
         let window = TestWindow.new(id: 1, parent: Workspace.get(byName: "old"),

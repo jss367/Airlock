@@ -28,6 +28,9 @@ struct MoveNodeToMonitorCommand: Command {
                     } else {
                         window.setAxFrame(point, nil)
                     }
+                    // A refresh can run during the AX requests above and garbage-collect the window if it was closed.
+                    // Binding it then would bring it back as a ghost that no refresh collects
+                    guard window.isBound else { return io.err("Window \(window.windowId) was closed while moving it") }
                     let workspace = targetMonitor.activeWorkspace
                     let container: NonLeafTreeNodeObject = window.isFloating ? workspace : workspace.rootTilingContainer
                     window.bind(to: container, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
