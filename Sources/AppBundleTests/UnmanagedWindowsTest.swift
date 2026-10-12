@@ -168,4 +168,18 @@ final class UnmanagedWindowsTest: XCTestCase {
         assertEquals(window._rect?.width, rect.width)
         assertEquals(window._rect?.height, rect.height)
     }
+
+    func testSameMonitorCommandFailsIfWindowClosesDuringInitialFrameQuery() async throws {
+        config.enableWindowManagement = false
+        let window = TestWindow.new(id: 1, parent: focus.workspace.rootTilingContainer,
+                                    rect: Rect(topLeftX: 120, topLeftY: 140, width: 500, height: 300))
+        XCTAssertTrue(window.focusWindow())
+        window.duringGetAxRect = { [unowned window] in window.closeAxWindow() }
+        let result = try await MoveNodeToMonitorCommand(args: MoveNodeToMonitorCmdArgs(target: .patterns([.main])))
+            .run(.defaultEnv, .emptyStdin)
+        assertEquals(result.exitCode, 1)
+        XCTAssertTrue(result.stderr.joined().contains("was closed while moving it"))
+        XCTAssertFalse(window.isBound)
+        XCTAssertFalse(mainMonitor.activeWorkspace.allLeafWindowsRecursive.contains(window))
+    }
 }

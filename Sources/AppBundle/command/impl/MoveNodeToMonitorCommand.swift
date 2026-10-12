@@ -11,6 +11,9 @@ struct MoveNodeToMonitorCommand: Command {
             return io.err(noWindowIsFocused)
         }
         let nativeRect = !config.enableWindowManagement ? try await window.getAxRect() : nil
+        guard window.isBound else {
+            return io.err("Window \(window.windowId) was closed while moving it")
+        }
         guard let currentMonitor = nativeRect?.center.monitorApproximation ?? window.nodeMonitor else {
             return io.err(windowIsntPartOfTree(window))
         }
