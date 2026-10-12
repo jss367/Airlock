@@ -55,17 +55,36 @@ public func dieT<T>(
         )
     }
     if !recursionDetectorDuringTermination {
-        let semaphore = DispatchSemaphore(value: 0)
-        Task {
-            defer { semaphore.signal() }
-            // The error is dropped on purpose. We are already dying, and fatalError follows.
-            try? await $recursionDetectorDuringTermination.withValue(true) {
-                try await terminationHandler.beforeTermination()
-            }
+        $recursionDetectorDuringTermination.withValue(true) {
+            _ = runTerminationHandlerBeforeDying(terminationHandler, timeout: terminationHandlerTimeout)
         }
-        semaphore.wait()
     }
     fatalError("\n" + message)
+}
+
+/// How long `die` waits for the termination handler before crashing anyway. Restoring windows from screen corners
+/// takes one AX read and one AX write per window, normally a few milliseconds each. The bound matters when an app
+/// stops answering AX requests, each of which can then block for seconds: Airlock must still crash, so that it can be
+/// restarted, instead of hanging with windows parked in corners.
+let terminationHandlerTimeout: DispatchTimeInterval = .seconds(5)
+
+/// Runs `handler` before dying. Returns whether it finished before `timeout`, and never blocks longer than that.
+func runTerminationHandlerBeforeDying(_ handler: any TerminationHandler, timeout: DispatchTimeInterval) -> Bool {
+    let deadline = DispatchTime.now() + timeout
+    if Thread.isMainThread {
+        // The async variant can't run here. Main-actor work is scheduled on the main dispatch queue, and code on the
+        // main thread is almost always itself a main-queue job (any main-actor Task), which holds the queue until it
+        // returns. Spinning the run loop doesn't help: a nested run loop doesn't drain the main queue from inside a
+        // main-queue job.
+        return MainActor.assumeIsolated { handler.beforeTerminationBlocking(deadline: deadline) }
+    }
+    let semaphore = DispatchSemaphore(value: 0)
+    Task {
+        defer { semaphore.signal() }
+        // The error is dropped on purpose. We are already dying, and fatalError follows.
+        try? await handler.beforeTermination()
+    }
+    return semaphore.wait(timeout: deadline) == .success
 }
 
 public enum RefreshSessionEvent: Sendable, CustomStringConvertible {

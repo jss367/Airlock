@@ -159,10 +159,24 @@ final class MacApp: AbstractApp {
     }
 
     func getAxRect(_ windowId: UInt32) async throws -> Rect? {
-        try await withWindow(windowId) { window, job in
-            guard let topLeftCorner = window.get(Ax.topLeftCornerAttr) else { return nil }
-            guard let size = window.get(Ax.sizeAttr) else { return nil }
-            return Rect(topLeftX: topLeftCorner.x, topLeftY: topLeftCorner.y, width: size.width, height: size.height)
+        try await withWindow(windowId) { window, job in getRect(window) }
+    }
+
+    // Blocking variants of getAxRect and setAxFrameBlocking for termination on the main thread, where nothing can be
+    // awaited. See TerminationHandler.beforeTerminationBlocking
+    func getAxRectBlocking(_ windowId: UInt32, deadline: DispatchTime) -> Rect? {
+        thread?.runInLoopBlocking(deadline: deadline) { [windows] job in
+            windows.threadGuarded[windowId].flatMap { getRect($0.ax) }
+        }
+    }
+
+    func setAxFrameBlocking(_ windowId: UInt32, _ topLeft: CGPoint?, _ size: CGSize?, deadline: DispatchTime) {
+        setFrameJobs.removeValue(forKey: windowId)?.cancel()
+        _ = thread?.runInLoopBlocking(deadline: deadline) { [windows, axApp] job in
+            guard let window = windows.threadGuarded[windowId] else { return () }
+            return try disableAnimations(app: axApp.threadGuarded, job) {
+                try setFrame(window.ax, topLeft, size, job)
+            }
         }
     }
 
@@ -376,6 +390,12 @@ extension [UInt32: AxWindow] {
             return nil
         }
     }
+}
+
+private func getRect(_ window: AXUIElement) -> Rect? {
+    guard let topLeftCorner = window.get(Ax.topLeftCornerAttr) else { return nil }
+    guard let size = window.get(Ax.sizeAttr) else { return nil }
+    return Rect(topLeftX: topLeftCorner.x, topLeftY: topLeftCorner.y, width: size.width, height: size.height)
 }
 
 private func setFrame(_ window: AXUIElement, _ topLeft: CGPoint?, _ size: CGSize?, _ job: RunLoopJob) throws {

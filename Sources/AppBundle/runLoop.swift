@@ -33,6 +33,22 @@ extension Thread {
             job.cancel()
         }
     }
+
+    /// Blocks the calling thread until `body` has run in this thread's loop, or until `deadline`. Returns nil on
+    /// timeout or if `body` threw. Only for termination on the main thread, where `runInLoop` can't be awaited.
+    func runInLoopBlocking<T>(deadline: DispatchTime, _ body: @Sendable @escaping (RunLoopJob) throws -> T?) -> T? {
+        let semaphore = DispatchSemaphore(value: 0)
+        nonisolated(unsafe) var result: T? = nil
+        let job = runInLoopAsync { job in
+            result = try? body(job)
+            semaphore.signal()
+        }
+        if semaphore.wait(timeout: deadline) == .timedOut {
+            job.cancel()
+            return nil
+        }
+        return result
+    }
 }
 
 private final class RunLoopAction: NSObject, Sendable {
