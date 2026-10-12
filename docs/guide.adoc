@@ -53,7 +53,9 @@ enable-keyboard-shortcuts = true
     option-ctrl-right = 'move-node-to-monitor right'
 ----
 
-Without window management, each monitor's workspace holds the windows that are on that monitor. Windows from hidden workspaces join the workspace of the monitor they appear on, and stay there when you turn management back on. Commands that would move a window to another workspace or show a different workspace on a monitor fail with an error: `move-node-to-workspace`, `summon-workspace`, `move-workspace-to-monitor`, and `workspace` or `workspace-back-and-forth` when the target workspace isn't already shown on a monitor.
+Without window management, each monitor's workspace holds the windows that are on that monitor. Windows from hidden workspaces join the workspace of the monitor they appear on, and stay there when you turn management back on. Commands that would move a window to another workspace or show a different workspace on a monitor fail with an error: `move-node-to-workspace` when the destination differs from the window's workspace; `summon-app` when an existing window must be moved from another workspace; `summon-workspace`; `move-workspace-to-monitor`; and `workspace` or `workspace-back-and-forth` when the target workspace isn't already shown on a monitor.
+
+`summon-app` can still focus an existing window on the current workspace or launch an app. Same-workspace `move-node-to-workspace` requests keep their normal no-op behavior: success by default, or failure with `--fail-if-noop`.
 
 Turn *Window management* back on to resume tiling and workspace hiding.
 
