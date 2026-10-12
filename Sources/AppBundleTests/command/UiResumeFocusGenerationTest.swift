@@ -45,13 +45,15 @@ import XCTest
         let stale = TestWindow.new(id: 131, parent: Workspace.get(byName: "stale").rootTilingContainer)
         state.remember { stale }
         var queries = 0
-        let result = try await state.windowToResume(nativeFocus: {
-            queries += 1
-            await Task.yield()
-            state.remember { stale }
-            return stale
-        })
-        XCTAssertNil(result)
+        do {
+            _ = try await state.windowToResume(nativeFocus: {
+                queries += 1
+                await Task.yield()
+                state.remember { stale }
+                return stale
+            })
+            XCTFail("Continuous focus changes must abort the resume")
+        } catch UiResumeFocusError.focusKeptChanging {}
         XCTAssertEqual(queries, 3)
     }
 }

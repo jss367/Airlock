@@ -121,4 +121,41 @@ final class EnableCommandTest: XCTestCase {
         assertTrue(focus.windowOrNil === newer)
         assertTrue(TrayMenuModel.shared.isEnabled)
     }
+
+    func testContinuousFocusChangesAbortResumeAndKeepAirlockPaused() async throws {
+        let old = TestWindow.new(id: 1, parent: Workspace.get(byName: "old").rootTilingContainer)
+        let external = TestWindow.new(id: 2, parent: Workspace.get(byName: "external").rootTilingContainer)
+        check(old.focusWindow())
+        old.nativeFocus()
+        _ = updateFocusCache(old)
+        _ = try await parseCommand("enable off").cmdOrDie.run(.defaultEnv, .emptyStdin)
+        external.nativeFocus()
+        appForTests = nil
+        var queries = 0
+        @MainActor func changingFocus() async throws -> Window? {
+            queries += 1
+            await Task.yield()
+            uiResumeFocus.remember(changingFocus)
+            return external
+        }
+        uiResumeFocus.remember(changingFocus)
+
+        do {
+            try await runEnableCommandFromUi(.on)
+            XCTFail("Continuous focus changes must not enable Airlock")
+        } catch UiResumeFocusError.focusKeptChanging {}
+
+        XCTAssertEqual(queries, 3)
+        XCTAssertFalse(TrayMenuModel.shared.isEnabled)
+        assertTrue(focus.windowOrNil === old)
+        assertTrue(TestApp.shared.focusedWindow === external)
+        XCTAssertFalse(isQuickSwitcherHotkeyRegistered)
+
+        // A later click can resume normally once the external focus stops changing.
+        uiResumeFocus.remember { external }
+        try await runEnableCommandFromUi(.on)
+        resetFocusCacheForTests()
+        assertTrue(TrayMenuModel.shared.isEnabled)
+        assertTrue(focus.windowOrNil === external)
+    }
 }

@@ -1,6 +1,14 @@
 import AppKit
 import Common
 
+enum UiResumeFocusError: LocalizedError {
+    case focusKeptChanging
+
+    var errorDescription: String? {
+        "Focus kept changing while Airlock was resuming. Try Resume again."
+    }
+}
+
 /// Remembers the last external app without changing Airlock's focus while paused. Query its
 /// current window on resume, since the user may have changed windows before opening Settings.
 @MainActor
@@ -19,7 +27,7 @@ final class UiResumeFocusState {
     }
 
     func windowToResume(nativeFocus: @MainActor () async throws -> Window?) async throws -> Window? {
-        // If focus keeps changing, leave the current model alone rather than apply a stale answer.
+        // If focus keeps changing, abort the resume rather than enable with the stale paused model.
         for _ in 0 ..< 3 {
             let version = generation
             let native = try await nativeFocus()
@@ -35,7 +43,7 @@ final class UiResumeFocusState {
             if let currentNative { return currentNative.isBound ? currentNative : nil }
             return remembered?.isBound == true ? remembered : nil
         }
-        return nil
+        throw UiResumeFocusError.focusKeptChanging
     }
 }
 
