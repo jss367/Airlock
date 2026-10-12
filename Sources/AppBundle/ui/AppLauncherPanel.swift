@@ -200,8 +200,16 @@ final class AppLauncherPanel: NSPanelHud {
             let windowOnCurrentWs = appWindows.first { $0.nodeWorkspace == currentWorkspace }
 
             if let windowOnCurrentWs {
-                // Already on current workspace — just focus it
-                windowOnCurrentWs.nativeFocus()
+                // Already on current workspace — just focus it. Through Airlock's own focus, not
+                // only macOS's: otherwise prevent-focus-stealing sees a steal and reverts it
+                guard let token: RunSessionGuard = .isServerEnabled else { return }
+                Task {
+                    await withErrorReporting("Focusing an app window", userMessage: "Airlock could not focus the app window.") {
+                        try await runLightSession(.menuBarButton, token) {
+                            _ = windowOnCurrentWs.focusWindow()
+                        }
+                    }
+                }
             } else if let windowToMove = appWindows.first {
                 // Move a window from another workspace to current. Inside a session so the
                 // layout and Airlock's own focus get updated, not only macOS's

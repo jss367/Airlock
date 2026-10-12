@@ -6,11 +6,15 @@ import SwiftUI
 @MainActor private var missionControlCaptureTask: Task<Void, Never>?
 @MainActor private let missionControlCaptureMonitor = MissionControlCaptureMonitor()
 
+@MainActor var isMissionControlOpen: Bool { missionControlCaptureTask != nil || missionControlPanel?.isVisible == true }
+
 @MainActor
 func toggleMissionControl() {
-    if missionControlCaptureTask != nil || missionControlPanel?.isVisible == true {
+    if isMissionControlOpen {
         dismissMissionControl()
     } else {
+        // Paused Airlock can't act on a selection, and pausing closes the panel. Stay closed
+        guard TrayMenuModel.shared.isEnabled else { return }
         missionControlCaptureMonitor.start {
             dismissMissionControl(restoreFocus: false)
         }
@@ -43,6 +47,10 @@ func dismissMissionControl(restoreFocus: Bool = true) {
         focus.windowOrNil?.nativeFocus()
     }
 }
+
+/// Airlock's focus is stale while paused, so don't send the user back to it
+@MainActor
+private func dismissMissionControlWhilePaused() { dismissMissionControl(restoreFocus: false) }
 
 private final class MissionControlPanel: NSPanelHud {
     // periphery:ignore
@@ -341,7 +349,7 @@ struct MissionControlContent: View {
 
     @MainActor
     private func switchToWorkspace(_ ws: WorkspaceInfo) {
-        guard let token: RunSessionGuard = .isServerEnabled else { return }
+        guard let token: RunSessionGuard = .isServerEnabled else { return dismissMissionControlWhilePaused() }
         Task {
             do {
                 try await runLightSession(.menuBarButton, token) {
@@ -356,7 +364,7 @@ struct MissionControlContent: View {
 
     @MainActor
     private func focusWindow(_ window: WindowInfo) {
-        guard let token: RunSessionGuard = .isServerEnabled else { return }
+        guard let token: RunSessionGuard = .isServerEnabled else { return dismissMissionControlWhilePaused() }
         Task {
             do {
                 try await runLightSession(.menuBarButton, token) {

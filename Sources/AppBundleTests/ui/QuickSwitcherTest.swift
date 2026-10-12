@@ -35,4 +35,30 @@ final class QuickSwitcherTest: XCTestCase {
         _ = try await parseCommand("enable on").cmdOrDie.run(.defaultEnv, .emptyStdin)
         assertEquals(isQuickSwitcherHotkeyRegistered, true)
     }
+
+    @MainActor
+    func testPanelsDontOpenWhilePaused() async throws {
+        setUpWorkspacesForTests()
+        defer { TrayMenuModel.shared.isEnabled = true }
+        _ = try await parseCommand("enable off").cmdOrDie.run(.defaultEnv, .emptyStdin)
+
+        toggleQuickSwitcher()
+        assertEquals(isQuickSwitcherOpen, false)
+        toggleMissionControl()
+        assertEquals(isMissionControlOpen, false)
+    }
+
+    @MainActor
+    func testPausingClosesMissionControl() async throws {
+        setUpWorkspacesForTests()
+        defer {
+            TrayMenuModel.shared.isEnabled = true
+            dismissMissionControl(restoreFocus: false)
+        }
+        toggleMissionControl()
+        assertEquals(isMissionControlOpen, true) // Still capturing thumbnails
+
+        _ = try await parseCommand("enable off").cmdOrDie.run(.defaultEnv, .emptyStdin)
+        assertEquals(isMissionControlOpen, false)
+    }
 }

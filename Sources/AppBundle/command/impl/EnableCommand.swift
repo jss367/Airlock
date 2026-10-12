@@ -33,8 +33,23 @@ struct EnableCommand: Command {
             // Before activateMode, whose on-mode-changed callbacks may be slow or throw.
             // The panel activated Airlock, so hand focus back to the real window
             if isQuickSwitcherOpen { dismissQuickSwitcher() }
+            if isMissionControlOpen { dismissMissionControl() }
             try await activateMode(nil)
         }
         return true
+    }
+}
+
+/// Pause or resume from Airlock's own UI. Nothing records focus while paused, so the session's
+/// focus sync would treat the window the user worked in meanwhile as a steal, push focus back to
+/// the pre-pause window, and the resumed layout would hide the user's window. Clicks on Airlock's
+/// own menu and windows never reach the global mouse monitor, so mark the intent here, as the
+/// socket server does before `airlock enable`
+@MainActor
+func runEnableCommandFromUi(_ targetState: EnableCmdArgs.State) async throws {
+    markUserInitiatedFocusChange()
+    try await runLightSession(.menuBarButton, .forceRun) { () throws in
+        _ = try await EnableCommand(args: EnableCmdArgs(rawArgs: [], targetState: targetState))
+            .run(.defaultEnv, .emptyStdin)
     }
 }

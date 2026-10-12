@@ -32,6 +32,8 @@ func toggleQuickSwitcher() {
     if let panel = quickSwitcherPanel, panel.isVisible {
         dismissQuickSwitcher()
     } else {
+        // Paused Airlock can't act on a selection, and pausing closes the panel. Stay closed
+        guard TrayMenuModel.shared.isEnabled else { return }
         let panel = QuickSwitcherPanel()
         quickSwitcherPanel = panel
         panel.show()
@@ -389,7 +391,11 @@ struct QuickSwitcherContent: View {
                 }
                 dismissQuickSwitcher(restoreFocus: false)
             case .workspace, .window:
-                guard let token: RunSessionGuard = .isServerEnabled else { return }
+                guard let token: RunSessionGuard = .isServerEnabled else {
+                    // Airlock's focus is stale while paused, so don't send the user back to it
+                    dismissQuickSwitcher(restoreFocus: false)
+                    return
+                }
                 Task {
                     do {
                         try await runLightSession(.menuBarButton, token) {
