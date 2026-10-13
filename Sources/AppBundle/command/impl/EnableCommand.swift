@@ -55,6 +55,15 @@ private enum EnableIntentError: Error { case superseded }
     return enableIntentGeneration
 }
 
+/// Capture before queuing a feature action. Even a Pause followed by Resume supersedes that task.
+@MainActor
+func captureEnabledSessionAdmission() -> @MainActor () throws -> Void {
+    let intent = enableIntentGeneration
+    return {
+        guard TrayMenuModel.shared.isEnabled, intent == enableIntentGeneration else { throw CancellationError() }
+    }
+}
+
 /// Pause or resume from Airlock's own UI. Nothing records focus while paused, so the session's
 /// focus sync would treat the window the user worked in meanwhile as a steal, push focus back to
 /// the pre-pause window, and the resumed layout would hide the user's window. Clicks on Airlock's

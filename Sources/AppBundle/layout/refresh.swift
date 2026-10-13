@@ -57,22 +57,32 @@ func runLightSession<T>(
     _ event: RefreshSessionEvent,
     _: RunSessionGuard,
     syncFocusBeforeBody: Bool = true,
+    admissionCheck: @MainActor () throws -> Void = {},
     body: @MainActor () async throws -> T,
 ) async throws -> T {
     let state = signposter.beginInterval(#function, "event: \(event) axTaskLocalAppThreadToken: \(axTaskLocalAppThreadToken?.idForDebug)")
     defer { signposter.endInterval(#function, state) }
+    try admissionCheck()
     focusEvents.cancelRefresh() // Give priority to runSession
     return try await $refreshSessionEvent.withValue(event) {
         try await $_isStartup.withValue(event.isStartup) {
             let focusSyncedFromMacOs = syncFocusBeforeBody ? try await focusEvents.syncFocus(
                 consumingEvidence: false,
-                query: queryNativeFocusForSession,
+                query: {
+                    let native = try await queryNativeFocusForSession(admissionCheck: admissionCheck)
+                    // A captured force-run token does not prove the queued feature still owns this session.
+                    // Validate before syncFocus applies its answer or refreshModel can restore stale focus.
+                    try admissionCheck()
+                    return native
+                },
                 apply: updateFocusCache,
             ) : false
+            try admissionCheck()
             let focusBefore = focus.windowOrNil
 
             if syncFocusBeforeBody { refreshModel(focusSyncedFromMacOs: focusSyncedFromMacOs) }
             let result = try await body()
+            try admissionCheck()
             refreshModel()
 
             let focusAfter = focus.windowOrNil
@@ -80,6 +90,7 @@ func runLightSession<T>(
             updateTrayText()
             SecureInputPanel.shared.refresh()
             try await layoutWorkspaces()
+            try admissionCheck()
             FocusFlashController.shared.flushPendingFlash()
             if focusBefore != focusAfter {
                 focusAfter?.nativeFocus() // syncFocusToMacOs
@@ -92,7 +103,14 @@ func runLightSession<T>(
 
 @MainActor
 private func queryNativeFocusForSession() async throws -> Window? {
+    try await queryNativeFocusForSession(admissionCheck: {})
+}
+
+@MainActor
+private func queryNativeFocusForSession(admissionCheck: @MainActor () throws -> Void) async throws -> Window? {
     let nativeFocused = try await getNativeFocusedWindow()
+    // Stop directly after the initial query, before unmanaged-model sync or focus application.
+    try admissionCheck()
     if let nativeFocused {
         if !config.enableWindowManagement {
             try await syncUnmanagedWindow(nativeFocused)

@@ -29,6 +29,15 @@ func runAppLauncherWindowAction(_ window: Window, action: () -> Void) {
     action()
 }
 
+/// Shared by current-workspace focus and cross-workspace summon. Admission is captured by the
+/// selection caller before Task starts, and rechecked after the session's awaited initial query.
+@MainActor
+func runAppLauncherWindowSession(_ window: Window, admissionCheck: @MainActor () throws -> Void, action: @MainActor () -> Void) async throws {
+    try await runLightSession(.menuBarButton, .forceRun, admissionCheck: admissionCheck) {
+        runAppLauncherWindowAction(window, action: action)
+    }
+}
+
 final class AppLauncherPanel: NSPanelHud, AppLauncherPresentation {
     @MainActor static var shared = AppLauncherPanel()
     private let viewModel = AppLauncherViewModel()
@@ -232,25 +241,23 @@ final class AppLauncherPanel: NSPanelHud, AppLauncherPresentation {
             if let windowOnCurrentWs {
                 // Already on current workspace — just focus it. Through Airlock's own focus, not
                 // only macOS's: otherwise prevent-focus-stealing sees a steal and reverts it
-                guard let token: RunSessionGuard = .isServerEnabled else { return }
+                guard TrayMenuModel.shared.isEnabled else { return }
+                let admissionCheck = captureEnabledSessionAdmission()
                 Task {
                     await withErrorReporting("Focusing an app window", userMessage: "Airlock could not focus the app window.") {
-                        try await runLightSession(.menuBarButton, token) {
-                            runAppLauncherWindowAction(windowOnCurrentWs) { _ = windowOnCurrentWs.focusWindow() }
-                        }
+                        try await runAppLauncherWindowSession(windowOnCurrentWs, admissionCheck: admissionCheck) { _ = windowOnCurrentWs.focusWindow() }
                     }
                 }
             } else if let windowToMove = appWindows.first {
                 // Move a window from another workspace to current. Inside a session so the
                 // layout and Airlock's own focus get updated, not only macOS's
-                guard let token: RunSessionGuard = .isServerEnabled else { return }
+                guard TrayMenuModel.shared.isEnabled else { return }
+                let admissionCheck = captureEnabledSessionAdmission()
                 Task {
                     await withErrorReporting("Summoning an app window", userMessage: "Airlock could not bring the app window to this workspace.") {
-                        try await runLightSession(.menuBarButton, token) {
-                            runAppLauncherWindowAction(windowToMove) {
-                                _ = windowToMove.bindAsFloatingWindow(to: currentWorkspace)
-                                _ = windowToMove.focusWindow()
-                            }
+                        try await runAppLauncherWindowSession(windowToMove, admissionCheck: admissionCheck) {
+                            _ = windowToMove.bindAsFloatingWindow(to: currentWorkspace)
+                            _ = windowToMove.focusWindow()
                         }
                     }
                 }
