@@ -6,6 +6,8 @@ struct WorkspaceBackAndForthCommand: Command {
     /*conforms*/ let shouldResetClosedWindowsCache = false
 
     func run(_ env: CmdEnv, _ io: CmdIo) -> Bool {
-        return prevFocusedWorkspace?.focusWorkspace() ?? false
+        guard let prevFocusedWorkspace else { return false }
+        guard checkWorkspaceCanBeFocused(prevFocusedWorkspace, io) else { return false }
+        return prevFocusedWorkspace.focusWorkspace()
     }
 }

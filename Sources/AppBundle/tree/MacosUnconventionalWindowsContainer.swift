@@ -3,7 +3,9 @@ import Common
 final class MacosFullscreenWindowsContainer: TreeNode, NonLeafTreeNodeObject {
     @MainActor
     init(parent: Workspace) {
-        super.init(parent: parent, adaptiveWeight: 1, index: INDEX_BIND_LAST)
+        // An empty container must not become the workspace's most recent child, or the workspace forgets its most
+        // recent window. Binding a window into the container marks it most recent
+        super.init(parent: parent, adaptiveWeight: 1, index: INDEX_BIND_LAST, updateMru: false)
     }
 }
 
@@ -11,7 +13,7 @@ final class MacosFullscreenWindowsContainer: TreeNode, NonLeafTreeNodeObject {
 final class MacosHiddenAppsWindowsContainer: TreeNode, NonLeafTreeNodeObject {
     @MainActor
     init(parent: Workspace) {
-        super.init(parent: parent, adaptiveWeight: 1, index: INDEX_BIND_LAST)
+        super.init(parent: parent, adaptiveWeight: 1, index: INDEX_BIND_LAST, updateMru: false) // See MacosFullscreenWindowsContainer
     }
 }
 

@@ -8,7 +8,10 @@ func syncUnmanagedWindow(_ window: Window) async throws {
     guard window.layoutReason == .standard,
           let parent = window.parent,
           parent is Workspace || parent is TilingContainer,
-          let rect = try await window.getAxRect()
+          let rect = try await window.getAxRect(),
+          // A refresh can run during the query and garbage-collect the window if it was closed. Binding it then
+          // would bring it back as a ghost that no refresh collects. Skip it too if something else moved it meanwhile
+          window.parent === parent
     else { return }
     let workspace = rect.center.monitorApproximation.activeWorkspace
     if window.nodeWorkspace != workspace {

@@ -19,7 +19,7 @@ Alternatively, build it from a checkout of https://github.com/jss367/Airlock[the
 ./build.sh
 ----
 
-To install and launch the app, run `./deploy.sh`. This stops any running Airlock instance, rebuilds and tests, replaces `/Applications/Airlock.app`, installs `~/.local/bin/airlock`, and launches the app. Add `~/.local/bin` to your `PATH` to use the command-line tool.
+To install and launch the app, run `./deploy.sh`. This rebuilds and tests the app and builds the command-line tool before stopping any running Airlock instance. After those steps succeed, it stops Airlock, replaces `/Applications/Airlock.app`, installs `~/.local/bin/airlock`, and launches the app. A failed build or test leaves the running app untouched. Add `~/.local/bin` to your `PATH` to use the command-line tool.
 
 Grant Airlock access in *System Settings → Privacy & Security → Accessibility* when prompted. See https://github.com/jss367/Airlock/blob/main/dev-docs/development.md[development instructions] for setup and build options.
 
@@ -52,6 +52,10 @@ enable-keyboard-shortcuts = true
     option-ctrl-left = 'move-node-to-monitor left'
     option-ctrl-right = 'move-node-to-monitor right'
 ----
+
+Without window management, each monitor's workspace holds the windows that are on that monitor. Windows from hidden workspaces join the workspace of the monitor they appear on, and stay there when you turn management back on. Commands that would move a window to another workspace or show a different workspace on a monitor fail with an error: `move-node-to-workspace` when the destination differs from the window's workspace; `summon-app` when an existing window must be moved from another workspace; `summon-workspace`; `move-workspace-to-monitor`; and `workspace` or `workspace-back-and-forth` when the target workspace isn't already shown on a monitor.
+
+`summon-app` can still focus an existing window on the current workspace or launch an app. Same-workspace `move-node-to-workspace` requests keep their normal no-op behavior: success by default, or failure with `--fail-if-noop`.
 
 Turn *Window management* back on to resume tiling and workspace hiding.
 

@@ -21,9 +21,9 @@ open class TreeNode: Equatable, AeroAny {
     var isBound: Bool { parent != nil }
 
     @MainActor
-    init(parent: NonLeafTreeNodeObject, adaptiveWeight: CGFloat, index: Int) {
+    init(parent: NonLeafTreeNodeObject, adaptiveWeight: CGFloat, index: Int, updateMru: Bool = true) {
         self.adaptiveWeight = adaptiveWeight
-        bind(to: parent, adaptiveWeight: adaptiveWeight, index: index)
+        bind(to: parent, adaptiveWeight: adaptiveWeight, index: index, updateMru: updateMru)
     }
 
     fileprivate init() {

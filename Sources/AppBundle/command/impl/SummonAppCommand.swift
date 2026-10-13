@@ -32,15 +32,8 @@ struct SummonAppCommand: Command {
             let currentWorkspace = focus.workspace
             let windowOnCurrentWs = appWindows.first { $0.nodeWorkspace == currentWorkspace }
 
-            if let windowOnCurrentWs {
-                // Already on current workspace — just focus it
-                _ = windowOnCurrentWs.focusWindow()
-            } else if let windowToMove = appWindows.first {
-                // Move window from another workspace to current. Only use focusWindow() here —
-                // the session will call nativeFocus() after layoutWorkspaces() moves the window,
-                // avoiding the workspace-pull caused by activating before the move completes.
-                _ = windowToMove.bindAsFloatingWindow(to: currentWorkspace)
-                _ = windowToMove.focusWindow()
+            if let window = windowOnCurrentWs ?? appWindows.first {
+                return summonAppWindow(window, to: currentWorkspace, io: io)
             } else {
                 // Running but no windows — launch a new instance
                 launchNewInstance(installedApp)
@@ -59,4 +52,20 @@ struct SummonAppCommand: Command {
         config.createsNewApplicationInstance = true
         NSWorkspace.shared.openApplication(at: app.url, configuration: config)
     }
+}
+
+/// Existing-window path, separate from app discovery and launching so it can be tested with synthetic windows.
+@MainActor
+func summonAppWindow(_ window: Window, to workspace: Workspace, io: CmdIo) -> Bool {
+    if window.nodeWorkspace == workspace {
+        _ = window.focusWindow()
+        return true
+    }
+    guard config.enableWindowManagement else {
+        return reportWindowManagementIsOff(io, "Summoning an app window to another workspace")
+    }
+    // The session focuses natively after layout moves the window, avoiding a premature workspace pull.
+    _ = window.bindAsFloatingWindow(to: workspace)
+    _ = window.focusWindow()
+    return true
 }

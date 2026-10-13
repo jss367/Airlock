@@ -3,6 +3,8 @@ import AppKit
 
 final class TestWindow: Window, CustomStringConvertible {
     var _rect: Rect?
+    /// Runs during getAxRect, where a real AX query suspends and lets a refresh run
+    var duringGetAxRect: (@MainActor () -> ())? = nil
 
     @MainActor
     private init(_ id: UInt32, _ parent: NonLeafTreeNodeObject, _ adaptiveWeight: CGFloat, _ rect: Rect?) {
@@ -37,7 +39,8 @@ final class TestWindow: Window, CustomStringConvertible {
     }
 
     @MainActor override func getAxRect() async throws -> Rect? {
-        _rect
+        duringGetAxRect?()
+        return _rect
     }
 
     override func getAxSize() async throws -> CGSize? {

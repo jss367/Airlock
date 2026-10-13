@@ -24,6 +24,9 @@ struct MoveNodeToWorkspaceCommand: Command {
             case .direct(let name):
                 targetWorkspace = Workspace.get(byName: name.raw)
         }
+        if !config.enableWindowManagement && window.nodeWorkspace != targetWorkspace {
+            return reportWindowManagementIsOff(io, "Moving a window to another workspace")
+        }
         return moveWindowToWorkspace(window, targetWorkspace, io, focusFollowsWindow: args.focusFollowsWindow, failIfNoop: args.failIfNoop)
     }
 }

@@ -30,6 +30,11 @@ private struct AppServerTerminationHandler: TerminationHandler {
         try await makeAllWindowsVisibleAndRestoreSize()
         await toggleReleaseServerIfDebug(.on)
     }
+
+    func beforeTerminationBlocking(deadline: DispatchTime) -> Bool {
+        // toggleReleaseServerIfDebug is skipped: it only matters for debug builds, and it needs to be awaited
+        makeAllWindowsVisibleAndRestoreSizeBlocking(deadline: deadline)
+    }
 }
 
 @MainActor
@@ -39,15 +44,32 @@ private func makeAllWindowsVisibleAndRestoreSize() async throws {
     for (_, window) in MacWindow.allWindowsMap {
         // makeAllWindowsVisibleAndRestoreSize may be invoked when something went wrong (e.g. some windows are unbound)
         // that's why it's not allowed to use `.parent` call in here
-        let monitor = try await window.getCenter()?.monitorApproximation ?? mainMonitor
-        let monitorVisibleRect = monitor.visibleRect
-        let windowSize = window.lastFloatingSize ?? CGSize(width: monitorVisibleRect.width, height: monitorVisibleRect.height)
-        let point = CGPoint(
-            x: monitorVisibleRect.topLeftX + (monitorVisibleRect.width - windowSize.width) / 2,
-            y: monitorVisibleRect.topLeftY + (monitorVisibleRect.height - windowSize.height) / 2,
-        )
+        let (point, windowSize) = restoredFrame(window, center: try await window.getCenter())
         try await window.setAxFrameBlocking(point, windowSize)
     }
+}
+
+/// Same as makeAllWindowsVisibleAndRestoreSize, but blocks instead of awaiting, and gives up at `deadline`
+@MainActor
+private func makeAllWindowsVisibleAndRestoreSizeBlocking(deadline: DispatchTime) -> Bool {
+    guard config.enableWindowManagement else { return true }
+    for (_, window) in MacWindow.allWindowsMap {
+        if DispatchTime.now() >= deadline { return false }
+        let (point, windowSize) = restoredFrame(window, center: window.macApp.getAxRectBlocking(window.windowId, deadline: deadline)?.center)
+        window.macApp.setAxFrameBlocking(window.windowId, point, windowSize, deadline: deadline)
+    }
+    return DispatchTime.now() < deadline
+}
+
+@MainActor
+private func restoredFrame(_ window: MacWindow, center: CGPoint?) -> (topLeft: CGPoint, size: CGSize) {
+    let monitorVisibleRect = (center?.monitorApproximation ?? mainMonitor).visibleRect
+    let windowSize = window.lastFloatingSize ?? CGSize(width: monitorVisibleRect.width, height: monitorVisibleRect.height)
+    let point = CGPoint(
+        x: monitorVisibleRect.topLeftX + (monitorVisibleRect.width - windowSize.width) / 2,
+        y: monitorVisibleRect.topLeftY + (monitorVisibleRect.height - windowSize.height) / 2,
+    )
+    return (point, windowSize)
 }
 
 @MainActor
