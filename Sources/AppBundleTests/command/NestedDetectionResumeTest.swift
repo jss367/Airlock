@@ -9,10 +9,12 @@ import XCTest
         config.focusFlash.enabled = false
         uiResumeFocus.reset()
         DetectionEnableFixtureCommand.calls = 0
+        DetectionModeFixtureCommand.focusIds = []
         DetectionNewPauseFixtureCommand.newer = nil
     }
     override func tearDown() async throws {
         config.onWindowDetected = []
+        config.onModeChanged = []
         DetectionNewPauseFixtureCommand.newer = nil
         TrayMenuModel.shared.isEnabled = true
         activeMode = mainModeId
@@ -25,7 +27,13 @@ import XCTest
     func testNewerUiPauseDuringDetectionStillSupersedesOuterResume() async throws {
         try await exerciseDetectionResume(newerUserPause: true)
     }
-    private func exerciseDetectionResume(newerUserPause: Bool) async throws {
+    func testNestedModeCallbackSessionDoesNotRestoreStaleFocusAfterRegistrationGraceExpires() async throws {
+        try await exerciseDetectionResume(newerUserPause: false, modeCallbacks: true)
+    }
+    func testNewerPauseStillWinsWithNestedModeCallbackSession() async throws {
+        try await exerciseDetectionResume(newerUserPause: true, modeCallbacks: true)
+    }
+    private func exerciseDetectionResume(newerUserPause: Bool, modeCallbacks: Bool = false) async throws {
         let old = TestWindow.new(id: 391, parent: Workspace.get(byName: "old").rootTilingContainer)
         let newer = TestWindow.new(id: 392, parent: Workspace.get(byName: "newer").rootTilingContainer)
         XCTAssertTrue(old.focusWindow())
@@ -33,6 +41,13 @@ import XCTest
         appForTests = nil
         var registered: TestWindow?
         var cachePrimed = false
+        var now = ContinuousClock().now
+        let clock = FocusStealingPreventionState(now: { now })
+        clock.markUserInitiatedFocusChange()
+        if modeCallbacks {
+            config.preventFocusStealing = .always
+            config.onModeChanged = [DetectionModeFixtureCommand()]
+        }
         var commands: [any Command] = [DetectionEnableFixtureCommand()]
         if newerUserPause {
             DetectionNewPauseFixtureCommand.newer = newer
@@ -42,7 +57,7 @@ import XCTest
         uiResumeFocus.rememberCandidate {
             UiResumeFocusCandidate(isStillFocused: {
                 registered == nil || TestApp.shared.focusedWindow === registered
-            }, resolveWithAdmission: { validate, admit in
+            }, resolveWithWindowAdmission: { validate, admit in
                 try await registerFocusedWindowWithAxCache(
                     expectedWindowId: 393,
                     registerAxWindow: { cachePrimed = true; return 393 },
@@ -52,7 +67,13 @@ import XCTest
                         let selected = TestWindow.new(id: id, parent: Workspace.get(byName: "selected").rootTilingContainer)
                         registered = selected
                         selected.nativeFocus() // Synthetic native identity exists independently of modeled focus.
-                        try await tryOnWindowDetected(selected, beforeCallbacks: admit)
+                        if modeCallbacks {
+                            await Task.yield()
+                            now = now.advanced(by: .seconds(2))
+                            XCTAssertFalse(clock.isUserInitiatedFocusChange)
+                            resetFocusStealingPreventionForTests()
+                        }
+                        try await tryOnWindowDetected(selected, beforeCallbacks: { try await admit(selected) })
                         return selected
                     },
                 )
@@ -61,6 +82,7 @@ import XCTest
         try await runEnableCommandFromUi(.on)
         XCTAssertEqual(DetectionEnableFixtureCommand.calls, 1)
         XCTAssertNotNil(registered)
+        if modeCallbacks { XCTAssertEqual(DetectionModeFixtureCommand.focusIds, [393]) }
         if newerUserPause {
             XCTAssertFalse(TrayMenuModel.shared.isEnabled)
             XCTAssertTrue(focus.windowOrNil === newer)
@@ -92,6 +114,17 @@ private struct DetectionNewPauseFixtureCommand: Command {
     func run(_ env: CmdEnv, _ io: CmdIo) async throws -> Bool {
         Self.newer?.nativeFocus()
         try await runEnableCommandFromUi(.off)
+        return true
+    }
+}
+
+/// Only observes in-memory modeled focus; never launches, registers keys or calls AX.
+private struct DetectionModeFixtureCommand: Command {
+    @MainActor static var focusIds: [UInt32] = []
+    let args = EnableCmdArgs(rawArgs: [], targetState: .on)
+    let shouldResetClosedWindowsCache = false
+    func run(_ env: CmdEnv, _ io: CmdIo) -> Bool {
+        if let id = focus.windowOrNil?.windowId { Self.focusIds.append(id) }
         return true
     }
 }

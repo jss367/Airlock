@@ -20,10 +20,10 @@ final class MacWindow: Window {
 
     @MainActor
     @discardableResult
-    static func getOrRegister(windowId: UInt32, macApp: MacApp, beforeRegistration: @MainActor () throws -> Void = {}, beforeDetectionCallbacks: @MainActor () async throws -> Void = {}) async throws -> MacWindow {
+    static func getOrRegister(windowId: UInt32, macApp: MacApp, beforeRegistration: @MainActor () throws -> Void = {}, beforeDetectionCallbacks: @MainActor () async throws -> Void = {}, beforeWindowDetectionCallbacks: @MainActor (Window) async throws -> Void = { _ in }) async throws -> MacWindow {
         try beforeRegistration()
         if let existing = allWindowsMap[windowId] {
-            try await existing.completePendingDetection(beforeCallbacks: beforeDetectionCallbacks)
+            try await existing.completePendingDetection(beforeCallbacks: beforeDetectionCallbacks, beforeWindowCallbacks: beforeWindowDetectionCallbacks)
             return existing
         }
         let rect = try await macApp.getAxRect(windowId)
@@ -39,18 +39,18 @@ final class MacWindow: Window {
         // atomic synchronous section
         try beforeRegistration()
         if let existing = allWindowsMap[windowId] {
-            try await existing.completePendingDetection(beforeCallbacks: beforeDetectionCallbacks)
+            try await existing.completePendingDetection(beforeCallbacks: beforeDetectionCallbacks, beforeWindowCallbacks: beforeWindowDetectionCallbacks)
             return existing
         }
         let window = MacWindow(windowId, macApp, lastFloatingSize: rect?.size, parent: data.parent, adaptiveWeight: data.adaptiveWeight, index: data.index)
         allWindowsMap[windowId] = window
 
-        try await window.completePendingDetection(beforeCallbacks: beforeDetectionCallbacks)
+        try await window.completePendingDetection(beforeCallbacks: beforeDetectionCallbacks, beforeWindowCallbacks: beforeWindowDetectionCallbacks)
         return window
     }
 
     @MainActor
-    private func completePendingDetection(beforeCallbacks: @MainActor () async throws -> Void) async throws {
+    private func completePendingDetection(beforeCallbacks: @MainActor () async throws -> Void, beforeWindowCallbacks: @MainActor (Window) async throws -> Void) async throws {
         guard !pendingDetection.finished, !completingDetection else { return }
         completingDetection = true
         defer { completingDetection = false }
@@ -64,7 +64,10 @@ final class MacWindow: Window {
         }
         // Preserve the rule list across cancellation/config reload so indices cannot replay rules.
         if detectionCallbacks == nil { detectionCallbacks = config.onWindowDetected }
-        try await tryOnWindowDetected(self, beforeCallbacks: beforeCallbacks, progress: pendingDetection, callbacks: detectionCallbacks)
+        try await tryOnWindowDetected(self, beforeCallbacks: {
+            try await beforeCallbacks()
+            try await beforeWindowCallbacks(self)
+        }, progress: pendingDetection, callbacks: detectionCallbacks)
         pendingDetection.finished = true
         detectionCallbacks = nil
     }

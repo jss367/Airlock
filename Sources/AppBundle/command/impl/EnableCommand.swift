@@ -150,6 +150,7 @@ func runEnableCommandFromUi(_ targetState: EnableCmdArgs.State) async throws {
     }
     let isResuming = !TrayMenuModel.shared.isEnabled && requestedState == .on
     var selectedCandidate: UiResumeFocusCandidate?
+    var adoptedBeforeCallbacks = false
     let beforeEffects: @MainActor () async throws -> Void = {
         try validateIntent()
         try await selectedCandidate?.validateAfterSelection(validateIntent: validateIntent)
@@ -167,14 +168,22 @@ func runEnableCommandFromUi(_ targetState: EnableCmdArgs.State) async throws {
                     // Another UI action can finish resuming while the query is suspended.
                     if !TrayMenuModel.shared.isEnabled, let candidate {
                         // Registration and configured detection callbacks begin only after a stable selection.
-                        guard let window = try await candidate.resolveAfterSelection(validateIntent: validateIntent), window.isBound else {
+                        guard let window = try await candidate.resolveAfterSelection(validateIntent: validateIntent, beforeWindowCallbacks: { window in
+                            try validateIntent()
+                            guard window.isBound else { throw UiResumeFocusError.selectedWindowUnavailable }
+                            if !adoptedBeforeCallbacks {
+                                selectedCandidate = candidate
+                                _ = window.focusWindow()
+                                adoptedBeforeCallbacks = true
+                            }
+                        }), window.isBound else {
                             throw UiResumeFocusError.selectedWindowUnavailable
                         }
                         try validateIntent()
                         selectedCandidate = candidate
                         // A nested detection Enable belongs to this invocation. Its state change
                         // doesn't replace the validated selection; only a newer intent does.
-                        _ = window.focusWindow()
+                        if !adoptedBeforeCallbacks { _ = window.focusWindow() }
                     }
                 }
                 try validateIntent()
