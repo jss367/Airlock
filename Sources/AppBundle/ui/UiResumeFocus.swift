@@ -18,27 +18,31 @@ enum UiResumeFocusError: LocalizedError {
 @MainActor
 struct UiResumeFocusCandidate {
     private let isAvailable: () -> Bool
+    private let isStillFocused: () async throws -> Bool
     private let resolve: (@MainActor () throws -> Void) async throws -> Window?
     private var selectionIsCurrent: @MainActor () -> Bool = { true }
 
     init(_ window: Window) {
         isAvailable = { window.isBound }
+        isStillFocused = { true }
         resolve = { validate in
             try validate()
             return window.isBound ? window : nil
         }
     }
 
-    init(isAvailable: @escaping () -> Bool = { true }, resolve: @escaping () async throws -> Window?) {
+    init(isAvailable: @escaping () -> Bool = { true }, isStillFocused: @escaping () async throws -> Bool = { true }, resolve: @escaping () async throws -> Window?) {
         self.isAvailable = isAvailable
+        self.isStillFocused = isStillFocused
         self.resolve = { validate in
             try validate()
             return try await resolve()
         }
     }
 
-    init(isAvailable: @escaping () -> Bool = { true }, resolveValidated: @escaping (@MainActor () throws -> Void) async throws -> Window?) {
+    init(isAvailable: @escaping () -> Bool = { true }, isStillFocused: @escaping () async throws -> Bool = { true }, resolveValidated: @escaping (@MainActor () throws -> Void) async throws -> Window?) {
         self.isAvailable = isAvailable
+        self.isStillFocused = isStillFocused
         resolve = resolveValidated
     }
 
@@ -55,6 +59,9 @@ struct UiResumeFocusCandidate {
         }
         try validate()
         let window = try await resolve(validate)
+        try validate()
+        // A same-app window change has no application-activation generation. Read its identity again.
+        guard try await isStillFocused() else { throw UiResumeFocusError.focusKeptChanging }
         try validate()
         return window
     }
@@ -130,15 +137,26 @@ private func focusCandidateForUiResume(_ app: NSRunningApplication) async -> UiR
     guard pid != myPid, app.bundleIdentifier != lockScreenAppBundleId, !app.isTerminated else { return nil }
     let debugId = app.idForDebug
     // One read-only AX query. No observers, model binding, window-detection callbacks, or app activation.
-    let windowId = await Task.detached {
+    let windowId = await readOnlyFocusedWindowIdForUiResume(pid: pid, debugId: debugId)
+    guard let windowId else { return nil }
+    return UiResumeFocusCandidate(
+        isAvailable: { !app.isTerminated },
+        isStillFocused: {
+            guard !app.isTerminated else { return false }
+            return await readOnlyFocusedWindowIdForUiResume(pid: pid, debugId: debugId) == windowId
+        },
+        resolveValidated: { validate in
+            guard let macApp = try await MacApp.getOrRegister(app) else { return nil }
+            try validate()
+            return try await macApp.getFocusedWindow(expectedWindowId: windowId, beforeRegistration: validate)
+        },
+    )
+}
+
+private func readOnlyFocusedWindowIdForUiResume(pid: Int32, debugId: String) async -> UInt32? {
+    await Task.detached {
         $axTaskLocalAppThreadToken.withValue(AxAppThreadToken(pid: pid, idForDebug: debugId)) {
             AXUIElementCreateApplication(pid).get(Ax.focusedWindowAttr)?.windowId
         }
     }.value
-    guard let windowId else { return nil }
-    return UiResumeFocusCandidate(isAvailable: { !app.isTerminated }, resolveValidated: { validate in
-        guard let macApp = try await MacApp.getOrRegister(app) else { return nil }
-        try validate()
-        return try await macApp.getFocusedWindow(expectedWindowId: windowId, beforeRegistration: validate)
-    })
 }

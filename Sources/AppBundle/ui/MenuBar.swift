@@ -57,10 +57,12 @@ public func menuBar(viewModel: TrayMenuModel) -> some Scene {
             }
             Divider()
         }
-        Button(viewModel.isEnabled ? "Pause Airlock" : "Resume Airlock") {
+        let wasEnabled = viewModel.isEnabled
+        Button(wasEnabled ? "Pause Airlock" : "Resume Airlock") {
+            let requestedState: EnableCmdArgs.State = wasEnabled ? .off : .on
             Task {
                 await withErrorReporting("Pausing or resuming Airlock", userMessage: "Airlock could not change its running state.") {
-                    try await runEnableCommandFromUi(.toggle)
+                    try await runEnableCommandFromUi(requestedState)
                 }
             }
         }.keyboardShortcut("E", modifiers: .command)

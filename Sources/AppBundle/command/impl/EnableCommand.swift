@@ -47,7 +47,11 @@ struct EnableCommand: Command {
 /// socket server does before `airlock enable`
 @MainActor
 func runEnableCommandFromUi(_ targetState: EnableCmdArgs.State) async throws {
-    let isResuming = !TrayMenuModel.shared.isEnabled && targetState != .off
+    // A toggle describes the user's intent now, not the running state after an awaited query.
+    let requestedState: EnableCmdArgs.State = targetState == .toggle
+        ? (TrayMenuModel.shared.isEnabled ? .off : .on)
+        : targetState
+    let isResuming = !TrayMenuModel.shared.isEnabled && requestedState == .on
     markUserInitiatedFocusChange()
     // The paused model is stale. Ordinary sync could refocus it after grace expires during an AX query.
     try await runLightSession(.menuBarButton, .forceRun, syncFocusBeforeBody: !isResuming) { () throws in
@@ -62,7 +66,7 @@ func runEnableCommandFromUi(_ targetState: EnableCmdArgs.State) async throws {
                 if !TrayMenuModel.shared.isEnabled { _ = window.focusWindow() }
             }
         }
-        _ = try await EnableCommand(args: EnableCmdArgs(rawArgs: [], targetState: targetState))
+        _ = try await EnableCommand(args: EnableCmdArgs(rawArgs: [], targetState: requestedState))
             .run(.defaultEnv, .emptyStdin)
     }
 }
