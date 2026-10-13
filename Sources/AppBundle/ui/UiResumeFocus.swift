@@ -18,20 +18,46 @@ enum UiResumeFocusError: LocalizedError {
 @MainActor
 struct UiResumeFocusCandidate {
     private let isAvailable: () -> Bool
-    private let resolve: () async throws -> Window?
+    private let resolve: (@MainActor () throws -> Void) async throws -> Window?
+    private var selectionIsCurrent: @MainActor () -> Bool = { true }
 
     init(_ window: Window) {
         isAvailable = { window.isBound }
-        resolve = { window.isBound ? window : nil }
+        resolve = { validate in
+            try validate()
+            return window.isBound ? window : nil
+        }
     }
 
     init(isAvailable: @escaping () -> Bool = { true }, resolve: @escaping () async throws -> Window?) {
         self.isAvailable = isAvailable
-        self.resolve = resolve
+        self.resolve = { validate in
+            try validate()
+            return try await resolve()
+        }
+    }
+
+    init(isAvailable: @escaping () -> Bool = { true }, resolveValidated: @escaping (@MainActor () throws -> Void) async throws -> Window?) {
+        self.isAvailable = isAvailable
+        resolve = resolveValidated
     }
 
     var available: Bool { isAvailable() }
-    func resolveAfterSelection() async throws -> Window? { try await resolve() }
+    func selected(whileCurrent check: @MainActor @escaping () -> Bool) -> Self {
+        var selected = self
+        selected.selectionIsCurrent = check
+        return selected
+    }
+
+    func resolveAfterSelection() async throws -> Window? {
+        let validate: @MainActor () throws -> Void = {
+            guard selectionIsCurrent() else { throw UiResumeFocusError.focusKeptChanging }
+        }
+        try validate()
+        let window = try await resolve(validate)
+        try validate()
+        return window
+    }
 }
 
 /// Remembers the last external app without changing Airlock's focus while paused. Query its
@@ -68,7 +94,7 @@ final class UiResumeFocusState {
             let version = generation
             let native = try await nativeFocus()
             if version != generation { continue }
-            if let native { return native.available ? native : nil }
+            if let native { return native.available ? native.selected { self.generation == version } : nil }
             guard let query = externalFocusQuery else { return nil }
             let remembered = try await query()
             if version != generation { continue }
@@ -76,8 +102,8 @@ final class UiResumeFocusState {
             let currentNative = try await nativeFocus()
             // Or activate another app while either query is suspended. Reject even nonnil stale answers.
             if version != generation { continue }
-            if let currentNative { return currentNative.available ? currentNative : nil }
-            return remembered?.available == true ? remembered : nil
+            if let currentNative { return currentNative.available ? currentNative.selected { self.generation == version } : nil }
+            return remembered?.available == true ? remembered?.selected { self.generation == version } : nil
         }
         throw UiResumeFocusError.focusKeptChanging
     }
@@ -110,8 +136,9 @@ private func focusCandidateForUiResume(_ app: NSRunningApplication) async -> UiR
         }
     }.value
     guard let windowId else { return nil }
-    return UiResumeFocusCandidate(isAvailable: { !app.isTerminated }) {
+    return UiResumeFocusCandidate(isAvailable: { !app.isTerminated }, resolveValidated: { validate in
         guard let macApp = try await MacApp.getOrRegister(app) else { return nil }
-        return try await MacWindow.getOrRegister(windowId: windowId, macApp: macApp)
-    }
+        try validate()
+        return try await macApp.getFocusedWindow(expectedWindowId: windowId, beforeRegistration: validate)
+    })
 }

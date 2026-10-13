@@ -16,7 +16,8 @@ final class MacWindow: Window {
 
     @MainActor
     @discardableResult
-    static func getOrRegister(windowId: UInt32, macApp: MacApp) async throws -> MacWindow {
+    static func getOrRegister(windowId: UInt32, macApp: MacApp, beforeRegistration: @MainActor () throws -> Void = {}) async throws -> MacWindow {
+        try beforeRegistration()
         if let existing = allWindowsMap[windowId] { return existing }
         let rect = try await macApp.getAxRect(windowId)
         let data = try await unbindAndGetBindingDataForNewWindow(
@@ -29,6 +30,7 @@ final class MacWindow: Window {
         )
 
         // atomic synchronous section
+        try beforeRegistration()
         if let existing = allWindowsMap[windowId] { return existing }
         let window = MacWindow(windowId, macApp, lastFloatingSize: rect?.size, parent: data.parent, adaptiveWeight: data.adaptiveWeight, index: data.index)
         allWindowsMap[windowId] = window
