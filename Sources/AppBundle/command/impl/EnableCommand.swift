@@ -15,6 +15,7 @@ struct EnableCommand: Command {
             case .off: false
             case .toggle: !TrayMenuModel.shared.isEnabled
         }
+        if !newState { dismissAppLauncherForPause() }
         if newState == prevState {
             if !args.failIfNoop {
                 io.out((newState ? "Already enabled" : "Already disabled") +
@@ -28,9 +29,13 @@ struct EnableCommand: Command {
         if newState {
             for workspace in Workspace.all {
                 for window in workspace.allLeafWindowsRecursive where window.isFloating {
-                    window.lastFloatingSize = try await window.getAxSize() ?? window.lastFloatingSize
+                    guard intent == enableIntentGeneration else { return true }
+                    let size = try await window.getAxSize()
+                    guard intent == enableIntentGeneration else { return true }
+                    window.lastFloatingSize = size ?? window.lastFloatingSize
                 }
             }
+            guard intent == enableIntentGeneration else { return true }
             try await activateMode(mainModeId)
         } else {
             // Before activateMode, whose on-mode-changed callbacks may be slow or throw.
@@ -86,6 +91,7 @@ func runEnableCommandFromUi(_ targetState: EnableCmdArgs.State) async throws {
             try validateIntent()
             _ = try await EnableCommand(args: EnableCmdArgs(rawArgs: [], targetState: requestedState), uiIntent: intent)
                 .run(.defaultEnv, .emptyStdin)
+            try validateIntent()
         }
     } catch EnableIntentError.superseded {
         // A later explicit request owns the state, including an off request that was already paused.

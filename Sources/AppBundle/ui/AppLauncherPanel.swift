@@ -2,7 +2,34 @@ import AppKit
 import Common
 import SwiftUI
 
-final class AppLauncherPanel: NSPanelHud {
+@MainActor
+protocol AppLauncherPresentation: AnyObject {
+    var isVisible: Bool { get }
+    func dismiss(restoreFocus: Bool)
+}
+
+@MainActor var appLauncherPresentation: (any AppLauncherPresentation)?
+
+@MainActor
+func dismissAppLauncherForPause() {
+    if let panel = appLauncherPresentation, panel.isVisible { panel.dismiss(restoreFocus: true) }
+}
+
+/// A queued selection after Pause must close quietly without restoring stale focus or launching.
+@MainActor
+func beginAppLauncherSelection(isEnabled: Bool, dismiss: (Bool) -> Void) -> Bool {
+    dismiss(isEnabled)
+    return isEnabled
+}
+
+/// A selection accepted before Pause can still be waiting in its session's native-focus query.
+@MainActor
+func runAppLauncherWindowAction(_ window: Window, action: () -> Void) {
+    guard TrayMenuModel.shared.isEnabled, window.isBound else { return }
+    action()
+}
+
+final class AppLauncherPanel: NSPanelHud, AppLauncherPresentation {
     @MainActor static var shared = AppLauncherPanel()
     private let viewModel = AppLauncherViewModel()
     private var eventMonitor: Any?
@@ -13,6 +40,7 @@ final class AppLauncherPanel: NSPanelHud {
 
     override private init() {
         super.init()
+        appLauncherPresentation = self
         self.styleMask = [.borderless, .hudWindow, .utilityWindow]
         self.level = .floating
         self.isMovableByWindowBackground = false
@@ -135,6 +163,7 @@ final class AppLauncherPanel: NSPanelHud {
 
     @MainActor
     func show() {
+        guard TrayMenuModel.shared.isEnabled else { return }
         if Self.debugLogging { NSLog("[AppLauncher] === show() called ===") }
 
         viewModel.reset()
@@ -171,11 +200,12 @@ final class AppLauncherPanel: NSPanelHud {
     @MainActor
     func dismiss(restoreFocus: Bool = true) {
         // orderOut resigns key, which would dismiss again from resignKey
+        let wasVisible = isVisible
         isDismissing = true
         defer { isDismissing = false }
         removeEventMonitor()
         self.orderOut(nil)
-        if restoreFocus {
+        if restoreFocus && wasVisible {
             // Restore focus to the previously focused window
             focus.windowOrNil?.nativeFocus()
         }
@@ -183,7 +213,7 @@ final class AppLauncherPanel: NSPanelHud {
 
     @MainActor
     func launchApp(_ app: InstalledApp) {
-        dismiss()
+        guard beginAppLauncherSelection(isEnabled: TrayMenuModel.shared.isEnabled, dismiss: { dismiss(restoreFocus: $0) }) else { return }
 
         // Check if the app is already running and has windows. summon-app --new-window can start
         // several processes for one bundle id, so look at every matching process
@@ -206,7 +236,7 @@ final class AppLauncherPanel: NSPanelHud {
                 Task {
                     await withErrorReporting("Focusing an app window", userMessage: "Airlock could not focus the app window.") {
                         try await runLightSession(.menuBarButton, token) {
-                            _ = windowOnCurrentWs.focusWindow()
+                            runAppLauncherWindowAction(windowOnCurrentWs) { _ = windowOnCurrentWs.focusWindow() }
                         }
                     }
                 }
@@ -217,8 +247,10 @@ final class AppLauncherPanel: NSPanelHud {
                 Task {
                     await withErrorReporting("Summoning an app window", userMessage: "Airlock could not bring the app window to this workspace.") {
                         try await runLightSession(.menuBarButton, token) {
-                            _ = windowToMove.bindAsFloatingWindow(to: currentWorkspace)
-                            _ = windowToMove.focusWindow()
+                            runAppLauncherWindowAction(windowToMove) {
+                                _ = windowToMove.bindAsFloatingWindow(to: currentWorkspace)
+                                _ = windowToMove.focusWindow()
+                            }
                         }
                     }
                 }

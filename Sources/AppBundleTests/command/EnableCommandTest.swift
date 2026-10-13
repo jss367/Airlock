@@ -9,12 +9,73 @@ final class EnableCommandTest: XCTestCase {
         config.quickSwitcher.enabled = false
         config.focusFlash.enabled = false
         uiResumeFocus.reset()
+        appLauncherPresentation = nil
     }
 
     override func tearDown() async throws {
         TrayMenuModel.shared.isEnabled = true
         resetFocusCacheForTests() // Also cancels the refresh the session scheduled
         uiResumeFocus.reset()
+        appLauncherPresentation = nil
+    }
+
+    func testPauseClosesLauncherAndQueuedSelectionCannotRestoreStaleFocus() async throws {
+        let launcher = FakeAppLauncherPresentation()
+        appLauncherPresentation = launcher
+        _ = try await parseCommand("enable off").cmdOrDie.run(.defaultEnv, .emptyStdin)
+        XCTAssertFalse(launcher.isVisible)
+        XCTAssertEqual(launcher.restorations, 1)
+        let acceptsSelection = beginAppLauncherSelection(isEnabled: TrayMenuModel.shared.isEnabled, dismiss: { launcher.dismiss(restoreFocus: $0) })
+        XCTAssertFalse(acceptsSelection)
+        XCTAssertEqual(launcher.restorations, 1)
+        // The command guard returns before constructing or showing a real NSPanel.
+        let opened = try await parseCommand("app-launcher").cmdOrDie.run(.defaultEnv, .emptyStdin)
+        XCTAssertEqual(opened.exitCode, 1)
+        launcher.isVisible = true
+        _ = try await parseCommand("enable off").cmdOrDie.run(.defaultEnv, .emptyStdin)
+        XCTAssertFalse(launcher.isVisible)
+    }
+
+    func testPreviouslyAcceptedLauncherSelectionCannotActAfterPause() async throws {
+        let selected = TestWindow.new(id: 292, parent: Workspace.get(byName: "selected").rootTilingContainer)
+        let launcher = FakeAppLauncherPresentation()
+        appLauncherPresentation = launcher
+        XCTAssertTrue(beginAppLauncherSelection(isEnabled: true, dismiss: { launcher.dismiss(restoreFocus: $0) }))
+        // Stand in for the selection's awaited session query. The task resumes after Pause.
+        await Task.yield()
+        _ = try await parseCommand("enable off").cmdOrDie.run(.defaultEnv, .emptyStdin)
+        var actions = 0
+        runAppLauncherWindowAction(selected) { actions += 1 }
+        XCTAssertEqual(actions, 0)
+    }
+
+    func testLaterPauseDuringSizeReadKeepsModesDisabled() async throws {
+        try await exercisePauseDuringSizeRead(uiResume: false)
+    }
+
+    func testLaterPauseDuringUiResumeSizeReadKeepsModesDisabled() async throws {
+        try await exercisePauseDuringSizeRead(uiResume: true)
+    }
+
+    private func exercisePauseDuringSizeRead(uiResume: Bool) async throws {
+        let window = TestWindow.new(id: 291, parent: Workspace.get(byName: "floating").rootTilingContainer)
+        _ = window.bindAsFloatingWindow(to: Workspace.get(byName: "floating"))
+        _ = try await parseCommand("enable off").cmdOrDie.run(.defaultEnv, .emptyStdin)
+        window.nativeFocus()
+        window.lastFloatingSize = CGSize(width: 30, height: 40)
+        var reads = 0
+        window.sizeQueryForTests = {
+            reads += 1
+            _ = try await parseCommand("enable off").cmdOrDie.run(.defaultEnv, .emptyStdin)
+            XCTAssertNil(activeMode)
+            return CGSize(width: 90, height: 100)
+        }
+        if uiResume { try await runEnableCommandFromUi(.on) }
+        else { _ = try await parseCommand("enable on").cmdOrDie.run(.defaultEnv, .emptyStdin) }
+        XCTAssertEqual(reads, 1)
+        XCTAssertEqual(window.lastFloatingSize, CGSize(width: 30, height: 40))
+        XCTAssertFalse(TrayMenuModel.shared.isEnabled)
+        XCTAssertNil(activeMode)
     }
 
     /// Pause on workspace "a" with window 1 focused, then work in window 2 on workspace "b", which is
@@ -157,5 +218,14 @@ final class EnableCommandTest: XCTestCase {
         resetFocusCacheForTests()
         assertTrue(TrayMenuModel.shared.isEnabled)
         assertTrue(focus.windowOrNil === external)
+    }
+}
+
+@MainActor private final class FakeAppLauncherPresentation: AppLauncherPresentation {
+    var isVisible = true
+    var restorations = 0
+    func dismiss(restoreFocus: Bool) {
+        if restoreFocus && isVisible { restorations += 1 }
+        isVisible = false
     }
 }
