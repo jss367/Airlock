@@ -2,19 +2,21 @@ import AppKit
 
 extension Workspace {
     @MainActor
-    func layoutWorkspace() async throws {
+    func layoutWorkspace(admissionCheck: @MainActor @escaping () async throws -> Void = {}) async throws {
+        try await admissionCheck()
         if isEffectivelyEmpty { return }
         let rect = workspaceMonitor.visibleRectPaddedByOuterGaps
         // If monitors are aligned vertically and the monitor below has smaller width, then macOS may not allow the
         // window on the upper monitor to take full width. rect.height - 1 resolves this problem
         // But I also faced this problem in monitors horizontal configuration. ¯\_(ツ)_/¯
-        try await layoutRecursive(rect.topLeftCorner, width: rect.width, height: rect.height - 1, virtual: rect, LayoutContext(self))
+        try await layoutRecursive(rect.topLeftCorner, width: rect.width, height: rect.height - 1, virtual: rect, LayoutContext(self, admissionCheck: admissionCheck))
     }
 }
 
 extension TreeNode {
     @MainActor
     fileprivate func layoutRecursive(_ point: CGPoint, width: CGFloat, height: CGFloat, virtual: Rect, _ context: LayoutContext) async throws {
+        try await context.admissionCheck()
         let physicalRect = Rect(topLeftX: point.x, topLeftY: point.y, width: width, height: height)
         switch nodeCases {
             case .workspace(let workspace):
@@ -22,6 +24,7 @@ extension TreeNode {
                 lastAppliedLayoutVirtualRect = virtual
                 try await workspace.rootTilingContainer.layoutRecursive(point, width: width, height: height, virtual: virtual, context)
                 for window in workspace.children.filterIsInstance(of: Window.self) {
+                    try await context.admissionCheck()
                     window.lastAppliedLayoutPhysicalRect = nil
                     window.lastAppliedLayoutVirtualRect = nil
                     try await window.layoutFloatingWindow(context)
@@ -57,9 +60,11 @@ extension TreeNode {
 private struct LayoutContext {
     let workspace: Workspace
     let resolvedGaps: ResolvedGaps
+    let admissionCheck: @MainActor () async throws -> Void
 
     @MainActor
-    init(_ workspace: Workspace) {
+    init(_ workspace: Workspace, admissionCheck: @MainActor @escaping () async throws -> Void) {
+        self.admissionCheck = admissionCheck
         self.workspace = workspace
         self.resolvedGaps = ResolvedGaps(gaps: config.gaps, monitor: workspace.workspaceMonitor)
     }
@@ -69,7 +74,9 @@ extension Window {
     @MainActor
     fileprivate func layoutFloatingWindow(_ context: LayoutContext) async throws {
         let workspace = context.workspace
+        try await context.admissionCheck()
         let windowRect = try await getAxRect() // Probably not idempotent
+        try await context.admissionCheck()
         let currentMonitor = windowRect?.center.monitorApproximation
         if let currentMonitor, let windowRect, workspace != currentMonitor.activeWorkspace {
             let windowTopLeftCorner = windowRect.topLeftCorner
@@ -113,6 +120,7 @@ extension TilingContainer {
 
         let lastIndex = children.indices.last
         for (i, child) in children.enumerated() {
+            try await context.admissionCheck()
             child.setWeight(orientation, child.getWeight(orientation) + delta)
             let rawGap = context.resolvedGaps.inner.get(orientation).toDouble()
             // Gaps. Consider 4 cases:
@@ -142,6 +150,7 @@ extension TilingContainer {
     fileprivate func layoutAccordion(_ point: CGPoint, width: CGFloat, height: CGFloat, virtual: Rect, _ context: LayoutContext) async throws {
         guard let mruIndex: Int = mostRecentChild?.ownIndex else { return }
         for (index, child) in children.enumerated() {
+            try await context.admissionCheck()
             let padding = CGFloat(config.accordionPadding)
             let (lPadding, rPadding): (CGFloat, CGFloat) = switch index {
                 case 0 where children.count == 1: (0, 0)

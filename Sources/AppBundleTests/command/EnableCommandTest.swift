@@ -66,7 +66,8 @@ final class EnableCommandTest: XCTestCase {
         var reads = 0
         window.sizeQueryForTests = {
             reads += 1
-            _ = try await parseCommand("enable off").cmdOrDie.run(.defaultEnv, .emptyStdin)
+            let request = ClientRequest(args: ["enable", "off"], stdin: "", windowId: nil, workspace: nil)
+            _ = try await runSocketCommandSession(parseCommand("enable off").cmdOrDie, request: request, token: .forceRun)
             XCTAssertNil(activeMode)
             return CGSize(width: 90, height: 100)
         }

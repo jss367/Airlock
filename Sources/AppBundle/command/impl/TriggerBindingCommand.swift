@@ -3,9 +3,13 @@ import Common
 
 struct TriggerBindingCommand: Command {
     let args: TriggerBindingCmdArgs
+    var invocationCommands: [any Command]? = nil
+    var invocationError: String? = nil
     /*conforms*/ let shouldResetClosedWindowsCache = false
 
     func run(_ env: CmdEnv, _ io: CmdIo) async throws -> Bool {
+        if let invocationError { return io.err(invocationError) }
+        if let invocationCommands { return try await invocationCommands.runCmdSeq(env, io) }
         return if let mode = config.modes[args.mode] {
             if let binding = mode.bindings.values.first(where: { $0.descriptionWithKeyNotation == args.binding.val }) {
                 // refreshSession is not needed since commands are already run in refreshSession

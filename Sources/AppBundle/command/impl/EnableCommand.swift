@@ -4,11 +4,19 @@ import Common
 struct EnableCommand: Command {
     let args: EnableCmdArgs
     var requestedIntent: Int? = nil
+    var beforeEnableEffects: @MainActor () async throws -> Void = {}
     /*conforms*/ let shouldResetClosedWindowsCache = false
 
     func run(_ env: CmdEnv, _ io: CmdIo) async throws -> Bool {
-        let intent = requestedIntent ?? beginEnableIntent()
+        let intent = requestedIntent ?? CommandInvocationIntent.enable ?? beginEnableIntent()
         guard intent == enableIntentGeneration else { return true }
+        return try await CommandInvocationIntent.$enable.withValue(intent) {
+            try await runWithIntent(intent, env, io)
+        }
+    }
+
+    @MainActor
+    private func runWithIntent(_ intent: Int, _ env: CmdEnv, _ io: CmdIo) async throws -> Bool {
         let prevState = TrayMenuModel.shared.isEnabled
         let newState: Bool = switch args.targetState.val {
             case .on: true
@@ -24,20 +32,27 @@ struct EnableCommand: Command {
             return !args.failIfNoop
         }
 
-        TrayMenuModel.shared.isEnabled = newState
-        registerQuickSwitcherHotkey()
         if newState {
             for workspace in Workspace.all {
                 for window in workspace.allLeafWindowsRecursive where window.isFloating {
                     guard intent == enableIntentGeneration else { return true }
                     let size = try await window.getAxSize()
                     guard intent == enableIntentGeneration else { return true }
+                    try await beforeEnableEffects()
+                    guard intent == enableIntentGeneration else { return true }
                     window.lastFloatingSize = size ?? window.lastFloatingSize
                 }
             }
             guard intent == enableIntentGeneration else { return true }
-            try await activateMode(mainModeId)
+            try await beforeEnableEffects()
+            guard intent == enableIntentGeneration else { return true }
+            TrayMenuModel.shared.isEnabled = true
+            registerQuickSwitcherHotkey()
+            try await activateMode(mainModeId, beforeEffects: beforeEnableEffects)
+            try await beforeEnableEffects()
         } else {
+            TrayMenuModel.shared.isEnabled = false
+            registerQuickSwitcherHotkey()
             // Before activateMode, whose on-mode-changed callbacks may be slow or throw.
             // The panel activated Airlock, so hand focus back to the real window
             if isQuickSwitcherOpen { dismissQuickSwitcher() }
@@ -55,6 +70,17 @@ private enum EnableIntentError: Error { case superseded }
     return enableIntentGeneration
 }
 
+/// Nested trigger-binding/config command sequences share the accepted invocation. New socket,
+/// hotkey, or UI entrypoints still reserve their own intent before their session query.
+private enum CommandInvocationIntent {
+    @TaskLocal static var enable: Int?
+}
+
+@MainActor
+func validateInheritedEnableIntent() throws {
+    if let intent = CommandInvocationIntent.enable, intent != enableIntentGeneration { throw CancellationError() }
+}
+
 /// Each accepted invocation owns a fresh token. Parsed/configured commands remain reusable;
 /// only ephemeral copies passed to this invocation's body carry the reserved intent.
 @MainActor
@@ -63,17 +89,51 @@ struct PreparedCommandSession {
     private let intent: Int?
 
     init(_ commands: [any Command]) {
-        let intent = commands.contains { $0 is EnableCommand } ? beginEnableIntent() : nil
+        let (snapshot, containsEnable) = snapshotBindingCommands(commands, visiting: [])
+        let intent = containsEnable ? beginEnableIntent() : nil
         self.intent = intent
-        self.commands = commands.map { command in
+        self.commands = snapshot.map { command in
             guard let enable = command as? EnableCommand else { return command }
-            return EnableCommand(args: enable.args, requestedIntent: intent)
+            var prepared = enable
+            prepared.requestedIntent = intent
+            return prepared
         }
+    }
+
+    func run(_ env: CmdEnv, _ stdin: consuming CmdStdin) async throws -> CmdResult {
+        let io = CmdIo(stdin: stdin)
+        let success = try await CommandInvocationIntent.$enable.withValue(intent) {
+            try await commands.runCmdSeq(env, io, admissionCheck: validateAdmission)
+        }
+        return CmdResult(stdout: io.stdout, stderr: io.stderr, exitCode: success ? 0 : 1)
     }
 
     func validateAdmission() throws {
         if let intent, intent != enableIntentGeneration { throw CancellationError() }
     }
+}
+
+/// Freeze nested binding resolution for this invocation before its prelude; never mutate config.
+/// A visited binding stops preparation recursion while leaving existing runtime cycle behavior intact.
+@MainActor
+private func snapshotBindingCommands(_ commands: [any Command], visiting: Set<String>) -> ([any Command], Bool) {
+    var containsEnable = false
+    let snapshot: [any Command] = commands.map { command in
+        if command is EnableCommand { containsEnable = true; return command }
+        guard let trigger = command as? TriggerBindingCommand else { return command }
+        let key = trigger.args.mode + "\0" + trigger.args.binding.val
+        guard !visiting.contains(key) else { return command }
+        guard let mode = config.modes[trigger.args.mode] else {
+            return TriggerBindingCommand(args: trigger.args, invocationError: "Mode '\(trigger.args.mode)' doesn't exist. Available modes: \(config.modes.keys.joined(separator: ","))")
+        }
+        guard let binding = mode.bindings.values.first(where: { $0.descriptionWithKeyNotation == trigger.args.binding.val }) else {
+            return TriggerBindingCommand(args: trigger.args, invocationError: "Binding '\(trigger.args.binding.val)' is not presented in mode '\(trigger.args.mode)'")
+        }
+        let (nested, nestedEnable) = snapshotBindingCommands(binding.commands, visiting: visiting.union([key]))
+        containsEnable = containsEnable || nestedEnable
+        return TriggerBindingCommand(args: trigger.args, invocationCommands: nested)
+    }
+    return (snapshot, containsEnable)
 }
 
 /// Capture before queuing a feature action. Even a Pause followed by Resume supersedes that task.
@@ -101,30 +161,42 @@ func runEnableCommandFromUi(_ targetState: EnableCmdArgs.State) async throws {
         guard intent == enableIntentGeneration else { throw EnableIntentError.superseded }
     }
     let isResuming = !TrayMenuModel.shared.isEnabled && requestedState == .on
+    var selectedCandidate: UiResumeFocusCandidate?
+    let beforeEffects: @MainActor () async throws -> Void = {
+        try validateIntent()
+        try await selectedCandidate?.validateAfterSelection(validateIntent: validateIntent)
+        try validateIntent()
+    }
     markUserInitiatedFocusChange()
     // The paused model is stale. Ordinary sync could refocus it after grace expires during an AX query.
     do {
-        try await runLightSession(.menuBarButton, .forceRun, syncFocusBeforeBody: !isResuming) { () throws in
-            try validateIntent()
-            if isResuming && !TrayMenuModel.shared.isEnabled {
-                let candidate = try await uiResumeFocus.candidateToResume(nativeFocus: nativeFocusCandidateForUiResume)
+        try await CommandInvocationIntent.$enable.withValue(intent) {
+            try await runLightSession(.menuBarButton, .forceRun, syncFocusBeforeBody: !isResuming, admissionCheck: validateIntent, beforeEffects: beforeEffects) { () throws in
                 try validateIntent()
-                // Another UI action can finish resuming while the query is suspended.
-                if !TrayMenuModel.shared.isEnabled, let candidate {
-                    // Registration and configured detection callbacks begin only after a stable selection.
-                    guard let window = try await candidate.resolveAfterSelection(validateIntent: validateIntent), window.isBound else {
-                        throw UiResumeFocusError.selectedWindowUnavailable
+                if isResuming && !TrayMenuModel.shared.isEnabled {
+                    let candidate = try await uiResumeFocus.candidateToResume(nativeFocus: nativeFocusCandidateForUiResume)
+                    try validateIntent()
+                    // Another UI action can finish resuming while the query is suspended.
+                    if !TrayMenuModel.shared.isEnabled, let candidate {
+                        // Registration and configured detection callbacks begin only after a stable selection.
+                        guard let window = try await candidate.resolveAfterSelection(validateIntent: validateIntent), window.isBound else {
+                            throw UiResumeFocusError.selectedWindowUnavailable
+                        }
+                        selectedCandidate = candidate
+                        if !TrayMenuModel.shared.isEnabled { _ = window.focusWindow() }
                     }
-                    if !TrayMenuModel.shared.isEnabled { _ = window.focusWindow() }
                 }
+                try validateIntent()
+                _ = try await EnableCommand(args: EnableCmdArgs(rawArgs: [], targetState: requestedState), requestedIntent: intent, beforeEnableEffects: beforeEffects)
+                    .run(.defaultEnv, .emptyStdin)
+                try validateIntent()
             }
-            try validateIntent()
-            _ = try await EnableCommand(args: EnableCmdArgs(rawArgs: [], targetState: requestedState), requestedIntent: intent)
-                .run(.defaultEnv, .emptyStdin)
-            try validateIntent()
         }
     } catch EnableIntentError.superseded {
         // A later explicit request owns the state, including an off request that was already paused.
+        return
+    } catch is CancellationError where intent != enableIntentGeneration {
+        // Nested command dispatch detects the same supersession through its inherited token.
         return
     }
 }

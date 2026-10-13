@@ -4,12 +4,14 @@ import Common
 /// Track the window's native monitor without changing its frame. Keeping the model in sync
 /// makes shortcuts work after a window is dragged across displays while management is off.
 @MainActor
-func syncUnmanagedWindow(_ window: Window) async throws {
+func syncUnmanagedWindow(_ window: Window, admissionCheck: @MainActor () async throws -> Void = {}) async throws {
+    try await admissionCheck()
     guard window.layoutReason == .standard,
           let parent = window.parent,
           parent is Workspace || parent is TilingContainer,
           let rect = try await window.getAxRect()
     else { return }
+    try await admissionCheck()
     let workspace = rect.center.monitorApproximation.activeWorkspace
     if window.nodeWorkspace != workspace {
         resetClosedWindowsCache()

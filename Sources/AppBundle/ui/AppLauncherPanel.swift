@@ -32,7 +32,7 @@ func runAppLauncherWindowAction(_ window: Window, action: () -> Void) {
 /// Shared by current-workspace focus and cross-workspace summon. Admission is captured by the
 /// selection caller before Task starts, and rechecked after the session's awaited initial query.
 @MainActor
-func runAppLauncherWindowSession(_ window: Window, admissionCheck: @MainActor () throws -> Void, action: @MainActor () -> Void) async throws {
+func runAppLauncherWindowSession(_ window: Window, admissionCheck: @MainActor @escaping () throws -> Void, action: @MainActor () -> Void) async throws {
     try await runLightSession(.menuBarButton, .forceRun, admissionCheck: admissionCheck) {
         runAppLauncherWindowAction(window, action: action)
     }

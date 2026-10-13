@@ -121,7 +121,7 @@ func runSocketCommandSession(_ command: any Command, request: ClientRequest, tok
     if command.info.kind.mayChangeFocus { markUserInitiatedFocusChange() }
     return try await runLightSession(.socketServer(command.args), token, admissionCheck: prepared.validateAdmission) {
         let env = CmdEnv(windowId: request.windowId.flatMap { $0 }, workspaceName: request.workspace.flatMap { $0 })
-        let result = try await prepared.commands.runCmdSeq(env, CmdStdin(request.stdin), admissionCheck: prepared.validateAdmission)
+        let result = try await prepared.run(env, CmdStdin(request.stdin))
         return ServerAnswer(exitCode: result.exitCode, stdout: result.stdout.joined(separator: "\n"), stderr: result.stderr.joined(separator: "\n"), serverVersionAndHash: serverVersionAndHash)
     }
 }

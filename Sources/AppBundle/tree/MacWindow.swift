@@ -146,11 +146,13 @@ final class MacWindow: Window {
     }
 
     @MainActor
-    func hideInCorner(_ corner: OptimalHideCorner) async throws {
+    override func hideInCorner(_ corner: OptimalHideCorner, admissionCheck: @MainActor () async throws -> Void = {}) async throws {
+        try await admissionCheck()
         guard let nodeMonitor else { return }
         // Don't accidentally override prevUnhiddenEmulationPosition in case of subsequent `hideInCorner` calls
         if !isHiddenInCorner {
             guard let windowRect = try await getAxRect() else { return }
+            try await admissionCheck()
             // Check for isHiddenInCorner for the second time because of the suspension point above
             if !isHiddenInCorner {
                 let topLeftCorner = windowRect.topLeftCorner
@@ -163,7 +165,9 @@ final class MacWindow: Window {
         let p: CGPoint
         switch corner {
             case .bottomLeftCorner:
-                guard let s = try await getAxSize() else { fallthrough }
+                let size = try await getAxSize()
+                try await admissionCheck()
+                guard let s = size else { fallthrough }
                 // Zoom will jump off if you do one pixel offset https://github.com/nikitabobko/AeroSpace/issues/527
                 let onePixelOffset = macApp.appId == .zoom ? .zero : CGPoint(x: 1, y: -1)
                 p = nodeMonitor.visibleRect.bottomLeftCorner + onePixelOffset + CGPoint(x: -s.width, y: 0)
@@ -172,11 +176,12 @@ final class MacWindow: Window {
                 let onePixelOffset = macApp.appId == .zoom ? .zero : CGPoint(x: 1, y: 1)
                 p = nodeMonitor.visibleRect.bottomRightCorner - onePixelOffset
         }
+        try await admissionCheck()
         setAxFrame(p, nil)
     }
 
     @MainActor
-    func unhideFromCorner(restoreTilingPosition: Bool = false) {
+    override func unhideFromCorner(restoreTilingPosition: Bool = false) {
         guard let prevUnhiddenProportionalPositionInsideWorkspaceRect else { return }
         guard let nodeWorkspace else { return } // hiding only makes sense for workspace windows
         guard let parent else { return }

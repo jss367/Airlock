@@ -61,6 +61,16 @@ struct UiResumeFocusCandidate {
         return selected
     }
 
+    func validateAfterSelection(validateIntent: @MainActor @escaping () throws -> Void = {}) async throws {
+        try validateIntent()
+        guard selectionIsCurrent() else { throw UiResumeFocusError.focusKeptChanging }
+        guard isAvailable() else { throw UiResumeFocusError.selectedWindowUnavailable }
+        guard try await isStillFocused() else { throw UiResumeFocusError.focusKeptChanging }
+        try validateIntent()
+        guard selectionIsCurrent() else { throw UiResumeFocusError.focusKeptChanging }
+        guard isAvailable() else { throw UiResumeFocusError.selectedWindowUnavailable }
+    }
+
     func resolveAfterSelection(validateIntent: @MainActor @escaping () throws -> Void = {}) async throws -> Window? {
         let validate: @MainActor () throws -> Void = {
             try validateIntent()
@@ -158,7 +168,11 @@ private func focusCandidateForUiResume(_ app: NSRunningApplication) async -> UiR
         isAvailable: { !app.isTerminated },
         isStillFocused: {
             guard !app.isTerminated else { return false }
-            return await readOnlyFocusedWindowIdForUiResume(pid: pid, debugId: debugId) == windowId
+            let before = NSWorkspace.shared.frontmostApplication?.processIdentifier
+            guard before == pid || before == myPid else { return false }
+            let currentId = await readOnlyFocusedWindowIdForUiResume(pid: pid, debugId: debugId)
+            let after = NSWorkspace.shared.frontmostApplication?.processIdentifier
+            return currentId == windowId && (after == pid || after == myPid)
         },
         resolveWithAdmission: { validate, admit in
             guard let macApp = try await MacApp.getOrRegister(app) else { return nil }

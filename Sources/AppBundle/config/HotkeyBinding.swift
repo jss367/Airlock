@@ -28,7 +28,7 @@ extension HotKey {
 }
 
 @MainActor var activeMode: String? = mainModeId
-@MainActor func activateMode(_ targetMode: String?) async throws {
+@MainActor func activateMode(_ targetMode: String?, beforeEffects: @MainActor @escaping () async throws -> Void = {}) async throws {
     let targetBindings = activeBindings(targetMode.flatMap { config.modes[$0] }?.bindings ?? [:], config)
     for binding in targetBindings.values where !hotkeys.keys.contains(binding.descriptionWithKeyCode) {
         hotkeys[binding.descriptionWithKeyCode] = HotKey(key: binding.keyCode, modifiers: binding.modifiers, keyDownHandler: {
@@ -65,7 +65,7 @@ extension HotKey {
         broadcastEvent(.modeChanged(mode: targetMode))
         if !config.onModeChanged.isEmpty {
             guard let token: RunSessionGuard = .isServerEnabled else { return }
-            try await runLightSession(.onModeChanged, token) {
+            try await runLightSession(.onModeChanged, token, beforeEffects: beforeEffects) {
                 _ = try await config.onModeChanged.runCmdSeq(.defaultEnv, .emptyStdin)
             }
         }
@@ -175,6 +175,6 @@ func parseBinding(_ raw: String, _ backtrace: TomlBacktrace, _ mapping: [String:
 func runHotkeyCommandSession(_ commands: [any Command]) async throws {
     let prepared = PreparedCommandSession(commands)
     try await runLightSession(.hotkeyBinding, .checkServerIsEnabledOrDie(), admissionCheck: prepared.validateAdmission) {
-        _ = try await prepared.commands.runCmdSeq(.defaultEnv, .emptyStdin, admissionCheck: prepared.validateAdmission)
+        _ = try await prepared.run(.defaultEnv, .emptyStdin)
     }
 }
