@@ -8,9 +8,11 @@ struct EnableCommand: Command {
     /*conforms*/ let shouldResetClosedWindowsCache = false
 
     func run(_: CmdEnv, _ io: CmdIo) async throws -> Bool {
-        let intent = requestedIntent ?? CommandInvocationIntent.enable ?? beginEnableIntent()
-        guard intent == enableIntentGeneration else { return true }
-        return try await CommandInvocationIntent.$enable.withValue(intent) {
+        let intent = requestedIntent ?? CommandInvocationIntent.order ?? beginEnableIntent()
+        guard intent >= latestEnableIntent else { return true }
+        // A trigger's reserved order becomes Enable intent only when it reaches this command.
+        latestEnableIntent = intent
+        return try await CommandInvocationIntent.$order.withValue(intent) {
             try await runWithIntent(intent, io)
         }
     }
@@ -35,17 +37,17 @@ struct EnableCommand: Command {
         if newState {
             for workspace in Workspace.all {
                 for window in workspace.allLeafWindowsRecursive where window.isFloating {
-                    guard intent == enableIntentGeneration else { return true }
+                    guard intent == latestEnableIntent else { return true }
                     let size = try await window.getAxSize()
-                    guard intent == enableIntentGeneration else { return true }
+                    guard intent == latestEnableIntent else { return true }
                     try await beforeEnableEffects()
-                    guard intent == enableIntentGeneration else { return true }
+                    guard intent == latestEnableIntent else { return true }
                     window.lastFloatingSize = size ?? window.lastFloatingSize
                 }
             }
-            guard intent == enableIntentGeneration else { return true }
+            guard intent == latestEnableIntent else { return true }
             try await beforeEnableEffects()
-            guard intent == enableIntentGeneration else { return true }
+            guard intent == latestEnableIntent else { return true }
             TrayMenuModel.shared.isEnabled = true
             registerQuickSwitcherHotkey()
             try await activateMode(mainModeId, beforeEffects: beforeEnableEffects)
@@ -63,22 +65,28 @@ struct EnableCommand: Command {
     }
 }
 
-@MainActor private var enableIntentGeneration = 0
+@MainActor private var invocationSequence = 0
+@MainActor private var latestEnableIntent = 0
 private enum EnableIntentError: Error { case superseded }
+@MainActor private func reserveInvocationOrder() -> Int {
+    invocationSequence += 1
+    return invocationSequence
+}
 @MainActor private func beginEnableIntent() -> Int {
-    enableIntentGeneration += 1
-    return enableIntentGeneration
+    let order = reserveInvocationOrder()
+    latestEnableIntent = order
+    return order
 }
 
 /// Nested trigger-binding/config command sequences share the accepted invocation. New socket,
 /// hotkey, or UI entrypoints still reserve their own intent before their session query.
 private enum CommandInvocationIntent {
-    @TaskLocal static var enable: Int?
+    @TaskLocal static var order: Int?
 }
 
 @MainActor
 func validateInheritedEnableIntent() throws {
-    if let intent = CommandInvocationIntent.enable, intent != enableIntentGeneration { throw CancellationError() }
+    if let intent = CommandInvocationIntent.order, intent < latestEnableIntent { throw CancellationError() }
 }
 
 /// Each accepted invocation owns a fresh token. Parsed/configured commands remain reusable;
@@ -89,10 +97,11 @@ struct PreparedCommandSession {
     private let intent: Int?
 
     init(_ commands: [any Command]) {
-        // A trigger can reach Enable through a binding changed by an earlier command/reload.
-        // Reserve its invocation now, but resolve the live binding only when the trigger executes.
-        let mayEnable = commands.contains { $0 is EnableCommand || $0 is TriggerBindingCommand }
-        let intent = mayEnable ? beginEnableIntent() : nil
+        // Triggers need an order before the query, since a live/reloaded binding may reach Enable.
+        // They do not supersede actual Enable intent unless they execute an Enable command.
+        let intent: Int? = if commands.contains(where: { $0 is EnableCommand }) { beginEnableIntent() }
+        else if commands.contains(where: { $0 is TriggerBindingCommand }) { reserveInvocationOrder() }
+        else { nil }
         self.intent = intent
         self.commands = commands.map { command in
             guard let enable = command as? EnableCommand else { return command }
@@ -104,23 +113,23 @@ struct PreparedCommandSession {
 
     func run(_ env: CmdEnv, _ stdin: consuming CmdStdin) async throws -> CmdResult {
         let io = CmdIo(stdin: stdin)
-        let success = try await CommandInvocationIntent.$enable.withValue(intent) {
+        let success = try await CommandInvocationIntent.$order.withValue(intent) {
             try await commands.runCmdSeq(env, io, admissionCheck: validateAdmission)
         }
         return CmdResult(stdout: io.stdout, stderr: io.stderr, exitCode: success ? 0 : 1)
     }
 
     func validateAdmission() throws {
-        if let intent, intent != enableIntentGeneration { throw CancellationError() }
+        if let intent, intent < latestEnableIntent { throw CancellationError() }
     }
 }
 
 /// Capture before queuing a feature action. Even a Pause followed by Resume supersedes that task.
 @MainActor
 func captureEnabledSessionAdmission() -> @MainActor () throws -> Void {
-    let intent = enableIntentGeneration
+    let intent = latestEnableIntent
     return {
-        guard TrayMenuModel.shared.isEnabled, intent == enableIntentGeneration else { throw CancellationError() }
+        guard TrayMenuModel.shared.isEnabled, intent == latestEnableIntent else { throw CancellationError() }
     }
 }
 
@@ -137,7 +146,7 @@ func runEnableCommandFromUi(_ targetState: EnableCmdArgs.State) async throws {
         : targetState
     let intent = beginEnableIntent()
     let validateIntent: @MainActor () throws -> Void = {
-        guard intent == enableIntentGeneration else { throw EnableIntentError.superseded }
+        guard intent == latestEnableIntent else { throw EnableIntentError.superseded }
     }
     let isResuming = !TrayMenuModel.shared.isEnabled && requestedState == .on
     var selectedCandidate: UiResumeFocusCandidate?
@@ -149,7 +158,7 @@ func runEnableCommandFromUi(_ targetState: EnableCmdArgs.State) async throws {
     markUserInitiatedFocusChange()
     // The paused model is stale. Ordinary sync could refocus it after grace expires during an AX query.
     do {
-        try await CommandInvocationIntent.$enable.withValue(intent) {
+        try await CommandInvocationIntent.$order.withValue(intent) {
             try await runLightSession(.menuBarButton, .forceRun, syncFocusBeforeBody: !isResuming, admissionCheck: validateIntent, beforeEffects: beforeEffects) { () throws in
                 try validateIntent()
                 if isResuming && !TrayMenuModel.shared.isEnabled {
@@ -177,7 +186,7 @@ func runEnableCommandFromUi(_ targetState: EnableCmdArgs.State) async throws {
     } catch EnableIntentError.superseded {
         // A later explicit request owns the state, including an off request that was already paused.
         return
-    } catch is CancellationError where intent != enableIntentGeneration {
+    } catch is CancellationError where intent != latestEnableIntent {
         // Nested command dispatch detects the same supersession through its inherited token.
         return
     }
