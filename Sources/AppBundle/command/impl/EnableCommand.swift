@@ -7,16 +7,16 @@ struct EnableCommand: Command {
     var beforeEnableEffects: @MainActor () async throws -> Void = {}
     /*conforms*/ let shouldResetClosedWindowsCache = false
 
-    func run(_ env: CmdEnv, _ io: CmdIo) async throws -> Bool {
+    func run(_: CmdEnv, _ io: CmdIo) async throws -> Bool {
         let intent = requestedIntent ?? CommandInvocationIntent.enable ?? beginEnableIntent()
         guard intent == enableIntentGeneration else { return true }
         return try await CommandInvocationIntent.$enable.withValue(intent) {
-            try await runWithIntent(intent, env, io)
+            try await runWithIntent(intent, io)
         }
     }
 
     @MainActor
-    private func runWithIntent(_ intent: Int, _ env: CmdEnv, _ io: CmdIo) async throws -> Bool {
+    private func runWithIntent(_ intent: Int, _ io: CmdIo) async throws -> Bool {
         let prevState = TrayMenuModel.shared.isEnabled
         let newState: Bool = switch args.targetState.val {
             case .on: true
@@ -161,8 +161,11 @@ func runEnableCommandFromUi(_ targetState: EnableCmdArgs.State) async throws {
                         guard let window = try await candidate.resolveAfterSelection(validateIntent: validateIntent), window.isBound else {
                             throw UiResumeFocusError.selectedWindowUnavailable
                         }
+                        try validateIntent()
                         selectedCandidate = candidate
-                        if !TrayMenuModel.shared.isEnabled { _ = window.focusWindow() }
+                        // A nested detection Enable belongs to this invocation. Its state change
+                        // doesn't replace the validated selection; only a newer intent does.
+                        _ = window.focusWindow()
                     }
                 }
                 try validateIntent()
