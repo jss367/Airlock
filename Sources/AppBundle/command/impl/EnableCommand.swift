@@ -89,10 +89,12 @@ struct PreparedCommandSession {
     private let intent: Int?
 
     init(_ commands: [any Command]) {
-        let (snapshot, containsEnable) = snapshotBindingCommands(commands, visiting: [])
-        let intent = containsEnable ? beginEnableIntent() : nil
+        // A trigger can reach Enable through a binding changed by an earlier command/reload.
+        // Reserve its invocation now, but resolve the live binding only when the trigger executes.
+        let mayEnable = commands.contains { $0 is EnableCommand || $0 is TriggerBindingCommand }
+        let intent = mayEnable ? beginEnableIntent() : nil
         self.intent = intent
-        self.commands = snapshot.map { command in
+        self.commands = commands.map { command in
             guard let enable = command as? EnableCommand else { return command }
             var prepared = enable
             prepared.requestedIntent = intent
@@ -111,29 +113,6 @@ struct PreparedCommandSession {
     func validateAdmission() throws {
         if let intent, intent != enableIntentGeneration { throw CancellationError() }
     }
-}
-
-/// Freeze nested binding resolution for this invocation before its prelude; never mutate config.
-/// A visited binding stops preparation recursion while leaving existing runtime cycle behavior intact.
-@MainActor
-private func snapshotBindingCommands(_ commands: [any Command], visiting: Set<String>) -> ([any Command], Bool) {
-    var containsEnable = false
-    let snapshot: [any Command] = commands.map { command in
-        if command is EnableCommand { containsEnable = true; return command }
-        guard let trigger = command as? TriggerBindingCommand else { return command }
-        let key = trigger.args.mode + "\0" + trigger.args.binding.val
-        guard !visiting.contains(key) else { return command }
-        guard let mode = config.modes[trigger.args.mode] else {
-            return TriggerBindingCommand(args: trigger.args, invocationError: "Mode '\(trigger.args.mode)' doesn't exist. Available modes: \(config.modes.keys.joined(separator: ","))")
-        }
-        guard let binding = mode.bindings.values.first(where: { $0.descriptionWithKeyNotation == trigger.args.binding.val }) else {
-            return TriggerBindingCommand(args: trigger.args, invocationError: "Binding '\(trigger.args.binding.val)' is not presented in mode '\(trigger.args.mode)'")
-        }
-        let (nested, nestedEnable) = snapshotBindingCommands(binding.commands, visiting: visiting.union([key]))
-        containsEnable = containsEnable || nestedEnable
-        return TriggerBindingCommand(args: trigger.args, invocationCommands: nested)
-    }
-    return (snapshot, containsEnable)
 }
 
 /// Capture before queuing a feature action. Even a Pause followed by Resume supersedes that task.

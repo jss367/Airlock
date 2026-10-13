@@ -45,7 +45,7 @@ import XCTest
             try await runHotkeyCommandSession(commands)
             XCTAssertFalse(TrayMenuModel.shared.isEnabled)
             XCTAssertNil((nested as? EnableCommand)?.requestedIntent)
-            XCTAssertNil((trigger as? TriggerBindingCommand)?.invocationCommands)
+            XCTAssertTrue(trigger.equals(parseCommand("trigger-binding option-x --mode fixture").cmdOrDie))
         }
     }
     func testGenuinelyNewSocketRequestCancelsNestedAndOuterRemainder() async throws {
