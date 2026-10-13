@@ -65,7 +65,11 @@ extension HotKey {
         broadcastEvent(.modeChanged(mode: targetMode))
         if !config.onModeChanged.isEmpty {
             guard let token: RunSessionGuard = .isServerEnabled else { return }
-            try await runLightSession(.onModeChanged, token, beforeEffects: beforeEffects) {
+            try await adoptResumeWindowBeforeModeCallbacks()
+            try await runLightSession(.onModeChanged, token, beforeEffects: {
+                try await validateResumeWindowBeforeModeEffects()
+                try await beforeEffects()
+            }) {
                 _ = try await config.onModeChanged.runCmdSeq(.defaultEnv, .emptyStdin)
             }
         }

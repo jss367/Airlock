@@ -82,6 +82,28 @@ private enum EnableIntentError: Error { case superseded }
 /// hotkey, or UI entrypoints still reserve their own intent before their session query.
 private enum CommandInvocationIntent {
     @TaskLocal static var order: Int?
+    @TaskLocal static var resumeWindowAdmission: ResumeWindowAdmission?
+}
+
+/// A moved candidate must be re-adopted before a nested mode session reads modeled focus.
+private struct ResumeWindowAdmission: Sendable {
+    let order: Int
+    let validate: @MainActor () async throws -> Void
+    let adopt: @MainActor () async throws -> Void
+}
+
+@MainActor
+func adoptResumeWindowBeforeModeCallbacks() async throws {
+    guard let admission = CommandInvocationIntent.resumeWindowAdmission,
+          admission.order == CommandInvocationIntent.order else { return }
+    try await admission.adopt()
+}
+
+@MainActor
+func validateResumeWindowBeforeModeEffects() async throws {
+    guard let admission = CommandInvocationIntent.resumeWindowAdmission,
+          admission.order == CommandInvocationIntent.order else { return }
+    try await admission.validate()
 }
 
 @MainActor
@@ -168,22 +190,40 @@ func runEnableCommandFromUi(_ targetState: EnableCmdArgs.State) async throws {
                     // Another UI action can finish resuming while the query is suspended.
                     if !TrayMenuModel.shared.isEnabled, let candidate {
                         // Registration and configured detection callbacks begin only after a stable selection.
-                        guard let window = try await candidate.resolveAfterSelection(validateIntent: validateIntent, beforeWindowCallbacks: { window in
-                            try validateIntent()
+                        var resolvingWindow: Window?
+                        var resolvedWindow: Window?
+                        let admission = ResumeWindowAdmission(order: intent, validate: {
+                            guard let window = resolvingWindow else { return }
+                            try await candidate.validateAfterSelection(validateIntent: validateIntent)
                             guard window.isBound else { throw UiResumeFocusError.selectedWindowUnavailable }
-                            if !adoptedBeforeCallbacks {
-                                selectedCandidate = candidate
-                                _ = window.focusWindow()
-                                adoptedBeforeCallbacks = true
-                            }
-                        }), window.isBound else {
+                        }, adopt: {
+                            guard let window = resolvingWindow else { return }
+                            try await candidate.validateAfterSelection(validateIntent: validateIntent)
+                            guard window.isBound else { throw UiResumeFocusError.selectedWindowUnavailable }
+                            try validateIntent()
+                            selectedCandidate = candidate
+                            _ = window.focusWindow()
+                        })
+                        try await CommandInvocationIntent.$resumeWindowAdmission.withValue(admission) {
+                            resolvedWindow = try await candidate.resolveAfterSelection(validateIntent: validateIntent, beforeWindowCallbacks: { window in
+                                try validateIntent()
+                                guard window.isBound else { throw UiResumeFocusError.selectedWindowUnavailable }
+                                resolvingWindow = window
+                                if !adoptedBeforeCallbacks {
+                                    selectedCandidate = candidate
+                                    _ = window.focusWindow()
+                                    adoptedBeforeCallbacks = true
+                                }
+                            })
+                        }
+                        guard let window = resolvedWindow, window.isBound else {
                             throw UiResumeFocusError.selectedWindowUnavailable
                         }
                         try validateIntent()
                         selectedCandidate = candidate
                         // A nested detection Enable belongs to this invocation. Its state change
                         // doesn't replace the validated selection; only a newer intent does.
-                        if !adoptedBeforeCallbacks { _ = window.focusWindow() }
+                        _ = window.focusWindow()
                     }
                 }
                 try validateIntent()

@@ -10,6 +10,7 @@ import XCTest
         uiResumeFocus.reset()
         DetectionEnableFixtureCommand.calls = 0
         DetectionModeFixtureCommand.focusIds = []
+        DetectionModeFixtureCommand.workspaces = []
         DetectionNewPauseFixtureCommand.newer = nil
     }
     override func tearDown() async throws {
@@ -33,7 +34,19 @@ import XCTest
     func testNewerPauseStillWinsWithNestedModeCallbackSession() async throws {
         try await exerciseDetectionResume(newerUserPause: true, modeCallbacks: true)
     }
-    private func exerciseDetectionResume(newerUserPause: Bool, modeCallbacks: Bool = false) async throws {
+    func testMoveOnlyDetectionRuleFinalAdoptionFollowsCandidateToB() async throws {
+        try await exerciseDetectionResume(newerUserPause: false, move: true)
+    }
+    func testMoveThenNestedEnableModeSessionFollowsCandidateToB() async throws {
+        try await exerciseDetectionResume(newerUserPause: false, modeCallbacks: true, move: true)
+    }
+    func testNewerPauseStillWinsAfterMoveOnlyDetectionRule() async throws {
+        try await exerciseDetectionResume(newerUserPause: true, move: true)
+    }
+    func testNewerSameAppFocusDuringMovedCandidateModeQueryIsPreserved() async throws {
+        try await exerciseDetectionResume(newerUserPause: false, modeCallbacks: true, move: true, changeDuringModeQuery: true)
+    }
+    private func exerciseDetectionResume(newerUserPause: Bool, modeCallbacks: Bool = false, move: Bool = false, changeDuringModeQuery: Bool = false) async throws {
         let old = TestWindow.new(id: 391, parent: Workspace.get(byName: "old").rootTilingContainer)
         let newer = TestWindow.new(id: 392, parent: Workspace.get(byName: "newer").rootTilingContainer)
         XCTAssertTrue(old.focusWindow())
@@ -48,7 +61,9 @@ import XCTest
             config.preventFocusStealing = .always
             config.onModeChanged = [DetectionModeFixtureCommand()]
         }
-        var commands: [any Command] = [DetectionEnableFixtureCommand()]
+        var commands: [any Command] = []
+        if move { commands.append(parseCommand("move-node-to-workspace B").cmdOrDie) }
+        if !move || modeCallbacks { commands.append(DetectionEnableFixtureCommand()) }
         if newerUserPause {
             DetectionNewPauseFixtureCommand.newer = newer
             commands.append(DetectionNewPauseFixtureCommand())
@@ -64,7 +79,7 @@ import XCTest
                     beforeModelRegistration: validate,
                     registerModelWindow: { id in
                         XCTAssertTrue(cachePrimed)
-                        let selected = TestWindow.new(id: id, parent: Workspace.get(byName: "selected").rootTilingContainer)
+                        let selected = TestWindow.new(id: id, parent: Workspace.get(byName: move ? "old" : "selected").rootTilingContainer)
                         registered = selected
                         selected.nativeFocus() // Synthetic native identity exists independently of modeled focus.
                         if modeCallbacks {
@@ -73,16 +88,35 @@ import XCTest
                             XCTAssertFalse(clock.isUserInitiatedFocusChange)
                             resetFocusStealingPreventionForTests()
                         }
+                        if changeDuringModeQuery {
+                            appForTests = DetectionModeQueryFixtureApp {
+                                await Task.yield()
+                                newer.nativeFocus()
+                                return newer
+                            }
+                        }
                         try await tryOnWindowDetected(selected, beforeCallbacks: { try await admit(selected) })
                         return selected
                     },
                 )
             })
         }
+        if changeDuringModeQuery {
+            do { try await runEnableCommandFromUi(.on); XCTFail("Changed focus must abort before mode sync applies") }
+            catch UiResumeFocusError.focusKeptChanging {}
+            XCTAssertTrue(TestApp.shared.focusedWindow === newer)
+            XCTAssertEqual(DetectionModeFixtureCommand.focusIds, [])
+            XCTAssertEqual(registered?.nodeWorkspace?.name, "B")
+            return
+        }
         try await runEnableCommandFromUi(.on)
-        XCTAssertEqual(DetectionEnableFixtureCommand.calls, 1)
+        XCTAssertEqual(DetectionEnableFixtureCommand.calls, !move || modeCallbacks ? 1 : 0)
         XCTAssertNotNil(registered)
-        if modeCallbacks { XCTAssertEqual(DetectionModeFixtureCommand.focusIds, [393]) }
+        if modeCallbacks {
+            XCTAssertEqual(DetectionModeFixtureCommand.focusIds, [393])
+            if move { XCTAssertEqual(DetectionModeFixtureCommand.workspaces, ["B"]) }
+        }
+        if move { XCTAssertEqual(registered?.nodeWorkspace?.name, "B") }
         if newerUserPause {
             XCTAssertFalse(TrayMenuModel.shared.isEnabled)
             XCTAssertTrue(focus.windowOrNil === newer)
@@ -121,10 +155,23 @@ private struct DetectionNewPauseFixtureCommand: Command {
 /// Only observes in-memory modeled focus; never launches, registers keys or calls AX.
 private struct DetectionModeFixtureCommand: Command {
     @MainActor static var focusIds: [UInt32] = []
+    @MainActor static var workspaces: [String] = []
     let args = EnableCmdArgs(rawArgs: [], targetState: .on)
     let shouldResetClosedWindowsCache = false
     func run(_ env: CmdEnv, _ io: CmdIo) -> Bool {
         if let id = focus.windowOrNil?.windowId { Self.focusIds.append(id) }
+        Self.workspaces.append(focus.workspace.name)
         return true
     }
+}
+
+private final class DetectionModeQueryFixtureApp: AbstractApp {
+    let pid: Int32 = 999_411
+    let rawAppBundleId: String? = "fixture.detection-mode-query"
+    let name: String? = "Fixture"
+    let execPath: String? = nil
+    let bundlePath: String? = nil
+    private let query: @MainActor () async throws -> Window?
+    init(_ query: @MainActor @escaping () async throws -> Window?) { self.query = query }
+    @MainActor func getFocusedWindow() async throws -> Window? { try await query() }
 }
