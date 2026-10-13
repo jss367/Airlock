@@ -47,12 +47,20 @@ struct EnableCommand: Command {
 /// socket server does before `airlock enable`
 @MainActor
 func runEnableCommandFromUi(_ targetState: EnableCmdArgs.State) async throws {
+    let isResuming = !TrayMenuModel.shared.isEnabled && targetState != .off
     markUserInitiatedFocusChange()
-    try await runLightSession(.menuBarButton, .forceRun) { () throws in
-        if !TrayMenuModel.shared.isEnabled && targetState != .off {
-            let window = try await uiResumeFocus.windowToResume(nativeFocus: getNativeFocusedWindow)
+    // The paused model is stale. Ordinary sync could refocus it after grace expires during an AX query.
+    try await runLightSession(.menuBarButton, .forceRun, syncFocusBeforeBody: !isResuming) { () throws in
+        if isResuming && !TrayMenuModel.shared.isEnabled {
+            let candidate = try await uiResumeFocus.candidateToResume(nativeFocus: nativeFocusCandidateForUiResume)
             // Another UI action can finish resuming while the query is suspended.
-            if !TrayMenuModel.shared.isEnabled, let window, window.isBound { _ = window.focusWindow() }
+            if !TrayMenuModel.shared.isEnabled, let candidate {
+                // Registration and configured detection callbacks begin only after a stable selection.
+                guard let window = try await candidate.resolveAfterSelection(), window.isBound else {
+                    throw UiResumeFocusError.selectedWindowUnavailable
+                }
+                if !TrayMenuModel.shared.isEnabled { _ = window.focusWindow() }
+            }
         }
         _ = try await EnableCommand(args: EnableCmdArgs(rawArgs: [], targetState: targetState))
             .run(.defaultEnv, .emptyStdin)

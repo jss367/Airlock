@@ -56,6 +56,7 @@ func runRefreshSessionBlocking(
 func runLightSession<T>(
     _ event: RefreshSessionEvent,
     _: RunSessionGuard,
+    syncFocusBeforeBody: Bool = true,
     body: @MainActor () async throws -> T,
 ) async throws -> T {
     let state = signposter.beginInterval(#function, "event: \(event) axTaskLocalAppThreadToken: \(axTaskLocalAppThreadToken?.idForDebug)")
@@ -63,14 +64,14 @@ func runLightSession<T>(
     focusEvents.cancelRefresh() // Give priority to runSession
     return try await $refreshSessionEvent.withValue(event) {
         try await $_isStartup.withValue(event.isStartup) {
-            let focusSyncedFromMacOs = try await focusEvents.syncFocus(
+            let focusSyncedFromMacOs = syncFocusBeforeBody ? try await focusEvents.syncFocus(
                 consumingEvidence: false,
                 query: queryNativeFocusForSession,
                 apply: updateFocusCache,
-            )
+            ) : false
             let focusBefore = focus.windowOrNil
 
-            refreshModel(focusSyncedFromMacOs: focusSyncedFromMacOs)
+            if syncFocusBeforeBody { refreshModel(focusSyncedFromMacOs: focusSyncedFromMacOs) }
             let result = try await body()
             refreshModel()
 
