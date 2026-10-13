@@ -40,10 +40,7 @@ extension HotKey {
                         binding: binding.descriptionWithKeyNotation,
                     ))
                     await withErrorReporting("Running a keyboard shortcut", userMessage: "Airlock could not complete the keyboard shortcut.") {
-                        try await runLightSession(.hotkeyBinding, .checkServerIsEnabledOrDie()) { () throws in
-                            _ = try await config.modes[activeMode]?.bindings[binding.descriptionWithKeyCode]?.commands
-                                .runCmdSeq(.defaultEnv, .emptyStdin)
-                        }
+                        try await runHotkeyCommandSession(config.modes[activeMode]?.bindings[binding.descriptionWithKeyCode]?.commands ?? [])
                     }
                 }
             }
@@ -170,5 +167,14 @@ func parseBinding(_ raw: String, _ backtrace: TomlBacktrace, _ mapping: [String:
         key.flatMap { key -> ParsedToml<(NSEvent.ModifierFlags, Key)> in
             .success((modifiers, key))
         }
+    }
+}
+
+/// The same command-session path used by registered hotkeys, without key registration in tests.
+@MainActor
+func runHotkeyCommandSession(_ commands: [any Command]) async throws {
+    let prepared = PreparedCommandSession(commands)
+    try await runLightSession(.hotkeyBinding, .checkServerIsEnabledOrDie(), admissionCheck: prepared.validateAdmission) {
+        _ = try await prepared.commands.runCmdSeq(.defaultEnv, .emptyStdin, admissionCheck: prepared.validateAdmission)
     }
 }

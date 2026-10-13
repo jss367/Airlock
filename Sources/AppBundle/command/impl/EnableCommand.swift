@@ -3,11 +3,11 @@ import Common
 
 struct EnableCommand: Command {
     let args: EnableCmdArgs
-    var uiIntent: Int? = nil
+    var requestedIntent: Int? = nil
     /*conforms*/ let shouldResetClosedWindowsCache = false
 
     func run(_ env: CmdEnv, _ io: CmdIo) async throws -> Bool {
-        let intent = uiIntent ?? beginEnableIntent()
+        let intent = requestedIntent ?? beginEnableIntent()
         guard intent == enableIntentGeneration else { return true }
         let prevState = TrayMenuModel.shared.isEnabled
         let newState: Bool = switch args.targetState.val {
@@ -55,6 +55,27 @@ private enum EnableIntentError: Error { case superseded }
     return enableIntentGeneration
 }
 
+/// Each accepted invocation owns a fresh token. Parsed/configured commands remain reusable;
+/// only ephemeral copies passed to this invocation's body carry the reserved intent.
+@MainActor
+struct PreparedCommandSession {
+    let commands: [any Command]
+    private let intent: Int?
+
+    init(_ commands: [any Command]) {
+        let intent = commands.contains { $0 is EnableCommand } ? beginEnableIntent() : nil
+        self.intent = intent
+        self.commands = commands.map { command in
+            guard let enable = command as? EnableCommand else { return command }
+            return EnableCommand(args: enable.args, requestedIntent: intent)
+        }
+    }
+
+    func validateAdmission() throws {
+        if let intent, intent != enableIntentGeneration { throw CancellationError() }
+    }
+}
+
 /// Capture before queuing a feature action. Even a Pause followed by Resume supersedes that task.
 @MainActor
 func captureEnabledSessionAdmission() -> @MainActor () throws -> Void {
@@ -98,7 +119,7 @@ func runEnableCommandFromUi(_ targetState: EnableCmdArgs.State) async throws {
                 }
             }
             try validateIntent()
-            _ = try await EnableCommand(args: EnableCmdArgs(rawArgs: [], targetState: requestedState), uiIntent: intent)
+            _ = try await EnableCommand(args: EnableCmdArgs(rawArgs: [], targetState: requestedState), requestedIntent: intent)
                 .run(.defaultEnv, .emptyStdin)
             try validateIntent()
         }
