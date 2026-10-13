@@ -16,7 +16,7 @@ final class MacWindow: Window {
 
     @MainActor
     @discardableResult
-    static func getOrRegister(windowId: UInt32, macApp: MacApp, beforeRegistration: @MainActor () throws -> Void = {}) async throws -> MacWindow {
+    static func getOrRegister(windowId: UInt32, macApp: MacApp, beforeRegistration: @MainActor () throws -> Void = {}, beforeDetectionCallbacks: @MainActor () async throws -> Void = {}) async throws -> MacWindow {
         try beforeRegistration()
         if let existing = allWindowsMap[windowId] { return existing }
         let rect = try await macApp.getAxRect(windowId)
@@ -40,7 +40,7 @@ final class MacWindow: Window {
             ? try await restoreClosedWindowsCacheIfNeeded(newlyDetectedWindow: window)
             : false
         if !restored {
-            try await tryOnWindowDetected(window)
+            try await tryOnWindowDetected(window, beforeCallbacks: beforeDetectionCallbacks)
         }
         return window
     }
@@ -261,19 +261,19 @@ private func unbindAndGetBindingDataForNewTilingWindow(_ workspace: Workspace, w
 }
 
 @MainActor
-func tryOnWindowDetected(_ window: Window) async throws {
+func tryOnWindowDetected(_ window: Window, beforeCallbacks: @MainActor () async throws -> Void = {}) async throws {
     guard let parent = window.parent else { return }
     switch parent.cases {
         case .tilingContainer, .workspace, .macosMinimizedWindowsContainer,
              .macosFullscreenWindowsContainer, .macosHiddenAppsWindowsContainer:
-            try await onWindowDetected(window)
+            try await onWindowDetected(window, beforeCallbacks: beforeCallbacks)
         case .macosPopupWindowsContainer:
             break
     }
 }
 
 @MainActor
-private func onWindowDetected(_ window: Window) async throws {
+private func onWindowDetected(_ window: Window, beforeCallbacks: @MainActor () async throws -> Void) async throws {
     broadcastEvent(.windowDetected(
         windowId: window.windowId,
         workspace: window.nodeWorkspace?.name,
@@ -286,8 +286,10 @@ private func onWindowDetected(_ window: Window) async throws {
         // here would report that session (an ax notification, say) as what moved the focus. Name the
         // callback instead — but keep startup's session, which suppresses focus callbacks entirely.
         let event: RefreshSessionEvent = isStartup ? .startup : .onWindowDetected
-        _ = try await $refreshSessionEvent.withValue(event) {
-            try await callback.run.runCmdSeq(.defaultEnv.copy(\.windowId, window.windowId), .emptyStdin)
+        try await runAdmittedWindowDetectionCallback(beforeCallbacks: beforeCallbacks) {
+            _ = try await $refreshSessionEvent.withValue(event) {
+                try await callback.run.runCmdSeq(.defaultEnv.copy(\.windowId, window.windowId), .emptyStdin)
+            }
         }
         if !callback.checkFurtherCallbacks {
             return
@@ -315,4 +317,12 @@ extension WindowDetectedCallback {
         }
         return true
     }
+}
+
+/// Check after metadata/title awaits and immediately before admitting configured commands.
+/// Commands already admitted are not rolled back if focus changes while they run.
+@MainActor
+func runAdmittedWindowDetectionCallback(beforeCallbacks: @MainActor () async throws -> Void, run: @MainActor () async throws -> Void) async throws {
+    try await beforeCallbacks()
+    try await run()
 }

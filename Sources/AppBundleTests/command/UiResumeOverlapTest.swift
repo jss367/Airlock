@@ -20,7 +20,13 @@ import XCTest
     func testExternalEnableDuringToggleResumeRemainsEnabled() async throws {
         try await exerciseOverlappingResume(externalEnable: true)
     }
-    private func exerciseOverlappingResume(externalEnable: Bool) async throws {
+    func testLaterPauseWinsAfterSecondResumeCompletes() async throws {
+        try await exerciseOverlappingResume(externalEnable: false, pauseAgain: true)
+    }
+    func testLaterPauseWinsAfterExternalEnableCompletes() async throws {
+        try await exerciseOverlappingResume(externalEnable: true, pauseAgain: true)
+    }
+    private func exerciseOverlappingResume(externalEnable: Bool, pauseAgain: Bool = false) async throws {
         let window = TestWindow.new(id: 211, parent: Workspace.get(byName: "external").rootTilingContainer)
         XCTAssertTrue(window.focusWindow())
         _ = try await parseCommand("enable off").cmdOrDie.run(.defaultEnv, .emptyStdin)
@@ -48,11 +54,65 @@ import XCTest
             try await runEnableCommandFromUi(.toggle)
         }
         XCTAssertTrue(TrayMenuModel.shared.isEnabled)
+        if pauseAgain { try await runEnableCommandFromUi(.off) }
         await release.signalToAll()
         try await first.value
         resetFocusCacheForTests()
-        XCTAssertTrue(TrayMenuModel.shared.isEnabled)
+        XCTAssertEqual(TrayMenuModel.shared.isEnabled, !pauseAgain)
         XCTAssertEqual(resolutions, externalEnable ? 1 : 2)
+    }
+    func testPendingResumeCannotOverrideLaterExplicitOffWhileAlreadyPaused() async throws {
+        let window = TestWindow.new(id: 231, parent: Workspace.get(byName: "external").rootTilingContainer)
+        _ = try await parseCommand("enable off").cmdOrDie.run(.defaultEnv, .emptyStdin)
+        appForTests = nil
+        let started = AwaitableOneTimeBroadcastLatch()
+        let release = AwaitableOneTimeBroadcastLatch()
+        uiResumeFocus.rememberCandidate {
+            UiResumeFocusCandidate(resolve: {
+                await started.signalToAll()
+                try await release.await()
+                return window
+            })
+        }
+        let first = Task { @MainActor in try await runEnableCommandFromUi(.on) }
+        defer { first.cancel(); Task { await release.signalToAll() } }
+        try await awaitResumeGate(started)
+        _ = try await parseCommand("enable off").cmdOrDie.run(.defaultEnv, .emptyStdin)
+        await release.signalToAll()
+        try await first.value
+        XCTAssertFalse(TrayMenuModel.shared.isEnabled)
+    }
+    func testSameAppChangeBeforeCallbackAdmissionRunsNoCommands() async throws {
+        try await exerciseCallbackAdmission(changeBeforeAdmission: true)
+    }
+    func testAlreadyAdmittedCallbackEffectsAreNotRolledBack() async throws {
+        try await exerciseCallbackAdmission(changeBeforeAdmission: false)
+    }
+    private func exerciseCallbackAdmission(changeBeforeAdmission: Bool) async throws {
+        let selected = TestWindow.new(id: 241, parent: Workspace.get(byName: "selected").rootTilingContainer)
+        let newer = TestWindow.new(id: 242, parent: Workspace.get(byName: "newer").rootTilingContainer)
+        selected.nativeFocus()
+        var callbackCommands = 0
+        let candidate = UiResumeFocusCandidate(isStillFocused: {
+            TestApp.shared.focusedWindow === selected
+        }, resolveWithAdmission: { validate, admit in
+            try validate()
+            // Synthetic metadata/debug/cache/title await; no AX or configured commands.
+            await Task.yield()
+            if changeBeforeAdmission { newer.nativeFocus() }
+            try await runAdmittedWindowDetectionCallback(beforeCallbacks: admit) {
+                callbackCommands += 1
+                await Task.yield()
+                if !changeBeforeAdmission { newer.nativeFocus() }
+            }
+            return selected
+        })
+        do {
+            _ = try await candidate.resolveAfterSelection()
+            XCTFail("Same-app identity change must reject the older selection")
+        } catch UiResumeFocusError.focusKeptChanging {}
+        XCTAssertEqual(callbackCommands, changeBeforeAdmission ? 0 : 1)
+        XCTAssertTrue(TestApp.shared.focusedWindow === newer)
     }
     func testSameAppWindowChangeDuringResolutionDoesNotOverrideNewerWindow() async throws {
         let old = TestWindow.new(id: 221, parent: Workspace.get(byName: "old").rootTilingContainer)

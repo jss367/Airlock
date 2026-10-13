@@ -3,9 +3,12 @@ import Common
 
 struct EnableCommand: Command {
     let args: EnableCmdArgs
+    var uiIntent: Int? = nil
     /*conforms*/ let shouldResetClosedWindowsCache = false
 
     func run(_ env: CmdEnv, _ io: CmdIo) async throws -> Bool {
+        let intent = uiIntent ?? beginEnableIntent()
+        guard intent == enableIntentGeneration else { return true }
         let prevState = TrayMenuModel.shared.isEnabled
         let newState: Bool = switch args.targetState.val {
             case .on: true
@@ -40,6 +43,13 @@ struct EnableCommand: Command {
     }
 }
 
+@MainActor private var enableIntentGeneration = 0
+private enum EnableIntentError: Error { case superseded }
+@MainActor private func beginEnableIntent() -> Int {
+    enableIntentGeneration += 1
+    return enableIntentGeneration
+}
+
 /// Pause or resume from Airlock's own UI. Nothing records focus while paused, so the session's
 /// focus sync would treat the window the user worked in meanwhile as a steal, push focus back to
 /// the pre-pause window, and the resumed layout would hide the user's window. Clicks on Airlock's
@@ -51,22 +61,34 @@ func runEnableCommandFromUi(_ targetState: EnableCmdArgs.State) async throws {
     let requestedState: EnableCmdArgs.State = targetState == .toggle
         ? (TrayMenuModel.shared.isEnabled ? .off : .on)
         : targetState
+    let intent = beginEnableIntent()
+    let validateIntent: @MainActor () throws -> Void = {
+        guard intent == enableIntentGeneration else { throw EnableIntentError.superseded }
+    }
     let isResuming = !TrayMenuModel.shared.isEnabled && requestedState == .on
     markUserInitiatedFocusChange()
     // The paused model is stale. Ordinary sync could refocus it after grace expires during an AX query.
-    try await runLightSession(.menuBarButton, .forceRun, syncFocusBeforeBody: !isResuming) { () throws in
-        if isResuming && !TrayMenuModel.shared.isEnabled {
-            let candidate = try await uiResumeFocus.candidateToResume(nativeFocus: nativeFocusCandidateForUiResume)
-            // Another UI action can finish resuming while the query is suspended.
-            if !TrayMenuModel.shared.isEnabled, let candidate {
-                // Registration and configured detection callbacks begin only after a stable selection.
-                guard let window = try await candidate.resolveAfterSelection(), window.isBound else {
-                    throw UiResumeFocusError.selectedWindowUnavailable
+    do {
+        try await runLightSession(.menuBarButton, .forceRun, syncFocusBeforeBody: !isResuming) { () throws in
+            try validateIntent()
+            if isResuming && !TrayMenuModel.shared.isEnabled {
+                let candidate = try await uiResumeFocus.candidateToResume(nativeFocus: nativeFocusCandidateForUiResume)
+                try validateIntent()
+                // Another UI action can finish resuming while the query is suspended.
+                if !TrayMenuModel.shared.isEnabled, let candidate {
+                    // Registration and configured detection callbacks begin only after a stable selection.
+                    guard let window = try await candidate.resolveAfterSelection(validateIntent: validateIntent), window.isBound else {
+                        throw UiResumeFocusError.selectedWindowUnavailable
+                    }
+                    if !TrayMenuModel.shared.isEnabled { _ = window.focusWindow() }
                 }
-                if !TrayMenuModel.shared.isEnabled { _ = window.focusWindow() }
             }
+            try validateIntent()
+            _ = try await EnableCommand(args: EnableCmdArgs(rawArgs: [], targetState: requestedState), uiIntent: intent)
+                .run(.defaultEnv, .emptyStdin)
         }
-        _ = try await EnableCommand(args: EnableCmdArgs(rawArgs: [], targetState: requestedState))
-            .run(.defaultEnv, .emptyStdin)
+    } catch EnableIntentError.superseded {
+        // A later explicit request owns the state, including an off request that was already paused.
+        return
     }
 }

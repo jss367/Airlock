@@ -20,6 +20,7 @@ struct UiResumeFocusCandidate {
     private let isAvailable: () -> Bool
     private let isStillFocused: () async throws -> Bool
     private let resolve: (@MainActor () throws -> Void) async throws -> Window?
+    private var resolveWithAdmission: ((@MainActor () throws -> Void, @MainActor () async throws -> Void) async throws -> Window?)?
     private var selectionIsCurrent: @MainActor () -> Bool = { true }
 
     init(_ window: Window) {
@@ -46,6 +47,13 @@ struct UiResumeFocusCandidate {
         resolve = resolveValidated
     }
 
+    init(isAvailable: @escaping () -> Bool = { true }, isStillFocused: @escaping () async throws -> Bool, resolveWithAdmission: @escaping (@MainActor () throws -> Void, @MainActor () async throws -> Void) async throws -> Window?) {
+        self.isAvailable = isAvailable
+        self.isStillFocused = isStillFocused
+        self.resolve = { _ in nil }
+        self.resolveWithAdmission = resolveWithAdmission
+    }
+
     var available: Bool { isAvailable() }
     func selected(whileCurrent check: @MainActor @escaping () -> Bool) -> Self {
         var selected = self
@@ -53,12 +61,19 @@ struct UiResumeFocusCandidate {
         return selected
     }
 
-    func resolveAfterSelection() async throws -> Window? {
+    func resolveAfterSelection(validateIntent: @MainActor @escaping () throws -> Void = {}) async throws -> Window? {
         let validate: @MainActor () throws -> Void = {
+            try validateIntent()
             guard selectionIsCurrent() else { throw UiResumeFocusError.focusKeptChanging }
         }
         try validate()
-        let window = try await resolve(validate)
+        let admit: @MainActor () async throws -> Void = {
+            try validate()
+            guard try await isStillFocused() else { throw UiResumeFocusError.focusKeptChanging }
+            try validate()
+        }
+        let window: Window? = if let resolveWithAdmission { try await resolveWithAdmission(validate, admit) }
+        else { try await resolve(validate) }
         try validate()
         // A same-app window change has no application-activation generation. Read its identity again.
         guard try await isStillFocused() else { throw UiResumeFocusError.focusKeptChanging }
@@ -145,10 +160,10 @@ private func focusCandidateForUiResume(_ app: NSRunningApplication) async -> UiR
             guard !app.isTerminated else { return false }
             return await readOnlyFocusedWindowIdForUiResume(pid: pid, debugId: debugId) == windowId
         },
-        resolveValidated: { validate in
+        resolveWithAdmission: { validate, admit in
             guard let macApp = try await MacApp.getOrRegister(app) else { return nil }
             try validate()
-            return try await macApp.getFocusedWindow(expectedWindowId: windowId, beforeRegistration: validate)
+            return try await macApp.getFocusedWindow(expectedWindowId: windowId, beforeRegistration: validate, beforeDetectionCallbacks: admit)
         },
     )
 }

@@ -110,7 +110,7 @@ final class MacApp: AbstractApp {
 
     /// Commit a selected snapshot only after populating the AX-window cache used by model metadata/callbacks.
     @MainActor
-    func getFocusedWindow(expectedWindowId: UInt32?, beforeRegistration: @MainActor () throws -> Void) async throws -> Window? {
+    func getFocusedWindow(expectedWindowId: UInt32?, beforeRegistration: @MainActor () throws -> Void, beforeDetectionCallbacks: @MainActor () async throws -> Void = {}) async throws -> Window? {
         try await registerFocusedWindowWithAxCache(
             expectedWindowId: expectedWindowId,
             registerAxWindow: {
@@ -122,7 +122,7 @@ final class MacApp: AbstractApp {
             },
             beforeModelRegistration: beforeRegistration,
             registerModelWindow: { id in
-                try await MacWindow.getOrRegister(windowId: id, macApp: self, beforeRegistration: beforeRegistration)
+                try await MacWindow.getOrRegister(windowId: id, macApp: self, beforeRegistration: beforeRegistration, beforeDetectionCallbacks: beforeDetectionCallbacks)
             },
         )
     }
