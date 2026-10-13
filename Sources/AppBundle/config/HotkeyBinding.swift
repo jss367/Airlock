@@ -28,7 +28,8 @@ extension HotKey {
 }
 
 @MainActor var activeMode: String? = mainModeId
-@MainActor func activateMode(_ targetMode: String?) async throws {
+@MainActor func activateMode(_ targetMode: String?, beforeEffects: @MainActor @escaping () async throws -> Void = {}, beforeStateChange: @MainActor () -> Bool = { true }, onCallbacksAdmitted: @MainActor () -> Void = {}) async throws {
+    guard beforeStateChange() else { return }
     let targetBindings = activeBindings(targetMode.flatMap { config.modes[$0] }?.bindings ?? [:], config)
     for binding in targetBindings.values where !hotkeys.keys.contains(binding.descriptionWithKeyCode) {
         hotkeys[binding.descriptionWithKeyCode] = HotKey(key: binding.keyCode, modifiers: binding.modifiers, keyDownHandler: {
@@ -40,10 +41,7 @@ extension HotKey {
                         binding: binding.descriptionWithKeyNotation,
                     ))
                     await withErrorReporting("Running a keyboard shortcut", userMessage: "Airlock could not complete the keyboard shortcut.") {
-                        try await runLightSession(.hotkeyBinding, .checkServerIsEnabledOrDie()) { () throws in
-                            _ = try await config.modes[activeMode]?.bindings[binding.descriptionWithKeyCode]?.commands
-                                .runCmdSeq(.defaultEnv, .emptyStdin)
-                        }
+                        try await runHotkeyCommandSession(config.modes[activeMode]?.bindings[binding.descriptionWithKeyCode]?.commands ?? [])
                     }
                 }
             }
@@ -68,7 +66,12 @@ extension HotKey {
         broadcastEvent(.modeChanged(mode: targetMode))
         if !config.onModeChanged.isEmpty {
             guard let token: RunSessionGuard = .isServerEnabled else { return }
-            try await runLightSession(.onModeChanged, token) {
+            try await adoptResumeWindowBeforeModeCallbacks()
+            try await runLightSession(.onModeChanged, token, beforeEffects: {
+                try await validateResumeWindowBeforeModeEffects()
+                try await beforeEffects()
+            }) {
+                onCallbacksAdmitted()
                 _ = try await config.onModeChanged.runCmdSeq(.defaultEnv, .emptyStdin)
             }
         }
@@ -170,5 +173,14 @@ func parseBinding(_ raw: String, _ backtrace: TomlBacktrace, _ mapping: [String:
         key.flatMap { key -> ParsedToml<(NSEvent.ModifierFlags, Key)> in
             .success((modifiers, key))
         }
+    }
+}
+
+/// The same command-session path used by registered hotkeys, without key registration in tests.
+@MainActor
+func runHotkeyCommandSession(_ commands: [any Command]) async throws {
+    let prepared = PreparedCommandSession(commands)
+    try await runLightSession(.hotkeyBinding, .checkServerIsEnabledOrDie(), admissionCheck: prepared.validateAdmission) {
+        _ = try await prepared.run(.defaultEnv, .emptyStdin)
     }
 }

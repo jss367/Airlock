@@ -3,6 +3,7 @@ import SwiftUI
 
 @MainActor
 func showFeatureSettings() {
+    rememberExternalAppForUiResume(NSWorkspace.shared.frontmostApplication)
     let window = FeatureSettingsWindowController.shared
     window.showWindow(nil)
     NSApp.activate(ignoringOtherApps: true)
@@ -178,10 +179,7 @@ private struct FeatureRow<Control: View>: View {
 private func setAirlockEnabled(_ isOn: Bool) {
     Task {
         await withErrorReporting("Pausing or resuming Airlock", userMessage: "Airlock could not change its running state.") {
-            try await runLightSession(.menuBarButton, .forceRun) { () throws in
-                _ = try await EnableCommand(args: EnableCmdArgs(rawArgs: [], targetState: isOn ? .on : .off))
-                    .run(.defaultEnv, .emptyStdin)
-            }
+            try await runEnableCommandFromUi(isOn ? .on : .off)
         }
     }
 }

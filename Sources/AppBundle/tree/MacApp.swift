@@ -105,13 +105,26 @@ final class MacApp: AbstractApp {
     }
 
     func getFocusedWindow() async throws -> Window? {
-        let windowId = try await thread?.runInLoop { [nsApp, axApp, windows] job in
-            try axApp.threadGuarded.get(Ax.focusedWindowAttr)
-                .flatMap { try windows.threadGuarded.getOrRegisterAxWindow(windowId: $0.windowId, $0.ax.cast, nsApp, job) }?
-                .windowId
-        }
-        guard let windowId else { return nil }
-        return try await MacWindow.getOrRegister(windowId: windowId, macApp: self)
+        try await getFocusedWindow(expectedWindowId: nil, beforeRegistration: {})
+    }
+
+    /// Commit a selected snapshot only after populating the AX-window cache used by model metadata/callbacks.
+    @MainActor
+    func getFocusedWindow(expectedWindowId: UInt32?, beforeRegistration: @MainActor () throws -> Void, beforeDetectionCallbacks: @MainActor () async throws -> Void = {}, beforeWindowDetectionCallbacks: @MainActor (Window) async throws -> Void = { _ in }) async throws -> Window? {
+        try await registerFocusedWindowWithAxCache(
+            expectedWindowId: expectedWindowId,
+            registerAxWindow: {
+                try await self.thread?.runInLoop { [nsApp, axApp, windows] job in
+                    guard let focused = axApp.threadGuarded.get(Ax.focusedWindowAttr),
+                          expectedWindowId == nil || focused.windowId == expectedWindowId else { return nil }
+                    return try windows.threadGuarded.getOrRegisterAxWindow(windowId: focused.windowId, focused.ax.cast, nsApp, job)?.windowId
+                }
+            },
+            beforeModelRegistration: beforeRegistration,
+            registerModelWindow: { id in
+                try await MacWindow.getOrRegister(windowId: id, macApp: self, beforeRegistration: beforeRegistration, beforeDetectionCallbacks: beforeDetectionCallbacks, beforeWindowDetectionCallbacks: beforeWindowDetectionCallbacks)
+            },
+        )
     }
 
     @MainActor func nativeFocus(_ windowId: UInt32) {
@@ -423,4 +436,17 @@ private func disableAnimations<T>(app: AXUIElement, _ job: RunLoopJob, _ body: (
     }
     try job.checkCancellation()
     return try body()
+}
+
+/// Cache registration precedes metadata reads and detection callbacks. Injected stages also allow safe tests.
+@MainActor
+func registerFocusedWindowWithAxCache(
+    expectedWindowId: UInt32?,
+    registerAxWindow: () async throws -> UInt32?,
+    beforeModelRegistration: @MainActor () throws -> Void = {},
+    registerModelWindow: (UInt32) async throws -> Window?,
+) async throws -> Window? {
+    guard let id = try await registerAxWindow(), expectedWindowId == nil || id == expectedWindowId else { return nil }
+    try beforeModelRegistration()
+    return try await registerModelWindow(id)
 }

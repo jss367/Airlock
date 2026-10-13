@@ -56,29 +56,47 @@ func runRefreshSessionBlocking(
 func runLightSession<T>(
     _ event: RefreshSessionEvent,
     _: RunSessionGuard,
+    syncFocusBeforeBody: Bool = true,
+    admissionCheck: @MainActor @escaping () throws -> Void = {},
+    beforeEffects: @MainActor @escaping () async throws -> Void = {},
     body: @MainActor () async throws -> T,
 ) async throws -> T {
     let state = signposter.beginInterval(#function, "event: \(event) axTaskLocalAppThreadToken: \(axTaskLocalAppThreadToken?.idForDebug)")
     defer { signposter.endInterval(#function, state) }
+    let checkEffects: @MainActor () async throws -> Void = {
+        try admissionCheck()
+        try await beforeEffects()
+        try admissionCheck()
+    }
+    try await checkEffects()
     focusEvents.cancelRefresh() // Give priority to runSession
     return try await $refreshSessionEvent.withValue(event) {
         try await $_isStartup.withValue(event.isStartup) {
-            let focusSyncedFromMacOs = try await focusEvents.syncFocus(
+            let focusSyncedFromMacOs = syncFocusBeforeBody ? try await focusEvents.syncFocus(
                 consumingEvidence: false,
-                query: queryNativeFocusForSession,
+                query: {
+                    let native = try await queryNativeFocusForSession(admissionCheck: admissionCheck, beforeEffects: checkEffects)
+                    // A captured force-run token does not prove the queued feature still owns this session.
+                    // Validate before syncFocus applies its answer or refreshModel can restore stale focus.
+                    try await checkEffects()
+                    return native
+                },
                 apply: updateFocusCache,
-            )
+            ) : false
+            try await checkEffects()
             let focusBefore = focus.windowOrNil
 
-            refreshModel(focusSyncedFromMacOs: focusSyncedFromMacOs)
+            if syncFocusBeforeBody { refreshModel(focusSyncedFromMacOs: focusSyncedFromMacOs) }
             let result = try await body()
+            try await checkEffects()
             refreshModel()
 
             let focusAfter = focus.windowOrNil
 
             updateTrayText()
             SecureInputPanel.shared.refresh()
-            try await layoutWorkspaces()
+            try await layoutWorkspaces(admissionCheck: checkEffects)
+            try await checkEffects()
             FocusFlashController.shared.flushPendingFlash()
             if focusBefore != focusAfter {
                 focusAfter?.nativeFocus() // syncFocusToMacOs
@@ -91,10 +109,19 @@ func runLightSession<T>(
 
 @MainActor
 private func queryNativeFocusForSession() async throws -> Window? {
+    try await queryNativeFocusForSession(admissionCheck: {})
+}
+
+@MainActor
+private func queryNativeFocusForSession(admissionCheck: @MainActor () throws -> Void, beforeEffects: @MainActor () async throws -> Void = {}) async throws -> Window? {
     let nativeFocused = try await getNativeFocusedWindow()
+    // Stop directly after the initial query, before unmanaged-model sync or focus application.
+    try admissionCheck()
+    try await beforeEffects()
+    try admissionCheck()
     if let nativeFocused {
         if !config.enableWindowManagement {
-            try await syncUnmanagedWindow(nativeFocused)
+            try await syncUnmanagedWindow(nativeFocused, admissionCheck: beforeEffects)
         }
         try await debugWindowsIfRecording(nativeFocused)
     }
@@ -162,18 +189,23 @@ enum OptimalHideCorner {
 }
 
 @MainActor
-func layoutWorkspaces() async throws {
+func layoutWorkspaces(admissionCheck: @MainActor @escaping () async throws -> Void = {}) async throws {
+    try await admissionCheck()
     if !config.enableWindowManagement {
         for window in Workspace.all.flatMap(\.allLeafWindowsRecursive) {
-            (window as? MacWindow)?.unhideFromCorner(restoreTilingPosition: true)
-            try await syncUnmanagedWindow(window)
+            try await admissionCheck()
+            window.unhideFromCorner(restoreTilingPosition: true)
+            try await syncUnmanagedWindow(window, admissionCheck: admissionCheck)
         }
         return
     }
     if !TrayMenuModel.shared.isEnabled {
         for workspace in Workspace.all {
-            workspace.allLeafWindowsRecursive.forEach { ($0 as? MacWindow)?.unhideFromCorner() }
-            try await workspace.layoutWorkspace() // Unhide tiling windows from corner
+            for window in workspace.allLeafWindowsRecursive {
+                try await admissionCheck()
+                window.unhideFromCorner()
+            }
+            try await workspace.layoutWorkspace(admissionCheck: admissionCheck) // Unhide tiling windows from corner
         }
         return
     }
@@ -206,13 +238,17 @@ func layoutWorkspaces() async throws {
     // to reduce flicker, first unhide visible workspaces, then hide invisible ones
     for monitor in monitors {
         let workspace = monitor.activeWorkspace
-        workspace.allLeafWindowsRecursive.forEach { ($0 as? MacWindow)?.unhideFromCorner() }
-        try await workspace.layoutWorkspace()
+        for window in workspace.allLeafWindowsRecursive {
+            try await admissionCheck()
+            window.unhideFromCorner()
+        }
+        try await workspace.layoutWorkspace(admissionCheck: admissionCheck)
     }
     for workspace in Workspace.all where !workspace.isVisible {
         let corner = monitorToOptimalHideCorner[workspace.workspaceMonitor.rect.topLeftCorner] ?? .bottomRightCorner
-        for case let window as MacWindow in workspace.allLeafWindowsRecursive {
-            try await window.hideInCorner(corner)
+        for window in workspace.allLeafWindowsRecursive {
+            try await admissionCheck()
+            try await window.hideInCorner(corner, admissionCheck: admissionCheck)
         }
     }
 }

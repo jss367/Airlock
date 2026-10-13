@@ -20,6 +20,8 @@ final class TestWindow: Window, CustomStringConvertible {
         return wi
     }
 
+    var sizeQueryForTests: (@MainActor () async throws -> CGSize?)?
+
     nonisolated var description: String { "TestWindow(\(windowId))" }
 
     @MainActor
@@ -44,7 +46,8 @@ final class TestWindow: Window, CustomStringConvertible {
     }
 
     override func getAxSize() async throws -> CGSize? {
-        _rect.map { CGSize(width: $0.width, height: $0.height) }
+        if let query = sizeQueryForTests { return try await query() }
+        return _rect.map { CGSize(width: $0.width, height: $0.height) }
     }
 
     override func setAxFrame(_ topLeft: CGPoint?, _ size: CGSize?) {

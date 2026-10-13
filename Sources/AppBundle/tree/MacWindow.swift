@@ -3,6 +3,10 @@ import Common
 
 final class MacWindow: Window {
     let macApp: MacApp
+    @MainActor private var pendingDetection = WindowDetectionProgress()
+    @MainActor private var detectionPrepared = false
+    @MainActor private var completingDetection = false
+    @MainActor private var detectionCallbacks: [WindowDetectedCallback]?
     private var prevUnhiddenProportionalPositionInsideWorkspaceRect: CGPoint?
 
     @MainActor
@@ -16,8 +20,12 @@ final class MacWindow: Window {
 
     @MainActor
     @discardableResult
-    static func getOrRegister(windowId: UInt32, macApp: MacApp) async throws -> MacWindow {
-        if let existing = allWindowsMap[windowId] { return existing }
+    static func getOrRegister(windowId: UInt32, macApp: MacApp, beforeRegistration: @MainActor () throws -> Void = {}, beforeDetectionCallbacks: @MainActor () async throws -> Void = {}, beforeWindowDetectionCallbacks: @MainActor (Window) async throws -> Void = { _ in }) async throws -> MacWindow {
+        try beforeRegistration()
+        if let existing = allWindowsMap[windowId] {
+            try await existing.completePendingDetection(beforeCallbacks: beforeDetectionCallbacks, beforeWindowCallbacks: beforeWindowDetectionCallbacks)
+            return existing
+        }
         let rect = try await macApp.getAxRect(windowId)
         let data = try await unbindAndGetBindingDataForNewWindow(
             windowId,
@@ -29,18 +37,39 @@ final class MacWindow: Window {
         )
 
         // atomic synchronous section
-        if let existing = allWindowsMap[windowId] { return existing }
+        try beforeRegistration()
+        if let existing = allWindowsMap[windowId] {
+            try await existing.completePendingDetection(beforeCallbacks: beforeDetectionCallbacks, beforeWindowCallbacks: beforeWindowDetectionCallbacks)
+            return existing
+        }
         let window = MacWindow(windowId, macApp, lastFloatingSize: rect?.size, parent: data.parent, adaptiveWeight: data.adaptiveWeight, index: data.index)
         allWindowsMap[windowId] = window
 
-        try await debugWindowsIfRecording(window)
-        let restored = config.enableWindowManagement
-            ? try await restoreClosedWindowsCacheIfNeeded(newlyDetectedWindow: window)
-            : false
-        if !restored {
-            try await tryOnWindowDetected(window)
-        }
+        try await window.completePendingDetection(beforeCallbacks: beforeDetectionCallbacks, beforeWindowCallbacks: beforeWindowDetectionCallbacks)
         return window
+    }
+
+    @MainActor
+    private func completePendingDetection(beforeCallbacks: @MainActor () async throws -> Void, beforeWindowCallbacks: @MainActor (Window) async throws -> Void) async throws {
+        guard !pendingDetection.finished, !completingDetection else { return }
+        completingDetection = true
+        defer { completingDetection = false }
+        if !detectionPrepared {
+            try await debugWindowsIfRecording(self)
+            let restored = config.enableWindowManagement
+                ? try await restoreClosedWindowsCacheIfNeeded(newlyDetectedWindow: self)
+                : false
+            detectionPrepared = true
+            if restored { pendingDetection.finished = true; return }
+        }
+        // Preserve the rule list across cancellation/config reload so indices cannot replay rules.
+        if detectionCallbacks == nil { detectionCallbacks = config.onWindowDetected }
+        try await tryOnWindowDetected(self, beforeCallbacks: {
+            try await beforeCallbacks()
+            try await beforeWindowCallbacks(self)
+        }, progress: pendingDetection, callbacks: detectionCallbacks)
+        pendingDetection.finished = true
+        detectionCallbacks = nil
     }
 
     // var description: String {
@@ -120,11 +149,13 @@ final class MacWindow: Window {
     }
 
     @MainActor
-    func hideInCorner(_ corner: OptimalHideCorner) async throws {
+    override func hideInCorner(_ corner: OptimalHideCorner, admissionCheck: @MainActor () async throws -> Void = {}) async throws {
+        try await admissionCheck()
         guard let nodeMonitor else { return }
         // Don't accidentally override prevUnhiddenEmulationPosition in case of subsequent `hideInCorner` calls
         if !isHiddenInCorner {
             guard let windowRect = try await getAxRect() else { return }
+            try await admissionCheck()
             // Check for isHiddenInCorner for the second time because of the suspension point above
             if !isHiddenInCorner {
                 let topLeftCorner = windowRect.topLeftCorner
@@ -137,7 +168,9 @@ final class MacWindow: Window {
         let p: CGPoint
         switch corner {
             case .bottomLeftCorner:
-                guard let s = try await getAxSize() else { fallthrough }
+                let size = try await getAxSize()
+                try await admissionCheck()
+                guard let s = size else { fallthrough }
                 // Zoom will jump off if you do one pixel offset https://github.com/nikitabobko/AeroSpace/issues/527
                 let onePixelOffset = macApp.appId == .zoom ? .zero : CGPoint(x: 1, y: -1)
                 p = nodeMonitor.visibleRect.bottomLeftCorner + onePixelOffset + CGPoint(x: -s.width, y: 0)
@@ -146,11 +179,12 @@ final class MacWindow: Window {
                 let onePixelOffset = macApp.appId == .zoom ? .zero : CGPoint(x: 1, y: 1)
                 p = nodeMonitor.visibleRect.bottomRightCorner - onePixelOffset
         }
+        try await admissionCheck()
         setAxFrame(p, nil)
     }
 
     @MainActor
-    func unhideFromCorner(restoreTilingPosition: Bool = false) {
+    override func unhideFromCorner(restoreTilingPosition: Bool = false) {
         guard let prevUnhiddenProportionalPositionInsideWorkspaceRect else { return }
         guard let nodeWorkspace else { return } // hiding only makes sense for workspace windows
         guard let parent else { return }
@@ -259,38 +293,41 @@ private func unbindAndGetBindingDataForNewTilingWindow(_ workspace: Workspace, w
 }
 
 @MainActor
-func tryOnWindowDetected(_ window: Window) async throws {
+func tryOnWindowDetected(_ window: Window, beforeCallbacks: @MainActor () async throws -> Void = {}, progress: WindowDetectionProgress = WindowDetectionProgress(), callbacks: [WindowDetectedCallback]? = nil) async throws {
     guard let parent = window.parent else { return }
     switch parent.cases {
         case .tilingContainer, .workspace, .macosMinimizedWindowsContainer,
              .macosFullscreenWindowsContainer, .macosHiddenAppsWindowsContainer:
-            try await onWindowDetected(window)
+            try await onWindowDetected(window, beforeCallbacks: beforeCallbacks, progress: progress, callbacks: callbacks ?? config.onWindowDetected)
         case .macosPopupWindowsContainer:
             break
     }
 }
 
 @MainActor
-private func onWindowDetected(_ window: Window) async throws {
-    broadcastEvent(.windowDetected(
-        windowId: window.windowId,
-        workspace: window.nodeWorkspace?.name,
-        appBundleId: window.app.rawAppBundleId,
-        appName: window.app.name,
-    ))
-    guard config.enableWindowManagement else { return }
-    for callback in config.onWindowDetected where try await callback.matches(window) {
-        // The callback runs inside whichever session detected the window, so a focus-changing command
-        // here would report that session (an ax notification, say) as what moved the focus. Name the
-        // callback instead — but keep startup's session, which suppresses focus callbacks entirely.
-        let event: RefreshSessionEvent = isStartup ? .startup : .onWindowDetected
-        _ = try await $refreshSessionEvent.withValue(event) {
-            try await callback.run.runCmdSeq(.defaultEnv.copy(\.windowId, window.windowId), .emptyStdin)
-        }
-        if !callback.checkFurtherCallbacks {
-            return
-        }
+private func onWindowDetected(_ window: Window, beforeCallbacks: @MainActor () async throws -> Void, progress: WindowDetectionProgress, callbacks: [WindowDetectedCallback]) async throws {
+    if !progress.eventBroadcast {
+        progress.eventBroadcast = true
+        broadcastEvent(.windowDetected(
+            windowId: window.windowId,
+            workspace: window.nodeWorkspace?.name,
+            appBundleId: window.app.rawAppBundleId,
+            appName: window.app.name,
+        ))
     }
+    guard config.enableWindowManagement else { return }
+    try await progress.run(
+        callbacks: callbacks,
+        matches: { try await $0.matches(window) },
+        beforeCallbacks: beforeCallbacks,
+        checkFurther: { $0.checkFurtherCallbacks },
+        command: { callback in
+            let event: RefreshSessionEvent = isStartup ? .startup : .onWindowDetected
+            _ = try await $refreshSessionEvent.withValue(event) {
+                try await callback.run.runCmdSeq(.defaultEnv.copy(\.windowId, window.windowId), .emptyStdin)
+            }
+        },
+    )
 }
 
 extension WindowDetectedCallback {
@@ -312,5 +349,41 @@ extension WindowDetectedCallback {
             return false
         }
         return true
+    }
+}
+
+/// Check after metadata/title awaits and immediately before admitting configured commands.
+/// Commands already admitted are not rolled back if focus changes while they run.
+@MainActor
+func runAdmittedWindowDetectionCallback(beforeCallbacks: @MainActor () async throws -> Void, onAdmission: @MainActor () -> Void = {}, run: @MainActor () async throws -> Void) async throws {
+    try await beforeCallbacks()
+    onAdmission()
+    try await run()
+}
+
+/// A rejected admission remains pending on the cached model. Advance before running commands so
+/// an admitted rule (even one that throws after changing windows) is never replayed on retry.
+@MainActor
+final class WindowDetectionProgress {
+    var nextCallback = 0
+    var eventBroadcast = false
+    var finished = false
+    private(set) var running = false
+
+    func run<Callback>(callbacks: [Callback], matches: @MainActor (Callback) async throws -> Bool,
+                       beforeCallbacks: @MainActor () async throws -> Void, checkFurther: @MainActor (Callback) -> Bool,
+                       command: @MainActor (Callback) async throws -> Void) async throws
+    {
+        guard !finished, !running else { return }
+        running = true
+        defer { running = false }
+        while nextCallback < callbacks.count {
+            let callback = callbacks[nextCallback]
+            guard try await matches(callback) else { nextCallback += 1; continue }
+            try await runAdmittedWindowDetectionCallback(beforeCallbacks: beforeCallbacks, onAdmission: {
+                self.nextCallback = checkFurther(callback) ? self.nextCallback + 1 : callbacks.count
+            }, run: { try await command(callback) })
+        }
+        finished = true
     }
 }

@@ -95,23 +95,8 @@ private func newConnection(_ connection: NWConnection) async {
             continue
         }
         if let command {
-            if command.info.kind.mayChangeFocus {
-                await MainActor.run { markUserInitiatedFocusChange() }
-            }
             let _answer: Result<ServerAnswer, Error> = await Result {
-                try await runLightSession(.socketServer(command.args), token) { () throws in
-                    let env = CmdEnv.init(
-                        windowId: request.windowId.flatMap { $0 },
-                        workspaceName: request.workspace.flatMap { $0 },
-                    )
-                    let cmdResult = try await command.run(env, CmdStdin(request.stdin))
-                    return ServerAnswer(
-                        exitCode: cmdResult.exitCode,
-                        stdout: cmdResult.stdout.joined(separator: "\n"),
-                        stderr: cmdResult.stderr.joined(separator: "\n"),
-                        serverVersionAndHash: serverVersionAndHash,
-                    )
-                }
+                try await runSocketCommandSession(command, request: request, token: token)
             }
             var answer = _answer.getOrNil() ??
                 ServerAnswer(
@@ -126,5 +111,17 @@ private func newConnection(_ connection: NWConnection) async {
             continue
         }
         die("Unreachable")
+    }
+}
+
+/// Parsed request dispatch, kept separate from transport so the full session prelude is testable.
+@MainActor
+func runSocketCommandSession(_ command: any Command, request: ClientRequest, token: RunSessionGuard) async throws -> ServerAnswer {
+    let prepared = PreparedCommandSession([command])
+    if command.info.kind.mayChangeFocus { markUserInitiatedFocusChange() }
+    return try await runLightSession(.socketServer(command.args), token, admissionCheck: prepared.validateAdmission) {
+        let env = CmdEnv(windowId: request.windowId.flatMap { $0 }, workspaceName: request.workspace.flatMap { $0 })
+        let result = try await prepared.run(env, CmdStdin(request.stdin))
+        return ServerAnswer(exitCode: result.exitCode, stdout: result.stdout.joined(separator: "\n"), stderr: result.stderr.joined(separator: "\n"), serverVersionAndHash: serverVersionAndHash)
     }
 }

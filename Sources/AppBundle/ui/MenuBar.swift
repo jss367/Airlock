@@ -57,22 +57,24 @@ public func menuBar(viewModel: TrayMenuModel) -> some Scene {
             }
             Divider()
         }
-        Button(viewModel.isEnabled ? "Pause Airlock" : "Resume Airlock") {
+        let wasEnabled = viewModel.isEnabled
+        Button(wasEnabled ? "Pause Airlock" : "Resume Airlock") {
+            let requestedState: EnableCmdArgs.State = wasEnabled ? .off : .on
             Task {
                 await withErrorReporting("Pausing or resuming Airlock", userMessage: "Airlock could not change its running state.") {
-                    try await runLightSession(.menuBarButton, .forceRun) { () throws in
-                        _ = try await EnableCommand(args: EnableCmdArgs(rawArgs: [], targetState: .toggle))
-                            .run(.defaultEnv, .emptyStdin)
-                    }
+                    try await runEnableCommandFromUi(requestedState)
                 }
             }
         }.keyboardShortcut("E", modifiers: .command)
+        // Paused Airlock can't act on their selections
         Button("Quick Switcher") {
             toggleQuickSwitcher()
         }.keyboardShortcut("P", modifiers: .command)
+            .disabled(!viewModel.isEnabled)
         Button("Mission Control") {
             toggleMissionControl()
         }.keyboardShortcut("M", modifiers: .command)
+            .disabled(!viewModel.isEnabled)
         Button("Show Keybindings") {
             showKeybindingsHelp()
         }.keyboardShortcut("K", modifiers: .command)

@@ -42,6 +42,11 @@ open class Window: TreeNode, Hashable {
     func getAxRect() async throws -> Rect? { die("Not implemented") }
     func getCenter() async throws -> CGPoint? { try await getAxRect()?.center }
 
+    @MainActor
+    func hideInCorner(_ corner: OptimalHideCorner, admissionCheck: @MainActor () async throws -> Void = {}) async throws {}
+    @MainActor
+    func unhideFromCorner(restoreTilingPosition: Bool = false) {}
+
     func setAxFrame(_ topLeft: CGPoint?, _ size: CGSize?) { die("Not implemented") }
 }
 

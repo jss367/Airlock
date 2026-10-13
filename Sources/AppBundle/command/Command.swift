@@ -42,10 +42,12 @@ extension Command {
 // 4. Tray icon buttons
 extension [Command] {
     @MainActor
-    func runCmdSeq(_ env: CmdEnv, _ io: sending CmdIo) async throws -> Bool {
+    func runCmdSeq(_ env: CmdEnv, _ io: sending CmdIo, admissionCheck: @MainActor () throws -> Void = validateInheritedEnableIntent) async throws -> Bool {
         var isSucc = true
         for command in self {
+            try admissionCheck()
             isSucc = try await command.run(env, io) && isSucc
+            try admissionCheck()
             if command.shouldResetClosedWindowsCache { resetClosedWindowsCache() }
             refreshModel()
         }
@@ -53,9 +55,9 @@ extension [Command] {
     }
 
     @MainActor
-    func runCmdSeq(_ env: CmdEnv, _ stdin: consuming CmdStdin) async throws -> CmdResult {
+    func runCmdSeq(_ env: CmdEnv, _ stdin: consuming CmdStdin, admissionCheck: @MainActor () throws -> Void = validateInheritedEnableIntent) async throws -> CmdResult {
         let io: CmdIo = CmdIo(stdin: stdin)
-        let isSucc = try await runCmdSeq(env, io)
+        let isSucc = try await runCmdSeq(env, io, admissionCheck: admissionCheck)
         return CmdResult(stdout: io.stdout, stderr: io.stderr, exitCode: isSucc ? 0 : 1)
     }
 }
