@@ -28,7 +28,8 @@ extension HotKey {
 }
 
 @MainActor var activeMode: String? = mainModeId
-@MainActor func activateMode(_ targetMode: String?, beforeEffects: @MainActor @escaping () async throws -> Void = {}) async throws {
+@MainActor func activateMode(_ targetMode: String?, beforeEffects: @MainActor @escaping () async throws -> Void = {}, beforeStateChange: @MainActor () -> Bool = { true }, onCallbacksAdmitted: @MainActor () -> Void = {}) async throws {
+    guard beforeStateChange() else { return }
     let targetBindings = activeBindings(targetMode.flatMap { config.modes[$0] }?.bindings ?? [:], config)
     for binding in targetBindings.values where !hotkeys.keys.contains(binding.descriptionWithKeyCode) {
         hotkeys[binding.descriptionWithKeyCode] = HotKey(key: binding.keyCode, modifiers: binding.modifiers, keyDownHandler: {
@@ -70,6 +71,7 @@ extension HotKey {
                 try await validateResumeWindowBeforeModeEffects()
                 try await beforeEffects()
             }) {
+                onCallbacksAdmitted()
                 _ = try await config.onModeChanged.runCmdSeq(.defaultEnv, .emptyStdin)
             }
         }

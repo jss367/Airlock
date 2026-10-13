@@ -46,7 +46,13 @@ import XCTest
     func testNewerSameAppFocusDuringMovedCandidateModeQueryIsPreserved() async throws {
         try await exerciseDetectionResume(newerUserPause: false, modeCallbacks: true, move: true, changeDuringModeQuery: true)
     }
-    private func exerciseDetectionResume(newerUserPause: Bool, modeCallbacks: Bool = false, move: Bool = false, changeDuringModeQuery: Bool = false) async throws {
+    func testNewerEnableOnOwnsStateWhenOldResumeModeQueryRejects() async throws {
+        try await exerciseDetectionResume(newerUserPause: false, modeCallbacks: true, move: true, changeDuringModeQuery: true, newerEnable: .on)
+    }
+    func testNewerEnableOffOwnsStateWhenOldResumeModeQueryRejects() async throws {
+        try await exerciseDetectionResume(newerUserPause: false, modeCallbacks: true, move: true, changeDuringModeQuery: true, newerEnable: .off)
+    }
+    private func exerciseDetectionResume(newerUserPause: Bool, modeCallbacks: Bool = false, move: Bool = false, changeDuringModeQuery: Bool = false, newerEnable: EnableCmdArgs.State? = nil) async throws {
         let old = TestWindow.new(id: 391, parent: Workspace.get(byName: "old").rootTilingContainer)
         let newer = TestWindow.new(id: 392, parent: Workspace.get(byName: "newer").rootTilingContainer)
         XCTAssertTrue(old.focusWindow())
@@ -54,6 +60,7 @@ import XCTest
         appForTests = nil
         var registered: TestWindow?
         var cachePrimed = false
+        var modeQueries = 0
         var now = ContinuousClock().now
         let clock = FocusStealingPreventionState(now: { now })
         clock.markUserInitiatedFocusChange()
@@ -90,7 +97,14 @@ import XCTest
                         }
                         if changeDuringModeQuery {
                             appForTests = DetectionModeQueryFixtureApp {
+                                modeQueries += 1
+                                if modeQueries > 1 { return selected }
                                 await Task.yield()
+                                if let newerEnable {
+                                    let args = ["enable", newerEnable.rawValue]
+                                    let request = ClientRequest(args: args, stdin: "", windowId: nil, workspace: nil)
+                                    _ = try await runSocketCommandSession(parseCommand(args).cmdOrDie, request: request, token: .forceRun)
+                                }
                                 newer.nativeFocus()
                                 return newer
                             }
@@ -102,10 +116,16 @@ import XCTest
             })
         }
         if changeDuringModeQuery {
-            do { try await runEnableCommandFromUi(.on); XCTFail("Changed focus must abort before mode sync applies") }
-            catch UiResumeFocusError.focusKeptChanging {}
+            if newerEnable == nil {
+                do { try await runEnableCommandFromUi(.on); XCTFail("Changed focus must abort before mode sync applies") }
+                catch UiResumeFocusError.focusKeptChanging {}
+            } else { try await runEnableCommandFromUi(.on) }
             XCTAssertTrue(TestApp.shared.focusedWindow === newer)
             XCTAssertEqual(DetectionModeFixtureCommand.focusIds, [])
+            XCTAssertEqual(TrayMenuModel.shared.isEnabled, newerEnable == .on)
+            XCTAssertEqual(activeMode, newerEnable == .on ? mainModeId : nil)
+            XCTAssertFalse(isQuickSwitcherHotkeyRegistered)
+            XCTAssertEqual(DetectionEnableFixtureCommand.calls, 1)
             XCTAssertEqual(registered?.nodeWorkspace?.name, "B")
             return
         }

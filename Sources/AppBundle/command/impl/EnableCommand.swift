@@ -50,8 +50,20 @@ struct EnableCommand: Command {
             guard intent == latestEnableIntent else { return true }
             TrayMenuModel.shared.isEnabled = true
             registerQuickSwitcherHotkey()
-            try await activateMode(mainModeId, beforeEffects: beforeEnableEffects)
-            try await beforeEnableEffects()
+            var callbacksAdmitted = false
+            do {
+                try await activateMode(mainModeId, beforeEffects: beforeEnableEffects, onCallbacksAdmitted: { callbacksAdmitted = true })
+                try await beforeEnableEffects()
+            } catch {
+                if error is UiResumeFocusError, !callbacksAdmitted, intent == latestEnableIntent {
+                    // The mode preflight rejected this owned resume before callback effects began.
+                    // Preserve detection effects (e.g. moves), but restore paused state/hotkeys.
+                    TrayMenuModel.shared.isEnabled = false
+                    registerQuickSwitcherHotkey()
+                    try await activateMode(nil, beforeStateChange: { intent == latestEnableIntent })
+                }
+                throw error
+            }
         } else {
             TrayMenuModel.shared.isEnabled = false
             registerQuickSwitcherHotkey()
