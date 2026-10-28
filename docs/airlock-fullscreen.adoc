@@ -22,6 +22,7 @@ airlock fullscreen [-h|--help] off [--window-id <window-id>] [--fail-if-noop]
 {manpurpose}
 
 Switching to a different tiling window within the same workspace while the current focused window is in fullscreen mode results in the fullscreen window exiting fullscreen mode.
+Changing a tiled window to `layout floating` also exits fullscreen and restores its last floating size.
 
 For floating windows, this maximizes within the monitor's usable area and preserves the previous size and position.
 Run `fullscreen` again (or `fullscreen off`) to restore that frame. Each window remembers its own frame.

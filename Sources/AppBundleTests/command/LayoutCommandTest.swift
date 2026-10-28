@@ -12,6 +12,35 @@ final class LayoutCommandTest: XCTestCase {
         testParseCommandSucc("layout floating", LayoutCmdArgs(rawArgs: ["layout", "floating"], toggleBetween: [.floating]))
     }
 
+    func testFloatingLayoutExitsTiledFullscreenAndRestoresFloatingSize() async throws {
+        let window = TestWindow.new(id: 1, parent: focus.workspace.rootTilingContainer,
+                                    rect: Rect(topLeftX: 100, topLeftY: 120, width: 650, height: 430))
+        XCTAssertTrue(window.focusWindow())
+        try await layoutWorkspaces()
+        try await parseCommand("fullscreen on").cmdOrDie.run(.defaultEnv, .emptyStdin)
+        try await layoutWorkspaces()
+        XCTAssertTrue(window.isFullscreen)
+
+        try await parseCommand("layout floating").cmdOrDie.run(.defaultEnv, .emptyStdin)
+        try await layoutWorkspaces()
+        XCTAssertTrue(window.isFloating)
+        XCTAssertFalse(window.isFullscreen)
+        XCTAssertNil(window.floatingFullscreenRestore)
+        assertEquals(window._rect?.size, CGSize(width: 650, height: 430))
+
+        let floatingFrame = window._rect
+        try await parseCommand("fullscreen off").cmdOrDie.run(.defaultEnv, .emptyStdin)
+        try await layoutWorkspaces()
+        assertEquals(window._rect, floatingFrame)
+
+        // Subsequent floating maximization must capture and restore this frame normally.
+        try await parseCommand("fullscreen on").cmdOrDie.run(.defaultEnv, .emptyStdin)
+        try await layoutWorkspaces()
+        try await parseCommand("fullscreen off").cmdOrDie.run(.defaultEnv, .emptyStdin)
+        try await layoutWorkspaces()
+        assertEquals(window._rect, floatingFrame)
+    }
+
     func testParseLayoutToggleBetween() {
         testParseCommandSucc(
             "layout tiles accordion",
