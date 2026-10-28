@@ -9,7 +9,7 @@ struct ResizeCommand: Command {
         guard let target = args.resolveTargetOrReportError(env, io) else { return false }
         guard let window = target.windowOrNil else { return false }
 
-        if window.isFloating {
+        if args.floating || window.isFloating || !config.enableWindowManagement {
             return try await resizeFloatingWindow(window, args)
         }
 
@@ -58,7 +58,12 @@ struct ResizeCommand: Command {
 
 @MainActor
 private func resizeFloatingWindow(_ window: Window, _ args: ResizeCmdArgs) async throws -> Bool {
+    guard window.parent is Workspace || window.parent is TilingContainer else { return false }
     guard let size = try await window.getAxSize() else { return false }
+    guard window.isBound else { return false }
+    if args.floating, let workspace = window.nodeWorkspace {
+        window.bindAsFloatingWindow(to: workspace)
+    }
 
     let widthDiff: CGFloat
     let heightDiff: CGFloat
@@ -79,6 +84,7 @@ private func resizeFloatingWindow(_ window: Window, _ args: ResizeCmdArgs) async
 
     let newWidth = max(1, size.width + widthDiff)
     let newHeight = max(1, size.height + heightDiff)
+    window.clearFullscreen()
     window.setAxFrame(nil, CGSize(width: newWidth, height: newHeight))
     window.lastFloatingSize = CGSize(width: newWidth, height: newHeight)
     return true

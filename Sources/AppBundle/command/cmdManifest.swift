@@ -84,6 +84,8 @@ extension CmdArgs {
                 command = TriggerBindingCommand(args: self as! TriggerBindingCmdArgs)
             case .volume:
                 command = VolumeCommand(args: self as! VolumeCmdArgs)
+            case .windowFrame:
+                command = WindowFrameCommand(args: self as! WindowFrameCmdArgs)
             case .workspace:
                 command = WorkspaceCommand(args: self as! WorkspaceCmdArgs)
             case .workspaceBackAndForth:

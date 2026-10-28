@@ -138,6 +138,26 @@ on-mode-changed = []
 
     # All possible modifiers: cmd, option, ctrl, shift
 
+    # Programmable keyboard: hold a key that sends ctrl + option + cmd.
+    # I/J/K/L make small adjustments; Shift resizes. H/semicolon snap;
+    # Shift + H/semicolon moves to the monitor on that side.
+    # Nudging, resizing, and positioning make the window floating.
+    ctrl-option-cmd-i = 'move --floating up'
+    ctrl-option-cmd-j = 'move --floating left'
+    ctrl-option-cmd-k = 'move --floating down'
+    ctrl-option-cmd-l = 'move --floating right'
+    ctrl-option-cmd-shift-i = 'resize --floating height -50'
+    ctrl-option-cmd-shift-j = 'resize --floating width -50'
+    ctrl-option-cmd-shift-k = 'resize --floating height +50'
+    ctrl-option-cmd-shift-l = 'resize --floating width +50'
+    ctrl-option-cmd-h = 'window-frame left-half'
+    ctrl-option-cmd-semicolon = 'window-frame right-half'
+    ctrl-option-cmd-shift-h = 'move-node-to-monitor --focus-follows-window left'
+    ctrl-option-cmd-shift-semicolon = 'move-node-to-monitor --focus-follows-window right'
+    ctrl-option-cmd-m = 'fullscreen'
+    ctrl-option-cmd-c = 'window-frame center'
+    ctrl-option-cmd-space = 'window-frame comfortable'
+
     # You can uncomment the following lines to open up terminal with option + enter shortcut
     # (like in i3)
     # option-enter = '''exec-and-forget osascript -e '

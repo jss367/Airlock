@@ -129,13 +129,13 @@ let move_workspace_to_monitor_help_generated = """
        OR: move-workspace-to-monitor [-h|--help] [--workspace <workspace>] <monitor-pattern>...
     """
 let move_help_generated = """
-    USAGE: move [-h|--help] [--window-id <window-id>] [--boundaries <boundary>] [--boundaries-action <boundary-action>] (left|down|up|right)
+    USAGE: move [-h|--help] [--window-id <window-id>] [--floating] [--boundaries <boundary>] [--boundaries-action <boundary-action>] (left|down|up|right)
     """
 let reload_config_help_generated = """
     USAGE: reload-config [-h|--help] [--no-gui] [--dry-run]
     """
 let resize_help_generated = """
-    USAGE: resize [-h|--help] [--window-id <window-id>] (smart|smart-opposite|width|height) [+|-]<number>
+    USAGE: resize [-h|--help] [--window-id <window-id>] [--floating] (smart|smart-opposite|width|height) [+|-]<number>
     """
 let split_help_generated = """
     USAGE: split [-h|--help] [--window-id <window-id>] (horizontal|vertical|opposite)
@@ -161,6 +161,9 @@ let volume_help_generated = """
     USAGE: volume [-h|--help] (up|down) [--no-gui]
        OR: volume [-h|--help] (mute-toggle|mute-off|mute-on) [--no-gui]
        OR: volume [-h|--help] set <number> [--no-gui]
+    """
+let window_frame_help_generated = """
+    USAGE: window-frame [-h|--help] [--window-id <window-id>] (left-half|right-half|center|comfortable)
     """
 let workspace_back_and_forth_help_generated = """
     USAGE: workspace-back-and-forth [-h|--help]

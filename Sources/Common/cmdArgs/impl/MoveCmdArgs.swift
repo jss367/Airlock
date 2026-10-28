@@ -6,6 +6,7 @@ public struct MoveCmdArgs: CmdArgs {
         allowInConfig: true,
         help: move_help_generated,
         flags: [
+            "--floating": trueBoolFlag(\.floating),
             "--window-id": optionalWindowIdFlag(),
             "--boundaries": ArgParser(\.rawBoundaries, upcastArgParserFun(parseBoundaries)),
             "--boundaries-action": ArgParser(\.rawBoundariesAction, upcastArgParserFun(parseBoundariesAction)),
@@ -14,6 +15,7 @@ public struct MoveCmdArgs: CmdArgs {
     )
 
     public var direction: Lateinit<CardinalDirection> = .uninitialized
+    public var floating: Bool = false
     public var rawBoundaries: Boundaries? = nil
     public var rawBoundariesAction: WhenBoundariesCrossed? = nil
 

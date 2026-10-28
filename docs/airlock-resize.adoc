@@ -9,7 +9,7 @@ include::util/man-attributes.adoc[]
 == Synopsis
 [verse]
 // tag::synopsis[]
-airlock resize [-h|--help] [--window-id <window-id>] (smart|smart-opposite|width|height) [+|-]<number>
+airlock resize [-h|--help] [--window-id <window-id>] [--floating] (smart|smart-opposite|width|height) [+|-]<number>
 
 // end::synopsis[]
 
@@ -27,6 +27,9 @@ The dimension to resize is chosen by the first argument
 it changes height if the parent has vertical orientation
 * `smart-opposite` resizes the opposite axis of smart
 
+For floating windows, `smart` changes width and `smart-opposite` changes height.
+Resizing keeps the upper-left corner fixed. With window management disabled, windows resize directly in points.
+
 Second argument controls how much the size changes
 
 * If the `<number>` is prefixed with `+` then the dimension is increased
@@ -37,6 +40,8 @@ Second argument controls how much the size changes
 include::./util/conditional-options-header.adoc[]
 
 -h, --help:: Print help
+
+--floating:: Float the window at its current frame before resizing it in points.
 
 --window-id <window-id>::
 include::./util/window-id-flag-desc.adoc[]

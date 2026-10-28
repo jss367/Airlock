@@ -23,6 +23,12 @@ airlock fullscreen [-h|--help] off [--window-id <window-id>] [--fail-if-noop]
 
 Switching to a different tiling window within the same workspace while the current focused window is in fullscreen mode results in the fullscreen window exiting fullscreen mode.
 
+For floating windows, this maximizes within the monitor's usable area and preserves the previous size and position.
+Run `fullscreen` again (or `fullscreen off`) to restore that frame. Each window remembers its own frame.
+Moving a maximized floating window to another monitor keeps it maximized; restoring places its previous size on that monitor.
+Nudging, resizing, or applying a `window-frame` preset exits maximization and discards the saved frame.
+With window management disabled, maximize and restore still work directly on the native window.
+
 // =========================================================== Options
 include::./util/conditional-options-header.adoc[]
 
