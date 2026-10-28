@@ -21,23 +21,7 @@ struct MoveNodeToMonitorCommand: Command {
             case .success(let targetMonitor):
                 if !config.enableWindowManagement {
                     guard let nativeRect else { return io.err("Cannot read the window frame") }
-                    if currentMonitor.rect.topLeftCorner == targetMonitor.rect.topLeftCorner {
-                        return !args.failIfNoop
-                    }
-                    let point = windowPositionOnMonitor(nativeRect, from: currentMonitor.visibleRect, to: targetMonitor.visibleRect)
-                    let wasFocused = focus.windowOrNil == window
-                    if let macWindow = window as? MacWindow {
-                        try await macWindow.setAxFrameBlocking(point, nil)
-                    } else {
-                        window.setAxFrame(point, nil)
-                    }
-                    // A refresh can run during the AX requests above and garbage-collect the window if it was closed.
-                    // Binding it then would bring it back as a ghost that no refresh collects
-                    guard window.isBound else { return io.err("Window \(window.windowId) was closed while moving it") }
-                    let workspace = targetMonitor.activeWorkspace
-                    let container: NonLeafTreeNodeObject = window.isFloating ? workspace : workspace.rootTilingContainer
-                    window.bind(to: container, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
-                    return wasFocused || args.focusFollowsWindow ? window.focusWindow() : true
+                    return try await moveUnmanagedWindow(window, nativeRect: nativeRect, from: currentMonitor, to: targetMonitor, io)
                 }
                 let targetWs = targetMonitor.activeWorkspace
                 let index = true == args.target.val.directionOrNil
@@ -55,6 +39,31 @@ struct MoveNodeToMonitorCommand: Command {
             case .failure(let msg):
                 return io.err(msg)
         }
+    }
+
+    @MainActor
+    func moveUnmanagedWindow(_ window: Window, nativeRect: Rect, from currentMonitor: Monitor, to targetMonitor: Monitor, _ io: CmdIo) async throws -> Bool {
+        if currentMonitor.rect.topLeftCorner == targetMonitor.rect.topLeftCorner {
+            return !args.failIfNoop
+        }
+        let fullscreenFrame = window.isFullscreen
+            ? (window.noOuterGapsInFullscreen ? targetMonitor.visibleRect : targetMonitor.visibleRectPaddedByOuterGaps)
+            : nil
+        let point = fullscreenFrame?.topLeftCorner
+            ?? windowPositionOnMonitor(nativeRect, from: currentMonitor.visibleRect, to: targetMonitor.visibleRect)
+        let wasFocused = focus.windowOrNil == window
+        if let macWindow = window as? MacWindow {
+            try await macWindow.setAxFrameBlocking(point, fullscreenFrame?.size)
+        } else {
+            window.setAxFrame(point, fullscreenFrame?.size)
+        }
+        // A refresh can run during the AX requests above and garbage-collect the window if it was closed.
+        // Binding it then would bring it back as a ghost that no refresh collects
+        guard window.isBound else { return io.err("Window \(window.windowId) was closed while moving it") }
+        let workspace = targetMonitor.activeWorkspace
+        let container: NonLeafTreeNodeObject = window.isFloating ? workspace : workspace.rootTilingContainer
+        window.bind(to: container, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
+        return wasFocused || args.focusFollowsWindow ? window.focusWindow() : true
     }
 }
 

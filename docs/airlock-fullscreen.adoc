@@ -29,6 +29,7 @@ Run `fullscreen` again (or `fullscreen off`) to restore that frame. Each window 
 Moving a maximized floating window to another monitor keeps it maximized; restoring places its previous size on that monitor.
 Nudging, resizing, or applying a `window-frame` preset exits maximization and discards the saved frame.
 With window management disabled, maximize and restore still work directly on the native window.
+Monitor moves also fit maximized windows to the destination monitor's usable area, honoring `--no-outer-gaps`.
 
 // =========================================================== Options
 include::./util/conditional-options-header.adoc[]
