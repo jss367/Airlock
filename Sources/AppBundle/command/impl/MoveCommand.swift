@@ -11,6 +11,9 @@ struct MoveCommand: Command {
         guard let currentWindow = target.windowOrNil else {
             return io.err(noWindowIsFocused)
         }
+        if args.floating || !config.enableWindowManagement {
+            return try await moveFloatingWindowByDirection(currentWindow, direction, floatBeforeMoving: args.floating)
+        }
         guard let parent = currentWindow.parent else { return false }
         switch parent.cases {
             case .tilingContainer(let parent):
@@ -171,8 +174,14 @@ extension TilingTreeNodeCases {
 private let floatingMoveStep: CGFloat = 50
 
 @MainActor
-private func moveFloatingWindowByDirection(_ window: Window, _ direction: CardinalDirection) async throws -> Bool {
+private func moveFloatingWindowByDirection(_ window: Window, _ direction: CardinalDirection, floatBeforeMoving: Bool = false) async throws -> Bool {
+    guard window.parent is Workspace || window.parent is TilingContainer else { return false }
     guard let rect = try await window.getAxRect() else { return false }
+    guard window.isBound else { return false }
+    if floatBeforeMoving, let workspace = window.nodeWorkspace {
+        window.bindAsFloatingWindow(to: workspace)
+        window.lastFloatingSize = rect.size
+    }
     let dx: CGFloat = switch direction {
         case .left: -floatingMoveStep
         case .right: floatingMoveStep
@@ -183,6 +192,7 @@ private func moveFloatingWindowByDirection(_ window: Window, _ direction: Cardin
         case .down: floatingMoveStep
         case .left, .right: 0
     }
+    window.clearFullscreen()
     window.setAxFrame(CGPoint(x: rect.topLeftX + dx, y: rect.topLeftY + dy), nil)
     return true
 }

@@ -7,6 +7,7 @@ open class Window: TreeNode, Hashable {
     var lastFloatingSize: CGSize?
     var isFullscreen: Bool = false
     var noOuterGapsInFullscreen: Bool = false
+    var floatingFullscreenRestore: FloatingFullscreenRestore?
     var layoutReason: LayoutReason = .standard
     /// When this window last gained focus, as a `focusRecencyCounter` value. 0 if never focused
     var focusRecency: UInt64 = 0
@@ -59,6 +60,11 @@ enum LayoutReason: Equatable {
 extension Window {
     var isFloating: Bool { parent is Workspace }
 
+    func clearFullscreen() {
+        isFullscreen = false
+        floatingFullscreenRestore = nil
+    }
+
     @discardableResult
     @MainActor
     func bindAsFloatingWindow(to workspace: Workspace) -> BindingData? {
@@ -66,4 +72,9 @@ extension Window {
     }
 
     func asMacWindow() -> MacWindow { self as! MacWindow }
+}
+
+struct FloatingFullscreenRestore {
+    let frame: Rect
+    let monitorVisibleRect: Rect
 }

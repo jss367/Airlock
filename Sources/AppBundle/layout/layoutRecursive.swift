@@ -37,7 +37,7 @@ extension TreeNode {
                         window.layoutFullscreen(context)
                     } else {
                         lastAppliedLayoutPhysicalRect = physicalRect
-                        window.isFullscreen = false
+                        window.clearFullscreen()
                         window.setAxFrame(point, CGSize(width: width, height: height))
                     }
                 }
@@ -96,7 +96,6 @@ extension Window {
         }
         if isFullscreen {
             layoutFullscreen(context)
-            isFullscreen = false
         }
     }
 

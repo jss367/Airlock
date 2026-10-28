@@ -6,6 +6,34 @@ include::util/header.adoc[]
 These examples use Airlock commands and macOS tools. Adapt app names, paths, and shortcuts to your setup.
 Share improvements through https://github.com/jss367/Airlock/issues[issues] or pull requests.
 
+[#programmable-keyboard]
+== Window controls with one held key
+
+Program a spare key to hold `Control + Option + Command`, and release those modifiers when you release the key.
+The default configuration includes the following shortcuts. No arrow keys or persistent mode are needed.
+
+[cols="1,2"]
+|===
+|Held key plus |Action
+|I / J / K / L |Nudge up / left / down / right by 50 points
+|Shift + I / K |Shorter / taller by 50 points
+|Shift + J / L |Narrower / wider by 50 points
+|H / semicolon |Snap to the left / right half
+|Shift + H / semicolon |Move to the left / right monitor and follow the window
+|M |Toggle maximize and restore
+|C |Center without changing size
+|Space |Center at 75% of the monitor's usable width and height
+|===
+
+Nudging, resizing, and snapping or centering make the window floating, preserving its placement across layout refreshes.
+Resizing keeps the upper-left corner fixed.
+Maximize restores a floating window's previous size and position; a tiled window returns to its tiling layout.
+Monitor movement stops at the outermost monitor.
+
+Existing configurations inherit these default bindings unless they override or disable the same key combinations.
+To customize them, copy the `ctrl-option-cmd-...` bindings from
+link:config-examples/default-config.toml[the default configuration] into your `[mode.main.binding]` table, edit them, then reload the config.
+
 [#move-by-dragging-any-part-of-the-window]
 == Move windows by dragging any part of the window
 

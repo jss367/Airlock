@@ -9,7 +9,7 @@ include::util/man-attributes.adoc[]
 == Synopsis
 [verse]
 // tag::synopsis[]
-airlock move [-h|--help] [--window-id <window-id>] [--boundaries <boundary>] [--boundaries-action <boundary-action>] (left|down|up|right)
+airlock move [-h|--help] [--window-id <window-id>] [--floating] [--boundaries <boundary>] [--boundaries-action <boundary-action>] (left|down|up|right)
 
 // end::synopsis[]
 
@@ -21,10 +21,14 @@ Move the focused window in the given direction. See the "Examples" section for m
 
 Deprecated name: `move-through`
 
+Floating windows move by 50 points in the requested direction. With window management disabled, this also applies to windows tracked as tiled.
+
 // =========================================================== Options
 include::./util/conditional-options-header.adoc[]
 
 -h, --help:: Print help
+
+--floating:: Float the window at its current size and position before nudging it by 50 points. Tiling boundary options do not apply to floating movement.
 
 --window-id <window-id>::
 include::./util/window-id-flag-desc.adoc[]

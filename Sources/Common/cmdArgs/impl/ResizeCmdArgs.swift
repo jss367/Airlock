@@ -6,6 +6,7 @@ public struct ResizeCmdArgs: CmdArgs {
         allowInConfig: true,
         help: resize_help_generated,
         flags: [
+            "--floating": trueBoolFlag(\.floating),
             "--window-id": optionalWindowIdFlag(),
         ],
         posArgs: [
@@ -15,6 +16,7 @@ public struct ResizeCmdArgs: CmdArgs {
     )
 
     public var dimension: Lateinit<ResizeCmdArgs.Dimension> = .uninitialized
+    public var floating: Bool = false
     public var units: Lateinit<ResizeCmdArgs.Units> = .uninitialized
 
     public init(

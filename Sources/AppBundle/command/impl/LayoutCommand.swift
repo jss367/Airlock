@@ -46,6 +46,7 @@ struct LayoutCommand: Command {
                 }
             case .floating:
                 let workspace = target.workspace
+                window.clearFullscreen()
                 window.bindAsFloatingWindow(to: workspace)
                 if let size = window.lastFloatingSize { window.setAxFrame(nil, size) }
                 return true

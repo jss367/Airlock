@@ -40,6 +40,7 @@ Copy the [default configuration](docs/config-examples/default-config.toml) to `~
 - [User guide](docs/guide.adoc): configuration, layouts, workspaces, and monitor arrangement.
 - [Command reference](docs/commands.adoc): commands and examples. Run `airlock --help` or `airlock <command> --help` in a terminal.
 - [Workflow examples](docs/goodies.adoc): shortcuts and scripting recipes.
+- [Programmable keyboard shortcuts](docs/goodies.adoc#programmable-keyboard): nudging, snapping, monitor movement, and maximize/restore with one held key.
 - [Architecture](dev-docs/architecture.md): how the app and command-line tool fit together.
 
 ## Bugs and contributions

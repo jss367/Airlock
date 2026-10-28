@@ -225,6 +225,13 @@ include::./airlock-volume.adoc[tags=synopsis]
 include::./airlock-volume.adoc[tags=purpose]
 include::./airlock-volume.adoc[tags=body]
 
+== window-frame
+----
+include::airlock-window-frame.adoc[tags=synopsis]
+----
+include::airlock-window-frame.adoc[tags=purpose]
+include::airlock-window-frame.adoc[tags=body]
+
 == workspace
 ----
 include::airlock-workspace.adoc[tags=synopsis]

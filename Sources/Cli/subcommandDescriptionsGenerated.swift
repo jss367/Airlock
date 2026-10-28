@@ -41,6 +41,7 @@ let subcommandDescriptions = [
     ["  swap", "Swaps the focused window with another window."],
     ["  trigger-binding", "Trigger Airlock binding as if it was pressed by user"],
     ["  volume", "Manipulate volume"],
+    ["  window-frame", "Snap or center a window on its monitor"],
     ["  workspace-back-and-forth", "Switch between the focused workspace and previously focused workspace back and forth"],
     ["  workspace", "Focus the specified workspace"],
 ]
