@@ -8,7 +8,8 @@ include::util/man-attributes.adoc[]
 == Synopsis
 [verse]
 // tag::synopsis[]
-airlock window-frame [-h|--help] [--window-id <window-id>] (left-half|right-half|center|comfortable)
+airlock window-frame [-h|--help] [--window-id <window-id>] (left-half|right-half|center)
+airlock window-frame [-h|--help] [--window-id <window-id>] [--size <percent>] comfortable
 
 // end::synopsis[]
 
@@ -24,7 +25,7 @@ This command also works with `enable-window-management = false`.
 * `left-half` fills the left half of the usable area.
 * `right-half` fills the right half of the usable area.
 * `center` centers the window without changing its size.
-* `comfortable` centers the window at 75% of the usable width and height.
+* `comfortable` centers the window at 75% of the usable width and height. Pass `--size` to pick another percentage.
 
 Applying a preset exits Airlock's fullscreen mode and clears its saved restore frame.
 Applications may enforce minimum window sizes.
@@ -34,6 +35,10 @@ include::./util/conditional-options-header.adoc[]
 -h, --help:: Print help
 --window-id <window-id>::
 include::./util/window-id-flag-desc.adoc[]
+
+--size <percent>::
+Percentage of the usable width and height for `comfortable`, from 1 to 100.
+Defaults to 75.
 
 // end::body[]
 

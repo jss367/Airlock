@@ -82,7 +82,8 @@ airlock -h;
     | volume [--no-gui] (mute-toggle|mute-on|mute-off) [--no-gui]
     | volume [--no-gui] set <number> [--no-gui]
 
-    | window-frame [--window-id <window_id>] (left-half|right-half|center|comfortable) [--window-id <window_id>]
+    | window-frame [--window-id <window_id>] (left-half|right-half|center) [--window-id <window_id>]
+    | window-frame [--window-id <window_id>|--size <number>]... comfortable [--window-id <window_id>|--size <number>]...
 
     | workspace [--auto-back-and-forth|--fail-if-noop]... <workspace> [--auto-back-and-forth|--fail-if-noop]...
     | workspace [--wrap-around|--stdin|--no-stdin] (next|prev) [--wrap-around|--stdin|--no-stdin]

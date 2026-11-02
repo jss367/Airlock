@@ -39,6 +39,23 @@ final class WindowFrameCommandTest: XCTestCase {
                      Rect(topLeftX: -1400, topLeftY: -187.5, width: 1200, height: 675))
     }
 
+    func testComfortableSize() async throws {
+        let window = TestWindow.new(id: 1, parent: focus.workspace.rootTilingContainer,
+                                    rect: Rect(topLeftX: 100, topLeftY: 120, width: 600, height: 400))
+        XCTAssertTrue(window.focusWindow())
+        let result = try await parseCommand("window-frame comfortable --size 85").cmdOrDie.run(.defaultEnv, .emptyStdin)
+        assertEquals(result.exitCode, 0)
+        try await layoutWorkspaces()
+        assertEquals(window._rect, Rect(topLeftX: 144, topLeftY: 81, width: 1632, height: 918))
+    }
+
+    func testInvalidSize() {
+        XCTAssertNotNil(parseCommand("window-frame comfortable --size 0").errorOrNil)
+        XCTAssertNotNil(parseCommand("window-frame comfortable --size 101").errorOrNil)
+        XCTAssertNotNil(parseCommand("window-frame comfortable --size big").errorOrNil)
+        XCTAssertNotNil(parseCommand("window-frame center --size 85").errorOrNil)
+    }
+
     func testWindowIdTargetsAnotherWindowAndClearsMaximize() async throws {
         let focused = TestWindow.new(id: 1, parent: focus.workspace,
                                      rect: Rect(topLeftX: 100, topLeftY: 120, width: 600, height: 400))

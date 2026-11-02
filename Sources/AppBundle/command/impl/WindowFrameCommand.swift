@@ -16,7 +16,7 @@ struct WindowFrameCommand: Command {
         let monitor = config.enableWindowManagement
             ? target.workspace.workspaceMonitor
             : rect.center.monitorApproximation
-        let frame = windowFrame(args.preset.val, current: rect, visible: monitor.visibleRect)
+        let frame = windowFrame(args.preset.val, current: rect, visible: monitor.visibleRect, sizePercent: args.sizePercent)
         // Explicit placement takes this window out of automatic tiling.
         window.bindAsFloatingWindow(to: target.workspace)
         window.clearFullscreen()
@@ -26,14 +26,15 @@ struct WindowFrameCommand: Command {
     }
 }
 
-func windowFrame(_ preset: WindowFrameCmdArgs.Preset, current: Rect, visible: Rect) -> Rect {
+func windowFrame(_ preset: WindowFrameCmdArgs.Preset, current: Rect, visible: Rect, sizePercent: UInt? = nil) -> Rect {
     switch preset {
         case .leftHalf:
             return Rect(topLeftX: visible.minX, topLeftY: visible.minY, width: visible.width / 2, height: visible.height)
         case .rightHalf:
             return Rect(topLeftX: visible.center.x, topLeftY: visible.minY, width: visible.width / 2, height: visible.height)
         case .center, .comfortable:
-            let size = preset == .center ? current.size : CGSize(width: visible.width * 0.75, height: visible.height * 0.75)
+            let fraction = CGFloat(sizePercent ?? 75) / 100
+            let size = preset == .center ? current.size : CGSize(width: visible.width * fraction, height: visible.height * fraction)
             return Rect(
                 topLeftX: visible.center.x - size.width / 2,
                 topLeftY: visible.center.y - size.height / 2,
