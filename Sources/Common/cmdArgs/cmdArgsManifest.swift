@@ -136,7 +136,7 @@ func initSubcommands() -> [String: any SubCommandParserProtocol] {
             case .volume:
                 result[kind.rawValue] = SubCommandParser(VolumeCmdArgs.init)
             case .windowFrame:
-                result[kind.rawValue] = SubCommandParser(WindowFrameCmdArgs.init)
+                result[kind.rawValue] = SubCommandParser(parseWindowFrameCmdArgs)
             case .workspace:
                 result[kind.rawValue] = SubCommandParser(parseWorkspaceCmdArgs)
             case .workspaceBackAndForth:

@@ -163,7 +163,8 @@ let volume_help_generated = """
        OR: volume [-h|--help] set <number> [--no-gui]
     """
 let window_frame_help_generated = """
-    USAGE: window-frame [-h|--help] [--window-id <window-id>] (left-half|right-half|center|comfortable)
+    USAGE: window-frame [-h|--help] [--window-id <window-id>] (left-half|right-half|center)
+       OR: window-frame [-h|--help] [--window-id <window-id>] [--size <percent>] [--width <percent>] [--height <percent>] comfortable
     """
 let workspace_back_and_forth_help_generated = """
     USAGE: workspace-back-and-forth [-h|--help]
