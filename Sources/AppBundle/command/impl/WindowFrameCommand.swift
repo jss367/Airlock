@@ -16,7 +16,13 @@ struct WindowFrameCommand: Command {
         let monitor = config.enableWindowManagement
             ? target.workspace.workspaceMonitor
             : rect.center.monitorApproximation
-        let frame = windowFrame(args.preset.val, current: rect, visible: monitor.visibleRect, sizePercent: args.sizePercent)
+        let frame = windowFrame(
+            args.preset.val,
+            current: rect,
+            visible: monitor.visibleRect,
+            widthPercent: args.widthPercent ?? args.sizePercent,
+            heightPercent: args.heightPercent ?? args.sizePercent,
+        )
         // Explicit placement takes this window out of automatic tiling.
         window.bindAsFloatingWindow(to: target.workspace)
         window.clearFullscreen()
@@ -26,15 +32,23 @@ struct WindowFrameCommand: Command {
     }
 }
 
-func windowFrame(_ preset: WindowFrameCmdArgs.Preset, current: Rect, visible: Rect, sizePercent: UInt? = nil) -> Rect {
+func windowFrame(
+    _ preset: WindowFrameCmdArgs.Preset,
+    current: Rect,
+    visible: Rect,
+    widthPercent: UInt? = nil,
+    heightPercent: UInt? = nil,
+) -> Rect {
     switch preset {
         case .leftHalf:
             return Rect(topLeftX: visible.minX, topLeftY: visible.minY, width: visible.width / 2, height: visible.height)
         case .rightHalf:
             return Rect(topLeftX: visible.center.x, topLeftY: visible.minY, width: visible.width / 2, height: visible.height)
         case .center, .comfortable:
-            let fraction = CGFloat(sizePercent ?? 75) / 100
-            let size = preset == .center ? current.size : CGSize(width: visible.width * fraction, height: visible.height * fraction)
+            let size = preset == .center ? current.size : CGSize(
+                width: visible.width * CGFloat(widthPercent ?? 75) / 100,
+                height: visible.height * CGFloat(heightPercent ?? 75) / 100,
+            )
             return Rect(
                 topLeftX: visible.center.x - size.width / 2,
                 topLeftY: visible.center.y - size.height / 2,

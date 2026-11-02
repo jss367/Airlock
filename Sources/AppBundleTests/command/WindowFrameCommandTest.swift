@@ -47,13 +47,26 @@ final class WindowFrameCommandTest: XCTestCase {
         assertEquals(result.exitCode, 0)
         try await layoutWorkspaces()
         assertEquals(window._rect, Rect(topLeftX: 144, topLeftY: 81, width: 1632, height: 918))
+
+        let independent = try await parseCommand("window-frame comfortable --width 50 --height 90").cmdOrDie.run(.defaultEnv, .emptyStdin)
+        assertEquals(independent.exitCode, 0)
+        try await layoutWorkspaces()
+        assertEquals(window._rect, Rect(topLeftX: 480, topLeftY: 54, width: 960, height: 972))
+
+        let override = try await parseCommand("window-frame comfortable --size 50 --height 90").cmdOrDie.run(.defaultEnv, .emptyStdin)
+        assertEquals(override.exitCode, 0)
+        try await layoutWorkspaces()
+        assertEquals(window._rect, Rect(topLeftX: 480, topLeftY: 54, width: 960, height: 972))
     }
 
     func testInvalidSize() {
         XCTAssertNotNil(parseCommand("window-frame comfortable --size 0").errorOrNil)
         XCTAssertNotNil(parseCommand("window-frame comfortable --size 101").errorOrNil)
         XCTAssertNotNil(parseCommand("window-frame comfortable --size big").errorOrNil)
+        XCTAssertNotNil(parseCommand("window-frame comfortable --width 0").errorOrNil)
+        XCTAssertNotNil(parseCommand("window-frame comfortable --height 101").errorOrNil)
         XCTAssertNotNil(parseCommand("window-frame center --size 85").errorOrNil)
+        XCTAssertNotNil(parseCommand("window-frame left-half --width 85").errorOrNil)
     }
 
     func testWindowIdTargetsAnotherWindowAndClearsMaximize() async throws {

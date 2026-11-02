@@ -7,13 +7,17 @@ public struct WindowFrameCmdArgs: CmdArgs {
         help: window_frame_help_generated,
         flags: [
             "--window-id": optionalWindowIdFlag(),
-            "--size": singleValueSubArgParser(\.sizePercent, "<percent>") { UInt($0).flatMap { (1 ... 100).contains($0) ? $0 : nil } },
+            "--size": singleValueSubArgParser(\.sizePercent, "<percent>", parsePercent),
+            "--width": singleValueSubArgParser(\.widthPercent, "<percent>", parsePercent),
+            "--height": singleValueSubArgParser(\.heightPercent, "<percent>", parsePercent),
         ],
         posArgs: [newMandatoryPosArgParser(\.preset, parseWindowFramePreset, placeholder: Preset.unionLiteral)],
     )
 
     public var preset: Lateinit<Preset> = .uninitialized
     public var sizePercent: UInt? = nil
+    public var widthPercent: UInt? = nil
+    public var heightPercent: UInt? = nil
 
     public enum Preset: String, CaseIterable, Equatable, Sendable {
         case leftHalf = "left-half"
@@ -25,9 +29,13 @@ public struct WindowFrameCmdArgs: CmdArgs {
 
 func parseWindowFrameCmdArgs(_ args: StrArrSlice) -> ParsedCmd<WindowFrameCmdArgs> {
     parseSpecificCmdArgs(WindowFrameCmdArgs(rawArgs: args), args)
-        .filter("--size is only compatible with comfortable") {
-            ($0.sizePercent != nil).implies($0.preset.val == .comfortable)
+        .filter("--size, --width, and --height are only compatible with comfortable") {
+            ($0.sizePercent != nil || $0.widthPercent != nil || $0.heightPercent != nil).implies($0.preset.val == .comfortable)
         }
+}
+
+private func parsePercent(_ arg: String) -> UInt? {
+    UInt(arg).flatMap { (1 ... 100).contains($0) ? $0 : nil }
 }
 
 private func parseWindowFramePreset(i: PosArgParserInput) -> ParsedCliArgs<WindowFrameCmdArgs.Preset> {
