@@ -8,13 +8,13 @@ import XCTest
         setUpWorkspacesForTests()
         config.quickSwitcher.enabled = false
         config.focusFlash.enabled = false
-        TrayMenuModel.shared.isEnabled = true
+        sessionCoordinator.setEnabled(true)
         activeMode = mainModeId
         BindingTargetFixtureCommand.calls = []
     }
     override func tearDown() async throws {
         config.modes = [mainModeId: Mode(bindings: [:])]
-        TrayMenuModel.shared.isEnabled = true
+        sessionCoordinator.setEnabled(true)
         activeMode = mainModeId
         resetFocusCacheForTests()
     }
@@ -44,12 +44,12 @@ import XCTest
             let changed = HotkeyBinding(.option, .x, [parseCommand("enable toggle").cmdOrDie], descriptionWithKeyNotation: "option-x")
             config.modes["fixture"] = Mode(bindings: [changed.descriptionWithKeyCode: changed])
             let request = ClientRequest(args: ["enable", "off"], stdin: "", windowId: nil, workspace: nil)
-            _ = try await runSocketCommandSession(parseCommand("enable off").cmdOrDie, request: request, token: .forceRun)
+            _ = try await runSocketCommandSession(parseCommand("enable off").cmdOrDie, request: request)
             return nil
         }
         let request = ClientRequest(args: ["trigger-binding", "option-x", "--mode", "fixture"], stdin: "", windowId: nil, workspace: nil)
         do {
-            _ = try await runSocketCommandSession(parseCommand("trigger-binding option-x --mode fixture").cmdOrDie, request: request, token: .forceRun)
+            _ = try await runSocketCommandSession(parseCommand("trigger-binding option-x --mode fixture").cmdOrDie, request: request)
             XCTFail("Newer Pause must supersede the dynamically enabled binding")
         } catch is CancellationError {}
         XCTAssertEqual(queries, 2)

@@ -193,7 +193,7 @@ extension Workspace {
         trigger: trigger,
     ))
     if !config.enableWindowManagement || config.onFocusedMonitorChanged.isEmpty { return }
-    guard let token: RunSessionGuard = .isServerEnabled else { return }
+    guard let token: RunSessionGuard = .forCallback else { return }
     Task {
         await withErrorReporting("Running the focused-monitor callback") {
             try await runLightSession(.onFocusedMonitorChanged, token) {
@@ -209,7 +209,7 @@ extension Workspace {
         trigger: trigger,
     ))
     if !config.enableWindowManagement || config.onFocusChanged.isEmpty { return }
-    guard let token: RunSessionGuard = .isServerEnabled else { return }
+    guard let token: RunSessionGuard = .forCallback else { return }
     Task {
         await withErrorReporting("Running the focus callback") {
             try await runLightSession(.onFocusChanged, token) {

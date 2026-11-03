@@ -8,13 +8,13 @@ import XCTest
         setUpWorkspacesForTests()
         config.quickSwitcher.enabled = false
         config.focusFlash.enabled = false
-        TrayMenuModel.shared.isEnabled = true
+        sessionCoordinator.setEnabled(true)
         activeMode = mainModeId
         HarmlessTriggerFixtureCommand.calls = 0
     }
     override func tearDown() async throws {
         config.modes = [mainModeId: Mode(bindings: [:])]
-        TrayMenuModel.shared.isEnabled = true
+        sessionCoordinator.setEnabled(true)
         activeMode = mainModeId
         resetFocusCacheForTests()
     }
@@ -56,7 +56,7 @@ import XCTest
     }
     private func socket(_ text: String) async throws -> ServerAnswer {
         let request = ClientRequest(args: text.split(separator: " ").map(String.init), stdin: "", windowId: nil, workspace: nil)
-        return try await runSocketCommandSession(parseCommand(text).cmdOrDie, request: request, token: .forceRun)
+        return try await runSocketCommandSession(parseCommand(text).cmdOrDie, request: request)
     }
 }
 private struct HarmlessTriggerFixtureCommand: Command {

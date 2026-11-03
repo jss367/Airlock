@@ -14,7 +14,7 @@ func toggleMissionControl() {
         dismissMissionControl()
     } else {
         // Paused Airlock can't act on a selection, and pausing closes the panel. Stay closed
-        guard TrayMenuModel.shared.isEnabled else { return }
+        guard sessionCoordinator.isEnabled else { return }
         missionControlCaptureMonitor.start {
             dismissMissionControl(restoreFocus: false)
         }
@@ -43,7 +43,7 @@ func dismissMissionControl(restoreFocus: Bool = true) {
     let panel = missionControlPanel
     missionControlPanel = nil
     panel?.close()
-    if restoreFocus {
+    if restoreFocus, panel != nil {
         focus.windowOrNil?.nativeFocus()
     }
 }
@@ -350,21 +350,26 @@ struct MissionControlContent: View {
     @MainActor
     private func switchToWorkspace(_ ws: WorkspaceInfo) {
         guard let token: RunSessionGuard = .isServerEnabled else { return dismissMissionControlWhilePaused() }
+        let selectedPanel = missionControlPanel
         Task {
             do {
                 try await runLightSession(.menuBarButton, token) {
                     _ = Workspace.get(byName: ws.name).focusWorkspace()
                 }
+            } catch is CancellationError {
+                if missionControlPanel === selectedPanel { dismissMissionControl(restoreFocus: false) }
+                return
             } catch {
                 reportAppError(error, operation: "Switching workspace from Mission Control", userMessage: "Airlock could not switch workspace.")
             }
-            dismissMissionControl()
+            if missionControlPanel === selectedPanel { dismissMissionControl() }
         }
     }
 
     @MainActor
     private func focusWindow(_ window: WindowInfo) {
         guard let token: RunSessionGuard = .isServerEnabled else { return dismissMissionControlWhilePaused() }
+        let selectedPanel = missionControlPanel
         Task {
             do {
                 try await runLightSession(.menuBarButton, token) {
@@ -372,10 +377,13 @@ struct MissionControlContent: View {
                         _ = w.focusWindow()
                     }
                 }
+            } catch is CancellationError {
+                if missionControlPanel === selectedPanel { dismissMissionControl(restoreFocus: false) }
+                return
             } catch {
                 reportAppError(error, operation: "Focusing a window from Mission Control", userMessage: "Airlock could not focus the window.")
             }
-            dismissMissionControl()
+            if missionControlPanel === selectedPanel { dismissMissionControl() }
         }
     }
 }

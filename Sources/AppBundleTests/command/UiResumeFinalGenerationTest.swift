@@ -10,7 +10,7 @@ import XCTest
         uiResumeFocus.reset()
     }
     override func tearDown() async throws {
-        TrayMenuModel.shared.isEnabled = true
+        sessionCoordinator.setEnabled(true)
         resetFocusCacheForTests()
         uiResumeFocus.reset()
     }

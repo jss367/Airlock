@@ -13,7 +13,7 @@ final class EnableCommandTest: XCTestCase {
     }
 
     override func tearDown() async throws {
-        TrayMenuModel.shared.isEnabled = true
+        sessionCoordinator.setEnabled(true)
         resetFocusCacheForTests() // Also cancels the refresh the session scheduled
         uiResumeFocus.reset()
         appLauncherPresentation = nil
@@ -67,7 +67,7 @@ final class EnableCommandTest: XCTestCase {
         window.sizeQueryForTests = {
             reads += 1
             let request = ClientRequest(args: ["enable", "off"], stdin: "", windowId: nil, workspace: nil)
-            _ = try await runSocketCommandSession(parseCommand("enable off").cmdOrDie, request: request, token: .forceRun)
+            _ = try await runSocketCommandSession(parseCommand("enable off").cmdOrDie, request: request)
             XCTAssertNil(activeMode)
             return CGSize(width: 90, height: 100)
         }
@@ -174,7 +174,7 @@ final class EnableCommandTest: XCTestCase {
         uiResumeFocus.remember {
             await Task.yield()
             // A later action completed while the earlier resume was querying the old external app.
-            TrayMenuModel.shared.isEnabled = true
+            sessionCoordinator.setEnabled(true)
             check(newer.focusWindow())
             return stale
         }

@@ -65,7 +65,7 @@ extension HotKey {
     if oldMode != targetMode {
         broadcastEvent(.modeChanged(mode: targetMode))
         if !config.onModeChanged.isEmpty {
-            guard let token: RunSessionGuard = .isServerEnabled else { return }
+            guard let token: RunSessionGuard = .forCallback else { return }
             try await adoptResumeWindowBeforeModeCallbacks()
             try await runLightSession(.onModeChanged, token, beforeEffects: {
                 try await validateResumeWindowBeforeModeEffects()
@@ -179,8 +179,9 @@ func parseBinding(_ raw: String, _ backtrace: TomlBacktrace, _ mapping: [String:
 /// The same command-session path used by registered hotkeys, without key registration in tests.
 @MainActor
 func runHotkeyCommandSession(_ commands: [any Command]) async throws {
+    guard sessionCoordinator.isEnabled else { return }
     let prepared = PreparedCommandSession(commands)
-    try await runLightSession(.hotkeyBinding, .checkServerIsEnabledOrDie(), admissionCheck: prepared.validateAdmission) {
+    try await runLightSession(.hotkeyBinding, prepared.admission) {
         _ = try await prepared.run(.defaultEnv, .emptyStdin)
     }
 }

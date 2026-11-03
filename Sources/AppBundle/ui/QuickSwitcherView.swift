@@ -12,7 +12,7 @@ func registerQuickSwitcherHotkey() {
     quickSwitcherHotkey = nil
 
     // Paused Airlock owns no hotkeys. EnableCommand calls this again on resume
-    guard config.quickSwitcher.enabled && TrayMenuModel.shared.isEnabled else { return }
+    guard config.quickSwitcher.enabled && sessionCoordinator.isEnabled else { return }
 
     let parsed = parseBinding(config.quickSwitcher.binding, .emptyRoot, config.keyMapping.resolve())
     guard case .success(let (modifiers, key)) = parsed else { return }
@@ -33,7 +33,7 @@ func toggleQuickSwitcher() {
         dismissQuickSwitcher()
     } else {
         // Paused Airlock can't act on a selection, and pausing closes the panel. Stay closed
-        guard TrayMenuModel.shared.isEnabled else { return }
+        guard sessionCoordinator.isEnabled else { return }
         let panel = QuickSwitcherPanel()
         quickSwitcherPanel = panel
         panel.show()
@@ -45,9 +45,9 @@ func toggleQuickSwitcher() {
 @MainActor
 func dismissQuickSwitcher(restoreFocus: Bool = true) {
     // Clear the global before closing: close() resigns key, and resignKey dismisses only the current panel
-    let panel = quickSwitcherPanel
+    guard let panel = quickSwitcherPanel else { return }
     quickSwitcherPanel = nil
-    panel?.close()
+    panel.close()
     if restoreFocus {
         focus.windowOrNil?.nativeFocus()
     }
@@ -396,6 +396,7 @@ struct QuickSwitcherContent: View {
                     dismissQuickSwitcher(restoreFocus: false)
                     return
                 }
+                let selectedPanel = quickSwitcherPanel
                 Task {
                     do {
                         try await runLightSession(.menuBarButton, token) {
@@ -410,10 +411,13 @@ struct QuickSwitcherContent: View {
                                     break
                             }
                         }
+                    } catch is CancellationError {
+                        if quickSwitcherPanel === selectedPanel { dismissQuickSwitcher(restoreFocus: false) }
+                        return
                     } catch {
                         reportAppError(error, operation: "Selecting an item in Quick Switcher", userMessage: "Airlock could not switch to the selected item.")
                     }
-                    dismissQuickSwitcher()
+                    if quickSwitcherPanel === selectedPanel { dismissQuickSwitcher() }
                 }
         }
     }

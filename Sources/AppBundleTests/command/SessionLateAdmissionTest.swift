@@ -16,7 +16,7 @@ import XCTest
     }
     override func tearDown() async throws {
         config.onModeChanged = []
-        TrayMenuModel.shared.isEnabled = true
+        sessionCoordinator.setEnabled(true)
         activeMode = mainModeId
         resetFocusCacheForTests()
         uiResumeFocus.reset()
@@ -38,7 +38,7 @@ import XCTest
         let hidden = FakeLayoutWindow(353, parent: Workspace.get(byName: "hidden").rootTilingContainer)
         XCTAssertTrue(selected.focusWindow())
         selected.nativeFocus()
-        let check = captureEnabledSessionAdmission()
+        let check = RunSessionGuard.enabled
         var queries = 0
         floating.rectQuery = {
             queries += 1
@@ -46,7 +46,7 @@ import XCTest
             try await self.pauseThroughSocket()
             return floating.rect
         }
-        do { try await runAppLauncherWindowSession(selected, admissionCheck: check) {} }
+        do { try await runAppLauncherWindowSession(selected, admission: check) {} }
         catch is CancellationError {}
         XCTAssertEqual(queries, 1)
         XCTAssertFalse(TrayMenuModel.shared.isEnabled)
@@ -60,12 +60,12 @@ import XCTest
         let pending = FakeLayoutWindow(356, parent: hiddenWorkspace.rootTilingContainer)
         XCTAssertTrue(selected.focusWindow())
         selected.nativeFocus()
-        let check = captureEnabledSessionAdmission()
+        let check = RunSessionGuard.enabled
         pending.hideQuery = {
             await Task.yield()
             try await self.pauseThroughSocket()
         }
-        do { try await runAppLauncherWindowSession(selected, admissionCheck: check) {} }
+        do { try await runAppLauncherWindowSession(selected, admission: check) {} }
         catch is CancellationError {}
         XCTAssertFalse(TrayMenuModel.shared.isEnabled)
         XCTAssertEqual(admitted.hideWrites, 1)
@@ -186,7 +186,7 @@ import XCTest
     }
     private func pauseThroughSocket() async throws {
         let request = ClientRequest(args: ["enable", "off"], stdin: "", windowId: nil, workspace: nil)
-        _ = try await runSocketCommandSession(parseCommand("enable off").cmdOrDie, request: request, token: .forceRun)
+        _ = try await runSocketCommandSession(parseCommand("enable off").cmdOrDie, request: request)
     }
 }
 

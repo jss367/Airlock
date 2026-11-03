@@ -10,7 +10,7 @@ import XCTest
         config.preventFocusStealing = .always
     }
     override func tearDown() async throws {
-        TrayMenuModel.shared.isEnabled = true
+        sessionCoordinator.setEnabled(true)
         resetFocusCacheForTests()
         resetFocusStealingPreventionForTests()
     }
@@ -24,13 +24,13 @@ import XCTest
         try await exercisePendingRequest(hotkey: true, laterUi: false)
     }
     func testPendingSocketOffInvalidatesLauncherBeforeItsQueryCompletes() async throws {
-        let launcherAdmission = captureEnabledSessionAdmission()
+        let launcherAdmission = RunSessionGuard.enabled
         var queries = 0
         appForTests = EnableDispatchFixtureApp {
             queries += 1
             XCTAssertTrue(TrayMenuModel.shared.isEnabled) // Body has not paused yet.
             do {
-                try launcherAdmission()
+                try launcherAdmission.validateAdmission()
                 XCTFail("Accepted CLI Pause must invalidate older launcher admission before AX returns")
             } catch is CancellationError {}
             await Task.yield()
@@ -47,7 +47,7 @@ import XCTest
             _ = try await socket("enable off")
             XCTAssertFalse(TrayMenuModel.shared.isEnabled)
             let request = ClientRequest(args: ["enable", "on"], stdin: "", windowId: nil, workspace: nil)
-            let answer = try await runSocketCommandSession(reusable, request: request, token: .forceRun)
+            let answer = try await runSocketCommandSession(reusable, request: request)
             XCTAssertEqual(answer.exitCode, 0)
             XCTAssertTrue(TrayMenuModel.shared.isEnabled)
             XCTAssertEqual(activeMode, mainModeId)
@@ -68,6 +68,15 @@ import XCTest
         let answer = try await socket("enable off --fail-if-noop")
         XCTAssertEqual(answer.exitCode, 1)
         XCTAssertFalse(TrayMenuModel.shared.isEnabled)
+    }
+    func testModeCommandCanPauseThroughItsConfiguredCallbackWithoutCancelingItself() async throws {
+        config.modes["fixture"] = Mode(bindings: [:])
+        config.onModeChanged = [parseCommand("enable off").cmdOrDie]
+        defer { config.onModeChanged = [] }
+        let answer = try await socket("mode fixture")
+        XCTAssertEqual(answer.exitCode, 0)
+        XCTAssertFalse(TrayMenuModel.shared.isEnabled)
+        XCTAssertNil(activeMode)
     }
     private func exercisePendingRequest(hotkey: Bool, laterUi: Bool) async throws {
         let old = TestWindow.new(id: 321, parent: Workspace.get(byName: "old").rootTilingContainer)
@@ -100,7 +109,7 @@ import XCTest
     private func socket(_ text: String) async throws -> ServerAnswer {
         let command = parseCommand(text).cmdOrDie
         let request = ClientRequest(args: text.split(separator: " ").map(String.init), stdin: "", windowId: nil, workspace: nil)
-        return try await runSocketCommandSession(command, request: request, token: .forceRun)
+        return try await runSocketCommandSession(command, request: request)
     }
 }
 
