@@ -103,7 +103,7 @@ import XCTest
                                 if let newerEnable {
                                     let args = ["enable", newerEnable.rawValue]
                                     let request = ClientRequest(args: args, stdin: "", windowId: nil, workspace: nil)
-                                    _ = try await runSocketCommandSession(parseCommand(args).cmdOrDie, request: request)
+                                    _ = try await runSocketCommandSession(parseCommand(args).cmdOrDie, request: request, admission: XCTUnwrap(socketCommandAdmission(parseCommand(args).cmdOrDie)))
                                 }
                                 newer.nativeFocus()
                                 return newer

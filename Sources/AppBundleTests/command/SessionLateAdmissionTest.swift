@@ -186,7 +186,7 @@ import XCTest
     }
     private func pauseThroughSocket() async throws {
         let request = ClientRequest(args: ["enable", "off"], stdin: "", windowId: nil, workspace: nil)
-        _ = try await runSocketCommandSession(parseCommand("enable off").cmdOrDie, request: request)
+        _ = try await runSocketCommandSession(parseCommand("enable off").cmdOrDie, request: request, admission: XCTUnwrap(socketCommandAdmission(parseCommand("enable off").cmdOrDie)))
     }
 }
 

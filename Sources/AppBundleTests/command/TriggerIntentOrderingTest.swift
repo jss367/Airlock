@@ -56,7 +56,7 @@ import XCTest
     }
     private func socket(_ text: String) async throws -> ServerAnswer {
         let request = ClientRequest(args: text.split(separator: " ").map(String.init), stdin: "", windowId: nil, workspace: nil)
-        return try await runSocketCommandSession(parseCommand(text).cmdOrDie, request: request)
+        return try await runSocketCommandSession(parseCommand(text).cmdOrDie, request: request, admission: XCTUnwrap(socketCommandAdmission(parseCommand(text).cmdOrDie)))
     }
 }
 private struct HarmlessTriggerFixtureCommand: Command {

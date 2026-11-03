@@ -73,13 +73,30 @@ final class EnabledSessionAdmissionTest: XCTestCase {
         XCTAssertEqual(actions, 1)
     }
 
+    func testSocketDispatchRejectsAcceptedCommandAfterPauseThenResume() async throws {
+        let command = parseCommand("mode main").cmdOrDie
+        let admission = try XCTUnwrap(socketCommandAdmission(command))
+        _ = try await parseCommand("enable off").cmdOrDie.run(.defaultEnv, .emptyStdin)
+        _ = try await parseCommand("enable on").cmdOrDie.run(.defaultEnv, .emptyStdin)
+        var queries = 0
+        appForTests = EnabledSessionFixtureApp { queries += 1; return nil }
+        let request = ClientRequest(args: ["mode", "main"], stdin: "", windowId: nil, workspace: nil)
+        do {
+            _ = try await runSocketCommandSession(command, request: request, admission: admission)
+            XCTFail("Pause/Resume must invalidate the request accepted before dispatch")
+        } catch is CancellationError {}
+        XCTAssertEqual(queries, 0)
+    }
+
     func testSocketDispatchRejectsAnOrdinaryCommandAfterPause() async throws {
+        let command = parseCommand("focus left").cmdOrDie
+        let admission = try XCTUnwrap(socketCommandAdmission(command))
         _ = try await parseCommand("enable off").cmdOrDie.run(.defaultEnv, .emptyStdin)
         var queries = 0
         appForTests = EnabledSessionFixtureApp { queries += 1; return nil }
         let request = ClientRequest(args: ["focus", "left"], stdin: "", windowId: nil, workspace: nil)
         do {
-            _ = try await runSocketCommandSession(parseCommand("focus left").cmdOrDie, request: request)
+            _ = try await runSocketCommandSession(command, request: request, admission: admission)
             XCTFail("A request accepted before Pause must be rejected when dispatched afterward")
         } catch is CancellationError {}
         XCTAssertEqual(queries, 0)

@@ -74,7 +74,7 @@ private func newConnection(_ connection: NWConnection) async {
             continue
         }
         let (command, help, err) = parseCommand(request.args).unwrap()
-        guard await acceptsSocketCommand(command) else {
+        guard let admission = await socketCommandAdmission(command) else {
             await answerToClient(
                 exitCode: 1,
                 stderr: "\(airlockAppName) server is disabled and doesn't accept commands. " +
@@ -96,7 +96,7 @@ private func newConnection(_ connection: NWConnection) async {
         }
         if let command {
             let _answer: Result<ServerAnswer, Error> = await Result {
-                try await runSocketCommandSession(command, request: request)
+                try await runSocketCommandSession(command, request: request, admission: admission)
             }
             var answer = _answer.getOrNil() ??
                 ServerAnswer(
@@ -116,9 +116,10 @@ private func newConnection(_ connection: NWConnection) async {
 
 /// Parsed request dispatch, kept separate from transport so the full session prelude is testable.
 @MainActor
-func runSocketCommandSession(_ command: any Command, request: ClientRequest) async throws -> ServerAnswer {
-    // Pause can happen after the transport accepted this request but before main-actor dispatch.
-    guard acceptsSocketCommand(command) else { throw CancellationError() }
+func runSocketCommandSession(_ command: any Command, request: ClientRequest, admission: RunSessionGuard) async throws -> ServerAnswer {
+    // Validate the transport's generation before reserving a fresh command order. A Pause/Resume
+    // between acceptance and dispatch must not admit an ordinary command into the new generation.
+    try admission.validateAdmission()
     let prepared = PreparedCommandSession([command])
     if command.info.kind.mayChangeFocus { markUserInitiatedFocusChange() }
     return try await runLightSession(.socketServer(command.args), prepared.admission) {
@@ -129,6 +130,10 @@ func runSocketCommandSession(_ command: any Command, request: ClientRequest) asy
 }
 
 @MainActor
-private func acceptsSocketCommand(_ command: (any Command)?) -> Bool {
-    command is EnableCommand || sessionCoordinator.isEnabled
+func socketCommandAdmission(_ command: (any Command)?) -> RunSessionGuard? {
+    // Enable remains admissible while paused. Once dispatched, PreparedCommandSession owns the
+    // invocation guard so configured callbacks can intentionally pause/resume within that command.
+    command is EnableCommand
+        ? .command(intent: sessionCoordinator.reserveInvocationOrder())
+        : .isServerEnabled
 }

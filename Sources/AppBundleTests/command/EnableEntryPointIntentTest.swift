@@ -47,7 +47,7 @@ import XCTest
             _ = try await socket("enable off")
             XCTAssertFalse(TrayMenuModel.shared.isEnabled)
             let request = ClientRequest(args: ["enable", "on"], stdin: "", windowId: nil, workspace: nil)
-            let answer = try await runSocketCommandSession(reusable, request: request)
+            let answer = try await runSocketCommandSession(reusable, request: request, admission: XCTUnwrap(socketCommandAdmission(reusable)))
             XCTAssertEqual(answer.exitCode, 0)
             XCTAssertTrue(TrayMenuModel.shared.isEnabled)
             XCTAssertEqual(activeMode, mainModeId)
@@ -109,7 +109,7 @@ import XCTest
     private func socket(_ text: String) async throws -> ServerAnswer {
         let command = parseCommand(text).cmdOrDie
         let request = ClientRequest(args: text.split(separator: " ").map(String.init), stdin: "", windowId: nil, workspace: nil)
-        return try await runSocketCommandSession(command, request: request)
+        return try await runSocketCommandSession(command, request: request, admission: XCTUnwrap(socketCommandAdmission(command)))
     }
 }
 

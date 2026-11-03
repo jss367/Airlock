@@ -44,12 +44,12 @@ import XCTest
             let changed = HotkeyBinding(.option, .x, [parseCommand("enable toggle").cmdOrDie], descriptionWithKeyNotation: "option-x")
             config.modes["fixture"] = Mode(bindings: [changed.descriptionWithKeyCode: changed])
             let request = ClientRequest(args: ["enable", "off"], stdin: "", windowId: nil, workspace: nil)
-            _ = try await runSocketCommandSession(parseCommand("enable off").cmdOrDie, request: request)
+            _ = try await runSocketCommandSession(parseCommand("enable off").cmdOrDie, request: request, admission: XCTUnwrap(socketCommandAdmission(parseCommand("enable off").cmdOrDie)))
             return nil
         }
         let request = ClientRequest(args: ["trigger-binding", "option-x", "--mode", "fixture"], stdin: "", windowId: nil, workspace: nil)
         do {
-            _ = try await runSocketCommandSession(parseCommand("trigger-binding option-x --mode fixture").cmdOrDie, request: request)
+            _ = try await runSocketCommandSession(parseCommand("trigger-binding option-x --mode fixture").cmdOrDie, request: request, admission: XCTUnwrap(socketCommandAdmission(parseCommand("trigger-binding option-x --mode fixture").cmdOrDie)))
             XCTFail("Newer Pause must supersede the dynamically enabled binding")
         } catch is CancellationError {}
         XCTAssertEqual(queries, 2)
