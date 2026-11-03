@@ -16,7 +16,7 @@ enum GlobalObserver {
             MainActor.assumeIsolated { rememberExternalAppForUiResume(activatedApp) }
         }
         Task { @MainActor in
-            if !TrayMenuModel.shared.isEnabled { return }
+            if !sessionCoordinator.isEnabled { return }
             if notifName == NSWorkspace.didActivateApplicationNotification.rawValue {
                 markRecentAppActivation()
                 scheduleRefreshSession(.globalObserver(notifName), optimisticallyPreLayoutWorkspaces: true)
@@ -58,7 +58,7 @@ enum GlobalObserver {
     private static func onSpaceChange(_ notification: Notification) {
         let notifName = notification.name.rawValue
         Task { @MainActor in
-            if !TrayMenuModel.shared.isEnabled { return }
+            if !sessionCoordinator.isEnabled { return }
             if !hadRecentAppActivation {
                 markUserInitiatedFocusChange()
             }

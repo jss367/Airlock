@@ -25,15 +25,15 @@ func beginAppLauncherSelection(isEnabled: Bool, dismiss: (Bool) -> Void) -> Bool
 /// A selection accepted before Pause can still be waiting in its session's native-focus query.
 @MainActor
 func runAppLauncherWindowAction(_ window: Window, action: () -> Void) {
-    guard TrayMenuModel.shared.isEnabled, window.isBound else { return }
+    guard sessionCoordinator.isEnabled, window.isBound else { return }
     action()
 }
 
 /// Shared by current-workspace focus and cross-workspace summon. Admission is captured by the
 /// selection caller before Task starts, and rechecked after the session's awaited initial query.
 @MainActor
-func runAppLauncherWindowSession(_ window: Window, admissionCheck: @MainActor @escaping () throws -> Void, action: @MainActor () -> Void) async throws {
-    try await runLightSession(.menuBarButton, .forceRun, admissionCheck: admissionCheck) {
+func runAppLauncherWindowSession(_ window: Window, admission: RunSessionGuard, action: @MainActor () -> Void) async throws {
+    try await runLightSession(.menuBarButton, admission) {
         runAppLauncherWindowAction(window, action: action)
     }
 }
@@ -172,7 +172,7 @@ final class AppLauncherPanel: NSPanelHud, AppLauncherPresentation {
 
     @MainActor
     func show() {
-        guard TrayMenuModel.shared.isEnabled else { return }
+        guard sessionCoordinator.isEnabled else { return }
         if Self.debugLogging { NSLog("[AppLauncher] === show() called ===") }
 
         viewModel.reset()
@@ -222,7 +222,7 @@ final class AppLauncherPanel: NSPanelHud, AppLauncherPresentation {
 
     @MainActor
     func launchApp(_ app: InstalledApp) {
-        guard beginAppLauncherSelection(isEnabled: TrayMenuModel.shared.isEnabled, dismiss: { dismiss(restoreFocus: $0) }) else { return }
+        guard beginAppLauncherSelection(isEnabled: sessionCoordinator.isEnabled, dismiss: { dismiss(restoreFocus: $0) }) else { return }
 
         // Check if the app is already running and has windows. summon-app --new-window can start
         // several processes for one bundle id, so look at every matching process
@@ -241,21 +241,19 @@ final class AppLauncherPanel: NSPanelHud, AppLauncherPresentation {
             if let windowOnCurrentWs {
                 // Already on current workspace — just focus it. Through Airlock's own focus, not
                 // only macOS's: otherwise prevent-focus-stealing sees a steal and reverts it
-                guard TrayMenuModel.shared.isEnabled else { return }
-                let admissionCheck = captureEnabledSessionAdmission()
+                guard let admission: RunSessionGuard = .isServerEnabled else { return }
                 Task {
                     await withErrorReporting("Focusing an app window", userMessage: "Airlock could not focus the app window.") {
-                        try await runAppLauncherWindowSession(windowOnCurrentWs, admissionCheck: admissionCheck) { _ = windowOnCurrentWs.focusWindow() }
+                        try await runAppLauncherWindowSession(windowOnCurrentWs, admission: admission) { _ = windowOnCurrentWs.focusWindow() }
                     }
                 }
             } else if let windowToMove = appWindows.first {
                 // Move a window from another workspace to current. Inside a session so the
                 // layout and Airlock's own focus get updated, not only macOS's
-                guard TrayMenuModel.shared.isEnabled else { return }
-                let admissionCheck = captureEnabledSessionAdmission()
+                guard let admission: RunSessionGuard = .isServerEnabled else { return }
                 Task {
                     await withErrorReporting("Summoning an app window", userMessage: "Airlock could not bring the app window to this workspace.") {
-                        try await runAppLauncherWindowSession(windowToMove, admissionCheck: admissionCheck) {
+                        try await runAppLauncherWindowSession(windowToMove, admission: admission) {
                             _ = windowToMove.bindAsFloatingWindow(to: currentWorkspace)
                             _ = windowToMove.focusWindow()
                         }

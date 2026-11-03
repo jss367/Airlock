@@ -10,7 +10,7 @@ import XCTest
         config.preventFocusStealing = .always
     }
     override func tearDown() async throws {
-        TrayMenuModel.shared.isEnabled = true
+        sessionCoordinator.setEnabled(true)
         resetFocusCacheForTests()
         resetFocusStealingPreventionForTests()
     }
@@ -36,7 +36,7 @@ import XCTest
         old.nativeFocus()
         _ = updateFocusCache(old)
         let selectedWorkspace = selected.nodeWorkspace
-        let admissionCheck = captureEnabledSessionAdmission()
+        let admissionCheck = RunSessionGuard.enabled
         var queries = 0
         var actions = 0
         var now = ContinuousClock().now
@@ -54,7 +54,7 @@ import XCTest
             return external
         }
         do {
-            try await runAppLauncherWindowSession(selected, admissionCheck: admissionCheck) {
+            try await runAppLauncherWindowSession(selected, admission: admissionCheck) {
                 actions += 1
                 if crossWorkspace { _ = selected.bindAsFloatingWindow(to: old.nodeWorkspace!) }
                 _ = selected.focusWindow()
@@ -71,13 +71,13 @@ import XCTest
     }
     func testPauseBeforeQueuedSessionStartsDoesNotQueryOrAct() async throws {
         let selected = TestWindow.new(id: 304, parent: Workspace.get(byName: "selected").rootTilingContainer)
-        let admissionCheck = captureEnabledSessionAdmission()
+        let admissionCheck = RunSessionGuard.enabled
         _ = try await parseCommand("enable off").cmdOrDie.run(.defaultEnv, .emptyStdin)
         var queries = 0
         var actions = 0
         appForTests = DelayedLauncherFixtureApp { queries += 1; return selected }
         do {
-            try await runAppLauncherWindowSession(selected, admissionCheck: admissionCheck) { actions += 1 }
+            try await runAppLauncherWindowSession(selected, admission: admissionCheck) { actions += 1 }
             XCTFail("Superseded queued session must stop at entry")
         } catch is CancellationError {}
         XCTAssertEqual(queries, 0)
@@ -88,10 +88,10 @@ import XCTest
         let selected = TestWindow.new(id: 306, parent: Workspace.get(byName: "selected").rootTilingContainer)
         XCTAssertTrue(old.focusWindow())
         old.nativeFocus()
-        let admissionCheck = captureEnabledSessionAdmission()
+        let admissionCheck = RunSessionGuard.enabled
         var actions = 0
         appForTests = DelayedLauncherFixtureApp { await Task.yield(); return old }
-        try await runAppLauncherWindowSession(selected, admissionCheck: admissionCheck) {
+        try await runAppLauncherWindowSession(selected, admission: admissionCheck) {
             actions += 1
             _ = selected.focusWindow()
         }

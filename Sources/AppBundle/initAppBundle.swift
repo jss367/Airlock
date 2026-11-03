@@ -40,7 +40,7 @@ import Foundation
     Workspace.garbageCollectUnusedWorkspaces() // init workspaces
     _ = Workspace.all.first?.focusWorkspace()
     try await runRefreshSessionBlocking(.startup, layoutWorkspaces: false)
-    try await runLightSession(.startup, .forceRun) {
+    try await runLightSession(.startup, .startup) {
         smartLayoutAtStartup()
         _ = try await config.afterStartupCommand.runCmdSeq(.defaultEnv, .emptyStdin)
     }

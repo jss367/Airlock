@@ -21,7 +21,7 @@ func runRefreshSessionBlocking(
 ) async throws {
     let state = signposter.beginInterval(#function, "event: \(event) axTaskLocalAppThreadToken: \(axTaskLocalAppThreadToken?.idForDebug)")
     defer { signposter.endInterval(#function, state) }
-    if !TrayMenuModel.shared.isEnabled { return }
+    if !sessionCoordinator.isEnabled { return }
     focusEvents.note(event)
     try await $refreshSessionEvent.withValue(event) {
         try await $_isStartup.withValue(event.isStartup) {
@@ -55,54 +55,54 @@ func runRefreshSessionBlocking(
 @MainActor
 func runLightSession<T>(
     _ event: RefreshSessionEvent,
-    _: RunSessionGuard,
+    _ admission: RunSessionGuard,
     syncFocusBeforeBody: Bool = true,
-    admissionCheck: @MainActor @escaping () throws -> Void = {},
     beforeEffects: @MainActor @escaping () async throws -> Void = {},
     body: @MainActor () async throws -> T,
 ) async throws -> T {
     let state = signposter.beginInterval(#function, "event: \(event) axTaskLocalAppThreadToken: \(axTaskLocalAppThreadToken?.idForDebug)")
     defer { signposter.endInterval(#function, state) }
     let checkEffects: @MainActor () async throws -> Void = {
-        try admissionCheck()
+        try admission.validateAdmission()
         try await beforeEffects()
-        try admissionCheck()
+        try admission.validateAdmission()
     }
     try await checkEffects()
     focusEvents.cancelRefresh() // Give priority to runSession
-    return try await $refreshSessionEvent.withValue(event) {
-        try await $_isStartup.withValue(event.isStartup) {
-            let focusSyncedFromMacOs = syncFocusBeforeBody ? try await focusEvents.syncFocus(
-                consumingEvidence: false,
-                query: {
-                    let native = try await queryNativeFocusForSession(admissionCheck: admissionCheck, beforeEffects: checkEffects)
-                    // A captured force-run token does not prove the queued feature still owns this session.
-                    // Validate before syncFocus applies its answer or refreshModel can restore stale focus.
-                    try await checkEffects()
-                    return native
-                },
-                apply: updateFocusCache,
-            ) : false
-            try await checkEffects()
-            let focusBefore = focus.windowOrNil
+    return try await CommandInvocationIntent.$order.withValue(admission.invocationOrder) {
+        try await $refreshSessionEvent.withValue(event) {
+            try await $_isStartup.withValue(event.isStartup) {
+                let focusSyncedFromMacOs = syncFocusBeforeBody ? try await focusEvents.syncFocus(
+                    consumingEvidence: false,
+                    query: {
+                        let native = try await queryNativeFocusForSession(admissionCheck: admission.validateAdmission, beforeEffects: checkEffects)
+                        // Validate before syncFocus applies its answer or refreshModel can restore stale focus.
+                        try await checkEffects()
+                        return native
+                    },
+                    apply: updateFocusCache,
+                ) : false
+                try await checkEffects()
+                let focusBefore = focus.windowOrNil
 
-            if syncFocusBeforeBody { refreshModel(focusSyncedFromMacOs: focusSyncedFromMacOs) }
-            let result = try await body()
-            try await checkEffects()
-            refreshModel()
+                if syncFocusBeforeBody { refreshModel(focusSyncedFromMacOs: focusSyncedFromMacOs) }
+                let result = try await body()
+                try await checkEffects()
+                refreshModel()
 
-            let focusAfter = focus.windowOrNil
+                let focusAfter = focus.windowOrNil
 
-            updateTrayText()
-            SecureInputPanel.shared.refresh()
-            try await layoutWorkspaces(admissionCheck: checkEffects)
-            try await checkEffects()
-            FocusFlashController.shared.flushPendingFlash()
-            if focusBefore != focusAfter {
-                focusAfter?.nativeFocus() // syncFocusToMacOs
+                updateTrayText()
+                SecureInputPanel.shared.refresh()
+                try await layoutWorkspaces(admissionCheck: checkEffects)
+                try await checkEffects()
+                FocusFlashController.shared.flushPendingFlash()
+                if focusBefore != focusAfter {
+                    focusAfter?.nativeFocus() // syncFocusToMacOs
+                }
+                scheduleRefreshSession(event)
+                return result
             }
-            scheduleRefreshSession(event)
-            return result
         }
     }
 }
@@ -126,26 +126,6 @@ private func queryNativeFocusForSession(admissionCheck: @MainActor () throws -> 
         try await debugWindowsIfRecording(nativeFocused)
     }
     return nativeFocused
-}
-
-struct RunSessionGuard: Sendable {
-    @MainActor
-    static var isServerEnabled: RunSessionGuard? { TrayMenuModel.shared.isEnabled ? forceRun : nil }
-    @MainActor
-    static func isServerEnabled(orIsEnableCommand command: (any Command)?) -> RunSessionGuard? {
-        command is EnableCommand ? .forceRun : .isServerEnabled
-    }
-    @MainActor
-    static func checkServerIsEnabledOrDie(
-        file: StaticString = #fileID,
-        line: Int = #line,
-        column: Int = #column,
-        function: String = #function,
-    ) -> RunSessionGuard {
-        .isServerEnabled ?? dieT("server is disabled", file: file, line: line, column: column, function: function)
-    }
-    static let forceRun = RunSessionGuard()
-    private init() {}
 }
 
 @MainActor
@@ -179,7 +159,7 @@ private func refresh() async throws {
 func refreshObs(_: AXObserver, _: AXUIElement, notif: CFString, _: UnsafeMutableRawPointer?) {
     let notif = notif as String
     Task { @MainActor in
-        if !TrayMenuModel.shared.isEnabled { return }
+        if !sessionCoordinator.isEnabled { return }
         scheduleRefreshSession(.ax(notif))
     }
 }
@@ -199,7 +179,7 @@ func layoutWorkspaces(admissionCheck: @MainActor @escaping () async throws -> Vo
         }
         return
     }
-    if !TrayMenuModel.shared.isEnabled {
+    if !sessionCoordinator.isEnabled {
         for workspace in Workspace.all {
             for window in workspace.allLeafWindowsRecursive {
                 try await admissionCheck()

@@ -50,6 +50,13 @@ Command implementations live in [`Sources/AppBundle/command/`](../Sources/AppBun
 Replacing a refresh cancels its task but retains its evidence. After querying macOS, a refresh checks
 cancellation before consuming evidence and applying focus, with no suspension between those steps.
 Light command sessions synchronize focus without consuming evidence needed by a newer refresh.
+`SessionCoordinator` owns running state and enable-invocation ordering; the tray model observes
+that state. Every light session requires a `RunSessionGuard`, captured before queuing UI work
+and checked at entry, after the native-focus query, and before later layout/focus effects.
+Pause invalidates older UI actions even if Resume follows before their queries finish. Command
+sessions and configured callbacks share an invocation order so intentional nested Pause/Resume
+commands can complete, while a newer explicit invocation supersedes them. Reserving an order
+does not supersede a pending enable request until an Enable command actually executes.
 `FocusStealingPreventionState` owns the user-action and app-activation grace windows, using an
 injectable monotonic clock so expiry tests do not depend on sleeps or wall-clock changes.
 

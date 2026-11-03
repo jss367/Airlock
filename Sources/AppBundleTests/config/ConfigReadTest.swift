@@ -61,10 +61,10 @@ final class ConfigReadTest: XCTestCase {
 
     func testFallbackAfterFailureKeepsLoginItemAndWatchesUserConfig() async throws {
         // Paused, so the reloads register no global hotkeys
-        TrayMenuModel.shared.isEnabled = false
+        sessionCoordinator.setEnabled(false)
         activeMode = nil
         defer {
-            TrayMenuModel.shared.isEnabled = true
+            sessionCoordinator.setEnabled(true)
             activeMode = mainModeId
             failedUserConfigUrl = nil
             syncConfigFileWatcher()
@@ -100,7 +100,7 @@ final class ConfigReadTest: XCTestCase {
     }
 
     func testQuickSwitcherKeyMovedToBindingWorksAfterReload() async throws {
-        TrayMenuModel.shared.isEnabled = true
+        sessionCoordinator.setEnabled(true)
         activeMode = mainModeId
         config.quickSwitcher.enabled = true
         config.quickSwitcher.binding = "option-space"

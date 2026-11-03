@@ -17,7 +17,7 @@ import XCTest
         config.onWindowDetected = []
         config.onModeChanged = []
         DetectionNewPauseFixtureCommand.newer = nil
-        TrayMenuModel.shared.isEnabled = true
+        sessionCoordinator.setEnabled(true)
         activeMode = mainModeId
         resetFocusCacheForTests()
         uiResumeFocus.reset()
@@ -103,7 +103,7 @@ import XCTest
                                 if let newerEnable {
                                     let args = ["enable", newerEnable.rawValue]
                                     let request = ClientRequest(args: args, stdin: "", windowId: nil, workspace: nil)
-                                    _ = try await runSocketCommandSession(parseCommand(args).cmdOrDie, request: request, token: .forceRun)
+                                    _ = try await runSocketCommandSession(parseCommand(args).cmdOrDie, request: request, admission: XCTUnwrap(socketCommandAdmission(parseCommand(args).cmdOrDie)))
                                 }
                                 newer.nativeFocus()
                                 return newer

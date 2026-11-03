@@ -1,15 +1,22 @@
 import AppKit
+import Combine
 import Common
 
+@MainActor
 public final class TrayMenuModel: ObservableObject {
     @MainActor public static let shared = TrayMenuModel()
 
-    private init() {}
+    private var sessionObservation: AnyCancellable?
+
+    private init() {
+        sessionObservation = sessionCoordinator.objectWillChange.sink { [weak self] in
+            self?.objectWillChange.send()
+        }
+    }
 
     @Published var trayText: String = ""
     @Published var trayItems: [TrayItem] = []
-    /// Is "layouting" enabled
-    @Published var isEnabled: Bool = true
+    var isEnabled: Bool { sessionCoordinator.isEnabled }
     @Published var workspaces: [WorkspaceViewModel] = []
     @Published var experimentalUISettings: ExperimentalUISettings = ExperimentalUISettings()
 }

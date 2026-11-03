@@ -74,7 +74,7 @@ private func newConnection(_ connection: NWConnection) async {
             continue
         }
         let (command, help, err) = parseCommand(request.args).unwrap()
-        guard let token: RunSessionGuard = await .isServerEnabled(orIsEnableCommand: command) else {
+        guard let admission = await socketCommandAdmission(command) else {
             await answerToClient(
                 exitCode: 1,
                 stderr: "\(airlockAppName) server is disabled and doesn't accept commands. " +
@@ -96,7 +96,7 @@ private func newConnection(_ connection: NWConnection) async {
         }
         if let command {
             let _answer: Result<ServerAnswer, Error> = await Result {
-                try await runSocketCommandSession(command, request: request, token: token)
+                try await runSocketCommandSession(command, request: request, admission: admission)
             }
             var answer = _answer.getOrNil() ??
                 ServerAnswer(
@@ -116,12 +116,24 @@ private func newConnection(_ connection: NWConnection) async {
 
 /// Parsed request dispatch, kept separate from transport so the full session prelude is testable.
 @MainActor
-func runSocketCommandSession(_ command: any Command, request: ClientRequest, token: RunSessionGuard) async throws -> ServerAnswer {
+func runSocketCommandSession(_ command: any Command, request: ClientRequest, admission: RunSessionGuard) async throws -> ServerAnswer {
+    // Validate the transport's generation before reserving a fresh command order. A Pause/Resume
+    // between acceptance and dispatch must not admit an ordinary command into the new generation.
+    try admission.validateAdmission()
     let prepared = PreparedCommandSession([command])
     if command.info.kind.mayChangeFocus { markUserInitiatedFocusChange() }
-    return try await runLightSession(.socketServer(command.args), token, admissionCheck: prepared.validateAdmission) {
+    return try await runLightSession(.socketServer(command.args), prepared.admission) {
         let env = CmdEnv(windowId: request.windowId.flatMap { $0 }, workspaceName: request.workspace.flatMap { $0 })
         let result = try await prepared.run(env, CmdStdin(request.stdin))
         return ServerAnswer(exitCode: result.exitCode, stdout: result.stdout.joined(separator: "\n"), stderr: result.stderr.joined(separator: "\n"), serverVersionAndHash: serverVersionAndHash)
     }
+}
+
+@MainActor
+func socketCommandAdmission(_ command: (any Command)?) -> RunSessionGuard? {
+    // Enable remains admissible while paused. Once dispatched, PreparedCommandSession owns the
+    // invocation guard so configured callbacks can intentionally pause/resume within that command.
+    command is EnableCommand
+        ? .command(intent: sessionCoordinator.reserveInvocationOrder())
+        : .isServerEnabled
 }

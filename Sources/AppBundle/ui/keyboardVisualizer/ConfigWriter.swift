@@ -409,7 +409,7 @@ private struct TomlValueScanner {
 
     mutating func scan(_ line: String) {
         let chars = Array(line)
-        /// Length of the run of `char` starting at `i`
+        // Length of the run of `char` starting at `i`
         func run(_ char: Character, _ i: Int) -> Int {
             chars[i...].prefix { $0 == char }.count
         }

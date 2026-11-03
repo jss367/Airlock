@@ -11,7 +11,7 @@ import XCTest
     }
     override func tearDown() async throws {
         config.modes = [mainModeId: Mode(bindings: [:])]
-        TrayMenuModel.shared.isEnabled = true
+        sessionCoordinator.setEnabled(true)
         resetFocusCacheForTests()
     }
     func testSocketNestedToggleReservesIntentBeforeInitialQuery() async throws {
@@ -68,7 +68,7 @@ import XCTest
     }
     private func socket(_ text: String) async throws -> ServerAnswer {
         let request = ClientRequest(args: text.split(separator: " ").map(String.init), stdin: "", windowId: nil, workspace: nil)
-        return try await runSocketCommandSession(parseCommand(text).cmdOrDie, request: request, token: .forceRun)
+        return try await runSocketCommandSession(parseCommand(text).cmdOrDie, request: request, admission: XCTUnwrap(socketCommandAdmission(parseCommand(text).cmdOrDie)))
     }
     func testNestedNoopEnableDoesNotCancelRemainingOuterPause() async throws {
         let nested = parseCommand("enable on").cmdOrDie
@@ -102,7 +102,7 @@ private struct NestedNewRequestFixtureCommand: Command {
     func run(_ env: CmdEnv, _ io: CmdIo) async throws -> Bool {
         let request = ClientRequest(args: ["enable", "off"], stdin: "", windowId: nil, workspace: nil)
         if throughUi { try await runEnableCommandFromUi(.off) }
-        else { _ = try await runSocketCommandSession(parseCommand("enable off").cmdOrDie, request: request, token: .forceRun) }
+        else { _ = try await runSocketCommandSession(parseCommand("enable off").cmdOrDie, request: request, admission: XCTUnwrap(socketCommandAdmission(parseCommand("enable off").cmdOrDie))) }
         return true
     }
 }
