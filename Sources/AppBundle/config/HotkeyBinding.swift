@@ -30,12 +30,12 @@ extension HotKey {
 @MainActor var activeMode: String? = mainModeId
 @MainActor func activateMode(_ targetMode: String?, beforeEffects: @MainActor @escaping () async throws -> Void = {}, beforeStateChange: @MainActor () -> Bool = { true }, onCallbacksAdmitted: @MainActor () -> Void = {}) async throws {
     guard beforeStateChange() else { return }
-    let targetBindings = activeBindings(targetMode.flatMap { config.modes[$0] }?.bindings ?? pausedBindings(), config)
+    let targetBindings = hotkeyBindings(for: targetMode)
     for binding in targetBindings.values where !hotkeys.keys.contains(binding.descriptionWithKeyCode) {
         hotkeys[binding.descriptionWithKeyCode] = HotKey(key: binding.keyCode, modifiers: binding.modifiers, keyDownHandler: {
             Task {
-                // Paused Airlock has no active mode and keeps only main-mode resume bindings.
-                if let activeMode = activeMode ?? (sessionCoordinator.isEnabled ? nil : mainModeId) {
+                // Mode commands may still run after an intentional Pause in a command sequence.
+                if let activeMode = hotkeyDispatchMode {
                     markUserInitiatedFocusChange()
                     broadcastEvent(.bindingTriggered(
                         mode: activeMode,
@@ -77,6 +77,18 @@ extension HotKey {
             }
         }
     }
+}
+
+/// Registration and dispatch follow running state even if a command changes mode after Pause.
+@MainActor
+var hotkeyDispatchMode: String? { sessionCoordinator.isEnabled ? activeMode : mainModeId }
+
+@MainActor
+func hotkeyBindings(for targetMode: String?) -> [String: HotkeyBinding] {
+    let bindings = sessionCoordinator.isEnabled
+        ? targetMode.flatMap { config.modes[$0] }?.bindings ?? [:]
+        : pausedBindings()
+    return activeBindings(bindings, config)
 }
 
 /// Paused Airlock owns no hotkeys except the main-mode bindings that only run `enable`, so a key can resume it.
@@ -188,6 +200,10 @@ func runsOnlyEnable(_ commands: [any Command]) -> Bool {
 func runHotkeyCommandSession(_ commands: [any Command]) async throws {
     // Like `airlock enable` over the socket, an enable-only binding remains admissible while paused.
     guard sessionCoordinator.isEnabled || runsOnlyEnable(commands) else { return }
+    if !sessionCoordinator.isEnabled {
+        try await runEnableCommandsWithFocusAdoption(commands.compactMap { $0 as? EnableCommand }, event: .hotkeyBinding, syncFocusBeforeBody: false)
+        return
+    }
     let prepared = PreparedCommandSession(commands)
     try await runLightSession(.hotkeyBinding, prepared.admission) {
         _ = try await prepared.run(.defaultEnv, .emptyStdin)

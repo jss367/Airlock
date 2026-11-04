@@ -7,8 +7,12 @@ import XCTest
         setUpWorkspacesForTests()
         config.quickSwitcher.enabled = false
         config.focusFlash.enabled = false
+        uiResumeFocus.reset()
     }
     override func tearDown() async throws {
+        resetFocusCacheForTests()
+        resetFocusStealingPreventionForTests()
+        uiResumeFocus.reset()
         sessionCoordinator.setEnabled(true)
         activeMode = mainModeId
     }
@@ -24,6 +28,7 @@ import XCTest
     }
 
     func testEnableToggleHotkeyResumesWhilePaused() async throws {
+        defer { resetFocusCacheForTests() }
         try await runHotkeyCommandSession([parseCommand("enable toggle").cmdOrDie])
         XCTAssertFalse(TrayMenuModel.shared.isEnabled)
         XCTAssertNil(activeMode)
@@ -33,6 +38,7 @@ import XCTest
     }
 
     func testOtherHotkeysStayInertWhilePaused() async throws {
+        defer { resetFocusCacheForTests() }
         _ = try await parseCommand("enable off").cmdOrDie.run(.defaultEnv, .emptyStdin)
         try await runHotkeyCommandSession([parseCommand("workspace 2").cmdOrDie])
         XCTAssertFalse(TrayMenuModel.shared.isEnabled)

@@ -89,11 +89,23 @@ func runEnableCommandFromUi(_ targetState: EnableCmdArgs.State) async throws {
     let requestedState: EnableCmdArgs.State = targetState == .toggle
         ? (sessionCoordinator.isEnabled ? .off : .on)
         : targetState
+    let isResuming = !sessionCoordinator.isEnabled && requestedState == .on
+    try await runEnableCommandsWithFocusAdoption(
+        [EnableCommand(args: EnableCmdArgs(rawArgs: [], targetState: requestedState))], event: .menuBarButton,
+        syncFocusBeforeBody: !isResuming,
+    )
+}
+
+/// Resume from a paused model without treating its old focus as authoritative. A sequence shares
+/// one intent, so a later explicit invocation also cancels its remaining enable commands.
+@MainActor
+func runEnableCommandsWithFocusAdoption(_ commands: [EnableCommand], event: RefreshSessionEvent, syncFocusBeforeBody: Bool) async throws {
+    let wasEnabled = sessionCoordinator.isEnabled
     let intent = sessionCoordinator.beginEnableIntent()
     let validateIntent: @MainActor @Sendable () throws -> Void = {
         guard sessionCoordinator.isCurrent(intent) else { throw EnableIntentError.superseded }
     }
-    let isResuming = !sessionCoordinator.isEnabled && requestedState == .on
+    let isResuming = !wasEnabled && commands.contains { $0.args.targetState.val != .off }
     var selectedCandidate: UiResumeFocusCandidate?
     var adoptedBeforeCallbacks = false
     let beforeEffects: @MainActor () async throws -> Void = {
@@ -105,7 +117,7 @@ func runEnableCommandFromUi(_ targetState: EnableCmdArgs.State) async throws {
     // The paused model is stale. Ordinary sync could refocus it after grace expires during an AX query.
     do {
         try await CommandInvocationIntent.$order.withValue(intent) {
-            try await runLightSession(.menuBarButton, .command(intent: intent, check: validateIntent), syncFocusBeforeBody: !isResuming, beforeEffects: beforeEffects) { () throws in
+            try await runLightSession(event, .command(intent: intent, check: validateIntent), syncFocusBeforeBody: syncFocusBeforeBody, beforeEffects: beforeEffects) { () throws in
                 try validateIntent()
                 if isResuming && !sessionCoordinator.isEnabled {
                     let candidate = try await uiResumeFocus.candidateToResume(nativeFocus: nativeFocusCandidateForUiResume)
@@ -150,8 +162,18 @@ func runEnableCommandFromUi(_ targetState: EnableCmdArgs.State) async throws {
                     }
                 }
                 try validateIntent()
-                _ = try await EnableCommand(args: EnableCmdArgs(rawArgs: [], targetState: requestedState), requestedIntent: intent, beforeEnableEffects: beforeEffects)
-                    .run(.defaultEnv, .emptyStdin)
+                let preparedCommands: [any Command] = commands.map { command in
+                    var prepared = command
+                    prepared.requestedIntent = intent
+                    let originalBeforeEffects = command.beforeEnableEffects
+                    prepared.beforeEnableEffects = {
+                        try await beforeEffects()
+                        try await originalBeforeEffects()
+                        try await beforeEffects()
+                    }
+                    return prepared
+                }
+                _ = try await preparedCommands.runCmdSeq(.defaultEnv, .emptyStdin)
                 try validateIntent()
             }
         }
