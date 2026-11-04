@@ -66,16 +66,27 @@ final class SubscriberOutbox {
 @MainActor private var subscribers: [UniqueToken: Subscriber] = [:]
 
 @MainActor
-func handleSubscribeAndWaitTillError(_ connection: NWConnection, _ args: SubscribeCmdArgs) async {
+func registerSubscriber(_ outbox: SubscriberOutbox, events: Set<ServerEventType>) -> UniqueToken {
     let id = UniqueToken()
+    subscribers[id] = Subscriber(outbox: outbox, events: events)
+    return id
+}
+
+@MainActor
+func removeSubscriber(_ id: UniqueToken) {
+    subscribers.removeValue(forKey: id)
+}
+
+@MainActor
+func handleSubscribeAndWaitTillError(_ connection: NWConnection, _ args: SubscribeCmdArgs) async {
     let outbox = SubscriberOutbox(
         send: { await connection.writeAtomic($0, jsonEncoder).error == nil },
         // Cancelling also fails a write stuck on a client that stopped reading, and ends readTillError below
         onClose: { connection.cancel() },
     )
-    subscribers[id] = Subscriber(outbox: outbox, events: args.events)
+    let id = registerSubscriber(outbox, events: args.events)
     defer {
-        subscribers.removeValue(forKey: id)
+        removeSubscriber(id)
         outbox.close()
     }
     if args.sendInitial {
@@ -110,12 +121,13 @@ private let jsonEncoder: JSONEncoder = {
     return e
 }()
 
+// Enqueue in the same actor turn as the state change. Deferring registration lookup to a task
+// could deliver an older event to a new subscriber after its initial snapshot.
+@MainActor
 func broadcastEvent(_ event: ServerEvent) {
-    Task { @MainActor in
-        for (id, subscriber) in subscribers {
-            guard subscriber.events.contains(event.eventType) else { continue }
-            subscriber.outbox.enqueue(event)
-            if subscriber.outbox.isClosed { _ = subscribers.removeValue(forKey: id) }
-        }
+    for (id, subscriber) in subscribers {
+        guard subscriber.events.contains(event.eventType) else { continue }
+        subscriber.outbox.enqueue(event)
+        if subscriber.outbox.isClosed { removeSubscriber(id) }
     }
 }
