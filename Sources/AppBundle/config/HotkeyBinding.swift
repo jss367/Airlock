@@ -30,11 +30,12 @@ extension HotKey {
 @MainActor var activeMode: String? = mainModeId
 @MainActor func activateMode(_ targetMode: String?, beforeEffects: @MainActor @escaping () async throws -> Void = {}, beforeStateChange: @MainActor () -> Bool = { true }, onCallbacksAdmitted: @MainActor () -> Void = {}) async throws {
     guard beforeStateChange() else { return }
-    let targetBindings = activeBindings(targetMode.flatMap { config.modes[$0] }?.bindings ?? [:], config)
+    let targetBindings = activeBindings(targetMode.flatMap { config.modes[$0] }?.bindings ?? pausedBindings(), config)
     for binding in targetBindings.values where !hotkeys.keys.contains(binding.descriptionWithKeyCode) {
         hotkeys[binding.descriptionWithKeyCode] = HotKey(key: binding.keyCode, modifiers: binding.modifiers, keyDownHandler: {
             Task {
-                if let activeMode {
+                // Paused Airlock has no active mode and keeps only main-mode resume bindings.
+                if let activeMode = activeMode ?? (sessionCoordinator.isEnabled ? nil : mainModeId) {
                     markUserInitiatedFocusChange()
                     broadcastEvent(.bindingTriggered(
                         mode: activeMode,
@@ -78,6 +79,13 @@ extension HotKey {
     }
 }
 
+/// Paused Airlock owns no hotkeys except the main-mode bindings that only run `enable`, so a key can resume it.
+@MainActor
+func pausedBindings() -> [String: HotkeyBinding] {
+    guard !sessionCoordinator.isEnabled else { return [:] }
+    return (config.modes[mainModeId]?.bindings ?? [:]).filter { $0.value.isEnableOnly }
+}
+
 /// Drops the bindings whose feature is switched off, so their keys go back to macOS.
 /// Workspace app switching requires window management; other bindings use `enable-keyboard-shortcuts`.
 func activeBindings(_ bindings: [String: HotkeyBinding], _ config: Config) -> [String: HotkeyBinding] {
@@ -104,6 +112,9 @@ struct HotkeyBinding: Equatable, Sendable {
             : modifiers.toString() + "-" + keyCode.toString()
         self.descriptionWithKeyNotation = descriptionWithKeyNotation
     }
+
+    /// Runs only `enable` commands, so it stays registered while Airlock is paused.
+    var isEnableOnly: Bool { runsOnlyEnable(commands) }
 
     /// Runs `focus app-next`, `focus same-app-next`, or their `prev` twins
     var isAppSwitching: Bool {
@@ -168,10 +179,15 @@ func parseBinding(_ raw: String, _ backtrace: TomlBacktrace, _ mapping: [String:
     }
 }
 
+func runsOnlyEnable(_ commands: [any Command]) -> Bool {
+    !commands.isEmpty && commands.allSatisfy { $0 is EnableCommand }
+}
+
 /// The same command-session path used by registered hotkeys, without key registration in tests.
 @MainActor
 func runHotkeyCommandSession(_ commands: [any Command]) async throws {
-    guard sessionCoordinator.isEnabled else { return }
+    // Like `airlock enable` over the socket, an enable-only binding remains admissible while paused.
+    guard sessionCoordinator.isEnabled || runsOnlyEnable(commands) else { return }
     let prepared = PreparedCommandSession(commands)
     try await runLightSession(.hotkeyBinding, prepared.admission) {
         _ = try await prepared.run(.defaultEnv, .emptyStdin)
