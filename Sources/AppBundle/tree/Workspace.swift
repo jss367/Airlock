@@ -184,9 +184,14 @@ extension Monitor {
         }
         // What if monitor configuration changed? (frame.origin is changed)
         rearrangeWorkspacesOnMonitors()
-        // Normally, recursion should happen only once more because we must take the value from the cache
-        // (Unless, monitor configuration data race happens)
-        return self.activeWorkspace
+        let point = rect.topLeftCorner
+        if let existing = screenPointToVisibleWorkspace[point] {
+            return existing
+        }
+        // This Monitor value is stale: it was captured before a display change and its screen is gone.
+        // Rearranging again can't bring it back, so answer for the current screen nearest to it
+        return screenPointToVisibleWorkspace.minBy { ($0.key - point).vectorLength }?.value
+            ?? getStubWorkspace(forPoint: point)
     }
 
     @MainActor
@@ -199,6 +204,21 @@ extension Monitor {
 func gcMonitors() {
     if screenPointToVisibleWorkspace.count != monitors.count {
         rearrangeWorkspacesOnMonitors()
+    }
+    showFocusedWorkspace()
+}
+
+/// Rearranging drops the workspace of a screen that went away from the visible set, and nothing else
+/// moves focus off it. Left alone, layout would hide the focused window in a corner while it stays key.
+/// Keep the user on the workspace they were in, shown on the monitor it now belongs to (the one nearest
+/// to where it was), rather than switching them to whatever that monitor was showing.
+@MainActor
+private func showFocusedWorkspace() {
+    let workspace = focus.workspace
+    if workspace.isVisible { return }
+    let monitor = workspace.workspaceMonitor
+    if !monitor.setActiveWorkspace(workspace) {
+        _ = monitor.activeWorkspace.focusWorkspace()
     }
 }
 
@@ -228,17 +248,10 @@ extension CGPoint {
 @MainActor
 private func rearrangeWorkspacesOnMonitors() {
     let newScreens = monitors.map(\.rect.topLeftCorner)
-    var newScreenToOldScreenMapping: [CGPoint: CGPoint] = [:]
-    for (oldScreen, _) in screenPointToVisibleWorkspace {
-        guard let newScreen = newScreens.minBy({ ($0 - oldScreen).vectorLength }) else { continue }
-        if let prevOldScreen = newScreenToOldScreenMapping[newScreen] {
-            if (prevOldScreen - newScreen).vectorLength <= (oldScreen - newScreen).vectorLength {
-                // newScreen has already been assigned to a closer oldScreen.
-                continue
-            }
-        }
-        newScreenToOldScreenMapping[newScreen] = oldScreen
-    }
+    let newScreenToOldScreenMapping = mapNewScreensToOldScreens(
+        oldScreens: Array(screenPointToVisibleWorkspace.keys),
+        newScreens: newScreens,
+    )
 
     let oldScreenPointToVisibleWorkspace = screenPointToVisibleWorkspace
     screenPointToVisibleWorkspace = [:]
@@ -254,6 +267,39 @@ private func rearrangeWorkspacesOnMonitors() {
         check(newScreen.setActiveWorkspace(stubWorkspace),
               "getStubWorkspace generated incompatible stub workspace (\(stubWorkspace)) for the monitor (\(newScreen)")
     }
+}
+
+/// Decides which old screen's workspace each new screen keeps showing after a display change. Each old
+/// screen goes to its nearest new screen, and the closest one wins when several want the same screen.
+/// The ones that lost then take the screens nobody claimed, nearest pair first, so a visible workspace
+/// stays visible as long as there is a screen left for it.
+func mapNewScreensToOldScreens(oldScreens: [CGPoint], newScreens: [CGPoint]) -> [CGPoint: CGPoint] {
+    func distance(_ a: CGPoint, _ b: CGPoint) -> CGFloat { (a - b).vectorLength }
+    // Dictionary order isn't stable. Sort so that ties resolve the same way every time
+    let oldScreens = oldScreens.sortedBy([\.x, \.y])
+    var mapping: [CGPoint: CGPoint] = [:]
+    var leftover: [CGPoint] = []
+    for oldScreen in oldScreens {
+        guard let newScreen = newScreens.minBy({ distance($0, oldScreen) }) else { continue }
+        if let prevOldScreen = mapping[newScreen] {
+            if distance(prevOldScreen, newScreen) <= distance(oldScreen, newScreen) {
+                // newScreen has already been assigned to a closer oldScreen.
+                leftover.append(oldScreen)
+                continue
+            }
+            leftover.append(prevOldScreen)
+        }
+        mapping[newScreen] = oldScreen
+    }
+    var unclaimed = newScreens.filter { mapping[$0] == nil }
+    while !leftover.isEmpty && !unclaimed.isEmpty {
+        let pairs = leftover.flatMap { old in unclaimed.map { new in (old: old, new: new) } }
+        let nearest = pairs.minByOrDie { distance($0.old, $0.new) }
+        mapping[nearest.new] = nearest.old
+        leftover.removeAll { $0 == nearest.old }
+        unclaimed.removeAll { $0 == nearest.new }
+    }
+    return mapping
 }
 
 @MainActor
