@@ -61,4 +61,7 @@ final class TestWindow: Window, CustomStringConvertible {
     }
 
     override var isHiddenInCorner: Bool { false }
+
+    var isMacosAppHiddenForTests = false
+    @MainActor override var isMacosAppHidden: Bool { isMacosAppHiddenForTests }
 }

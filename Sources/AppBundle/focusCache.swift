@@ -37,10 +37,15 @@ func focusChangeTrigger(sessionTrigger: String?, syncedFromMacOs: Bool) -> Strin
             focusEvents.lastKnownNativeFocusedWindowId = nativeFocused?.windowId
         } else {
             // Refocus the previously focused window to resist the steal
-            if let currentWindow = focus.windowOrNil {
+            if let currentWindow = focus.windowOrNil, !currentWindow.staysHiddenByMacos {
                 currentWindow.nativeFocus()
+            } else if let shownWindow = focus.workspace.mostRecentShownWindow {
+                // Refocusing a window of a hidden app would unhide it and undo the user's cmd-h.
+                // Stay on the workspace with a window that is still shown
+                _ = shownWindow.focusWindow()
+                shownWindow.nativeFocus()
             } else if !isUnitTest && !serverArgs.isReadOnly {
-                // The focused workspace is empty, so there is no window to hand key focus back to.
+                // The focused workspace has no shown window, so there is no window to hand key focus back to.
                 // Take it ourselves: otherwise the stealer stays key and receives keystrokes
                 // while Airlock believes an empty workspace is focused
                 NSApp.activate(ignoringOtherApps: true)
