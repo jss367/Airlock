@@ -55,6 +55,23 @@ final class MonitorRearrangementTest: XCTestCase {
         assertTrue(mainMonitor.activeWorkspace === focused)
         assertTrue(focus.windowOrNil === window)
     }
+    func testNoScreensDefersFocusRestorationUntilMonitorReturns() {
+        let focused = Workspace.get(byName: "focused")
+        let window = TestWindow.new(id: 901, parent: focused.rootTilingContainer)
+        assertTrue(window.focusWindow())
+        defer { gcMonitors() }
+
+        // Supply a synthetic display snapshot; never change NSScreen or actual display state.
+        gcMonitors([])
+
+        assertEquals(focused.isVisible, false)
+        assertTrue(focus.windowOrNil === window)
+
+        gcMonitors()
+        assertTrue(focused.isVisible)
+        assertTrue(mainMonitor.activeWorkspace === focused)
+        assertTrue(focus.windowOrNil === window)
+    }
 }
 
 private struct StaleMonitor: Monitor {

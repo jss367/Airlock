@@ -201,11 +201,11 @@ extension Monitor {
 }
 
 @MainActor
-func gcMonitors() {
-    if screenPointToVisibleWorkspace.count != monitors.count {
-        rearrangeWorkspacesOnMonitors()
+func gcMonitors(_ currentMonitors: [Monitor] = monitors) {
+    if screenPointToVisibleWorkspace.count != currentMonitors.count {
+        rearrangeWorkspacesOnMonitors(currentMonitors)
     }
-    showFocusedWorkspace()
+    showFocusedWorkspace(currentMonitors)
 }
 
 /// Rearranging drops the workspace of a screen that went away from the visible set, and nothing else
@@ -213,7 +213,10 @@ func gcMonitors() {
 /// Keep the user on the workspace they were in, shown on the monitor it now belongs to (the one nearest
 /// to where it was), rather than switching them to whatever that monitor was showing.
 @MainActor
-private func showFocusedWorkspace() {
+private func showFocusedWorkspace(_ currentMonitors: [Monitor]) {
+    // NSScreen can be empty during display reconfiguration. Resolving a saved monitor point
+    // requires a current screen; retain focus and restore its workspace on the next refresh.
+    guard !currentMonitors.isEmpty else { return }
     let workspace = focus.workspace
     if workspace.isVisible { return }
     let monitor = workspace.workspaceMonitor
@@ -246,8 +249,8 @@ extension CGPoint {
 }
 
 @MainActor
-private func rearrangeWorkspacesOnMonitors() {
-    let newScreens = monitors.map(\.rect.topLeftCorner)
+private func rearrangeWorkspacesOnMonitors(_ currentMonitors: [Monitor] = monitors) {
+    let newScreens = currentMonitors.map(\.rect.topLeftCorner)
     let newScreenToOldScreenMapping = mapNewScreensToOldScreens(
         oldScreens: Array(screenPointToVisibleWorkspace.keys),
         newScreens: newScreens,

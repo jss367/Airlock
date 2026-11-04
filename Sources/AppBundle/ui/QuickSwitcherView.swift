@@ -405,7 +405,7 @@ struct QuickSwitcherContent: View {
                                     focusWorkspaceFromUi(Workspace.get(byName: name))
                                 case .window(let id):
                                     if let window = Window.get(byId: id) {
-                                        _ = window.focusWindow()
+                                        focusWindowFromUi(window)
                                     }
                                 default:
                                     break

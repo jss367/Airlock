@@ -374,7 +374,7 @@ struct MissionControlContent: View {
             do {
                 try await runLightSession(.menuBarButton, token) {
                     if let w = Window.get(byId: window.windowId) {
-                        _ = w.focusWindow()
+                        focusWindowFromUi(w)
                     }
                 }
             } catch is CancellationError {
