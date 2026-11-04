@@ -590,6 +590,17 @@ final class ConfigWriterTest: XCTestCase {
         assertEquals((binding?.commands.first?.args as? SummonAppCmdArgs)?.appName.val, "Spotify")
     }
 
+    func testFirstBindingWithoutConfigFileKeepsDefaultSettings() throws {
+        let result = try addBindingToLines(newConfigFileLines(), key: "h", appName: "Spotify", modifierPrefix: .option)
+        let (parsed, errors) = parseConfig(result.joined(separator: "\n"))
+        assertEquals(errors.map(\.description), [])
+        // Neither is a binding, so a config without them falls back to `config-version = 1` and no callback
+        assertEquals(parsed.configVersion, 2)
+        assertEquals(parsed.onFocusedMonitorChanged.map { $0.args.description }, ["move-mouse monitor-lazy-center"])
+        let binding = parsed.modes[mainModeId]?.bindings[HotkeyBinding(.option, .h, []).descriptionWithKeyCode]
+        assertEquals((binding?.commands.first?.args as? SummonAppCmdArgs)?.appName.val, "Spotify")
+    }
+
     func testSetValueInDefaultConfigIsVerified() throws {
         let lines = try readConfigLines(from: defaultConfigUrl).lines
         for (table, key) in [(nil, "start-at-login"), ("quick-switcher", "enabled"), ("focus-flash", "enabled")] {

@@ -148,6 +148,22 @@ final class ConfigTest: XCTestCase {
         XCTAssertTrue(binding?.commands.singleOrNil() is FocusCommand)
     }
 
+    func testWorkspacesShorthandRejectsNonStringModifiers() {
+        let (_, errors) = parseConfig(
+            """
+            [workspaces]
+                focus-modifier = ['cmd']
+                move-modifier = 1
+            [workspaces.names]
+                A = 'a'
+            """,
+        )
+        assertEquals(errors.descriptions, [
+            "workspaces.focus-modifier: Expected type is 'string'. But actual type is 'array'",
+            "workspaces.move-modifier: Expected type is 'string'. But actual type is 'integer'",
+        ])
+    }
+
     func testDropBindings() {
         let (config, errors) = parseConfig(
             """
@@ -632,6 +648,23 @@ final class ConfigTest: XCTestCase {
         XCTAssertNil(config.modes[mainModeId]?.bindings[kBinding.descriptionWithKeyCode])
         // Remaining count should be exactly 3 less than default
         assertEquals(config.modes[mainModeId]!.bindings.count, defaultBindings.count - 3)
+    }
+
+    func testDisabledBindingRedeclaringAKeyIsReported() {
+        for bindings in [
+            ["cmd-shift-a = 'workspace X'", "shift-cmd-a = 'disabled'"],
+            ["shift-cmd-a = 'disabled'", "cmd-shift-a = 'workspace X'"],
+        ] {
+            let (_, errors) = parseConfig(
+                """
+                [mode.main.binding]
+                    \(bindings[0])
+                    \(bindings[1])
+                """,
+            )
+            assertEquals(errors.descriptions.count, 1)
+            assertTrue(errors.descriptions.first?.hasSuffix("'cmd-shift-a' Binding redeclaration") == true)
+        }
     }
 
     func testUserModeOverridesDefaultMode() {

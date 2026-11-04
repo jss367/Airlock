@@ -413,8 +413,12 @@ private func expandWorkspacesShorthand(
         return
     }
 
-    let focusModifier = table["focus-modifier"]?.string ?? "option"
-    let moveModifier = table["move-modifier"]?.string ?? "option-shift"
+    func modifier(_ key: String, default defaultValue: String) -> String {
+        guard let raw = table[key] else { return defaultValue }
+        return parseString(raw, backtrace + .key(key)).getOrNil(appendErrorTo: &errors) ?? defaultValue
+    }
+    let focusModifier = modifier("focus-modifier", default: "option")
+    let moveModifier = modifier("move-modifier", default: "option-shift")
 
     guard let namesRaw = table["names"] else {
         errors += [.semantic(backtrace, "'names' subtable is required in [workspaces]")]
