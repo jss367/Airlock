@@ -587,9 +587,9 @@ so you stay where you are. The `prevent-focus-stealing` key controls this:
 * `off` -- follow macOS, the original AeroSpace behavior
 
 Focus changes you trigger yourself (a hotkey, a CLI command, or a mouse click) open a short grace
-window during which focus may move anywhere. The window opens when the click is released, so a
-click on another workspace's window can occasionally be pushed back if macOS moves focus on
-mouse-down first. Clicking again gets you there.
+window during which focus may move anywhere. For clicks, the window opens as soon as you press
+any mouse button and opens again when you release the left button, so clicking another
+workspace's window moves focus there.
 
 [source,toml]
 ----

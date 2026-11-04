@@ -30,7 +30,7 @@ struct BoolFeature: Identifiable {
     ),
     BoolFeature(
         title: "Quick switcher",
-        summary: "A searchable panel of the windows in the current workspace, opened with ⌥Space unless you rebind it.",
+        summary: "A searchable panel of every workspace and window, opened with ⌥Space unless you rebind it. Picking a window on another workspace switches you there.",
         table: "quick-switcher", key: "enabled", isOn: { config.quickSwitcher.enabled },
     ),
     BoolFeature(
