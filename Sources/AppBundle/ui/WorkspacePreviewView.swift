@@ -38,44 +38,29 @@ struct WorkspacePreviewView: View {
             return
         }
 
-        // Get window IDs for this workspace
-        let windowIds = windows.map { CGWindowID($0.windowId) }
+        let windowsById = Dictionary(windows.map { (CGWindowID($0.windowId), $0) }, uniquingKeysWith: { first, _ in first })
 
-        let images = await captureWindowImages(windowIds: Set(windowIds))
+        let images = await captureWindowImages(windowIds: Set(windowsById.keys))
         guard !Task.isCancelled else { return }
 
-        // Find the bounding rect of all windows on this workspace.
         guard let windowInfoList = CGWindowListCopyWindowInfo([.optionAll], kCGNullWindowID) as? [[CFString: Any]] else {
             return
         }
 
-        var minX = CGFloat.infinity, minY = CGFloat.infinity
-        var maxX = -CGFloat.infinity, maxY = -CGFloat.infinity
-        var foundWindows: [CGWindowID] = []
-
-        for info in windowInfoList {
-            guard let windowNumber = info[kCGWindowNumber] as? NSNumber else { continue }
-            let wid = CGWindowID(windowNumber.uint32Value)
-            guard windowIds.contains(wid) else { continue }
-
-            if let boundsDict = info[kCGWindowBounds] as? [String: CGFloat],
-               let x = boundsDict["X"], let y = boundsDict["Y"],
-               let w = boundsDict["Width"], let h = boundsDict["Height"]
-            {
-                minX = min(minX, x)
-                minY = min(minY, y)
-                maxX = max(maxX, x + w)
-                maxY = max(maxY, y + h)
-                foundWindows.append(wid)
-            }
+        // Windows of hidden workspaces all sit parked in one corner, so draw them where they'll be when shown
+        let unhiddenRect = { (wid: CGWindowID, size: CGSize) -> CGRect? in
+            guard let unhidden = (windowsById[wid] as? MacWindow)?.rectWhenUnhidden(currentSize: size) else { return nil }
+            return CGRect(x: unhidden.topLeftX, y: unhidden.topLeftY, width: unhidden.width, height: unhidden.height)
         }
-
-        guard !foundWindows.isEmpty else {
+        guard let layout = Self.previewLayout(
+            windowInfoList: windowInfoList,
+            windowIds: Set(windowsById.keys),
+            unhiddenRect: unhiddenRect,
+        ) else {
             preview = nil
             return
         }
-
-        let captureRect = CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
+        let captureRect = layout.captureRect
 
         // Capture each window individually and composite them
         let scale: CGFloat = 0.5
@@ -87,29 +72,54 @@ struct WorkspacePreviewView: View {
         NSColor.windowBackgroundColor.withAlphaComponent(0.3).setFill()
         NSBezierPath.fill(NSRect(origin: .zero, size: scaledSize))
 
-        for wid in foundWindows {
+        for (wid, rect) in layout.windows {
             if let cgImage = images[wid] {
-                // Get this window's bounds to position it correctly
-                if let info = windowInfoList.first(where: {
-                    ($0[kCGWindowNumber] as? NSNumber)?.uint32Value == wid
-                }),
-                    let boundsDict = info[kCGWindowBounds] as? [String: CGFloat],
-                    let x = boundsDict["X"], let y = boundsDict["Y"],
-                    let w = boundsDict["Width"], let h = boundsDict["Height"]
-                {
-                    let destRect = NSRect(
-                        x: (x - minX) * scale,
-                        y: (captureRect.height - (y - minY) - h) * scale, // Flip Y
-                        width: w * scale,
-                        height: h * scale,
-                    )
-                    let nsImage = NSImage(cgImage: cgImage, size: NSSize(width: w, height: h))
-                    nsImage.draw(in: destRect)
-                }
+                let destRect = NSRect(
+                    x: (rect.minX - captureRect.minX) * scale,
+                    y: (captureRect.height - (rect.minY - captureRect.minY) - rect.height) * scale, // Flip Y
+                    width: rect.width * scale,
+                    height: rect.height * scale,
+                )
+                let nsImage = NSImage(cgImage: cgImage, size: rect.size)
+                nsImage.draw(in: destRect)
             }
         }
 
         composited.unlockFocus()
         preview = composited
+    }
+
+    /// Where each window goes in the composite, and the rect bounding all of them.
+    /// `unhiddenRect` overrides the reported bounds for windows parked in the corner by a hidden workspace.
+    static func previewLayout(
+        windowInfoList: [[CFString: Any]],
+        windowIds: Set<CGWindowID>,
+        unhiddenRect: (CGWindowID, CGSize) -> CGRect?,
+    ) -> (captureRect: CGRect, windows: [(wid: CGWindowID, rect: CGRect)])? {
+        var minX = CGFloat.infinity, minY = CGFloat.infinity
+        var maxX = -CGFloat.infinity, maxY = -CGFloat.infinity
+        var foundWindows: [(wid: CGWindowID, rect: CGRect)] = []
+
+        for info in windowInfoList {
+            guard let windowNumber = info[kCGWindowNumber] as? NSNumber else { continue }
+            let wid = CGWindowID(windowNumber.uint32Value)
+            guard windowIds.contains(wid) else { continue }
+
+            if let boundsDict = info[kCGWindowBounds] as? [String: CGFloat],
+               let x = boundsDict["X"], let y = boundsDict["Y"],
+               let w = boundsDict["Width"], let h = boundsDict["Height"]
+            {
+                var rect = CGRect(x: x, y: y, width: w, height: h)
+                if let unhidden = unhiddenRect(wid, rect.size) { rect = unhidden }
+                minX = min(minX, rect.minX)
+                minY = min(minY, rect.minY)
+                maxX = max(maxX, rect.maxX)
+                maxY = max(maxY, rect.maxY)
+                foundWindows.append((wid, rect))
+            }
+        }
+
+        guard !foundWindows.isEmpty else { return nil }
+        return (CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY), foundWindows)
     }
 }
