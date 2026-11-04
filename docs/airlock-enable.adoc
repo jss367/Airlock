@@ -23,7 +23,7 @@ airlock enable [-h|--help] off [--fail-if-noop]
 
 When you disable Airlock, windows from currently invisible workspaces will be placed to the visible area of the screen
 
-Key events are not intercepted when Airlock is disabled
+Key events are not intercepted when Airlock is disabled, except main-mode bindings that run only `enable` commands. A binding such as `ctrl-option-e = 'enable toggle'` can both pause and resume Airlock.
 
 // =========================================================== Options
 include::util/conditional-options-header.adoc[]
