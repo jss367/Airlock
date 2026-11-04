@@ -354,7 +354,7 @@ struct MissionControlContent: View {
         Task {
             do {
                 try await runLightSession(.menuBarButton, token) {
-                    _ = Workspace.get(byName: ws.name).focusWorkspace()
+                    focusWorkspaceFromUi(Workspace.get(byName: ws.name))
                 }
             } catch is CancellationError {
                 if missionControlPanel === selectedPanel { dismissMissionControl(restoreFocus: false) }
