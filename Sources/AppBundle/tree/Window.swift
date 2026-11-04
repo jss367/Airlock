@@ -38,6 +38,8 @@ open class Window: TreeNode, Hashable {
     var isMacosFullscreen: Bool { get async throws { false } }
     var isMacosMinimized: Bool { get async throws { false } }
     var isHiddenInCorner: Bool { die("Not implemented") }
+    /// Whether the window's app is hidden by macOS (cmd-h)
+    @MainActor var isMacosAppHidden: Bool { false }
     @MainActor
     func nativeFocus() { die("Not implemented") }
     func getAxRect() async throws -> Rect? { die("Not implemented") }

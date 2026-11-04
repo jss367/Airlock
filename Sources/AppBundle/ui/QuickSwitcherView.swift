@@ -402,10 +402,10 @@ struct QuickSwitcherContent: View {
                         try await runLightSession(.menuBarButton, token) {
                             switch item.kind {
                                 case .workspace(let name):
-                                    _ = Workspace.get(byName: name).focusWorkspace()
+                                    focusWorkspaceFromUi(Workspace.get(byName: name))
                                 case .window(let id):
                                     if let window = Window.get(byId: id) {
-                                        _ = window.focusWindow()
+                                        focusWindowFromUi(window)
                                     }
                                 default:
                                     break

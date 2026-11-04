@@ -29,7 +29,7 @@ public func menuBar(viewModel: TrayMenuModel) -> some Scene {
                     Button("Focus") {
                         Task {
                             await withErrorReporting("Switching workspace", userMessage: "Airlock could not switch workspace.") {
-                                try await runLightSession(.menuBarButton, token) { _ = Workspace.get(byName: workspace.name).focusWorkspace() }
+                                try await runLightSession(.menuBarButton, token) { focusWorkspaceFromUi(Workspace.get(byName: workspace.name)) }
                             }
                         }
                     }

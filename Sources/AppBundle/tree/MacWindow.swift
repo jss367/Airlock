@@ -137,6 +137,7 @@ final class MacWindow: Window {
     @MainActor override var title: String { get async throws { try await macApp.getAxTitle(windowId) ?? "" } }
     @MainActor override var isMacosFullscreen: Bool { get async throws { try await macApp.isMacosNativeFullscreen(windowId) == true } }
     @MainActor override var isMacosMinimized: Bool { get async throws { try await macApp.isMacosNativeMinimized(windowId) == true } }
+    @MainActor override var isMacosAppHidden: Bool { macApp.nsApp.isHidden }
 
     @MainActor
     override func nativeFocus() {

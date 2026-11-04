@@ -125,4 +125,51 @@ final class FocusStealingPreventionTest: XCTestCase {
         assertTrue(updateFocusCache(otherWorkspace))
         assertTrue(focus.windowOrNil === otherWorkspace)
     }
+
+    /// At startup the window macOS reports focused is the user's, even when it sits on a workspace
+    /// other than the one Airlock focused first.
+    func testStartupAdoptsMacOsFocus() {
+        $_isStartup.withValue(true) {
+            assertTrue(updateFocusCache(otherWorkspace))
+        }
+        assertTrue(focus.windowOrNil === otherWorkspace)
+        assertEquals(focus.workspace.name, "other")
+    }
+
+    /// cmd-h on the focused app hands focus to the next app. Pushing focus back to the hidden window
+    /// would unhide it and make cmd-h do nothing, so a window that is still shown takes focus instead.
+    func testCrossWorkspaceStealAfterHideRefocusesAShownWindow() {
+        (current as! TestWindow).isMacosAppHiddenForTests = true
+        assertEquals(updateFocusCache(otherWorkspace), false)
+        assertTrue(focus.windowOrNil === sameWorkspace)
+        assertEquals(focus.workspace.name, "focused")
+        assertTrue(TestApp.shared.focusedWindow === sameWorkspace)
+    }
+
+    func testCrossWorkspaceStealAfterHidingTheLastShownWindowDoesNotRefocusIt() {
+        (current as! TestWindow).isMacosAppHiddenForTests = true
+        (sameWorkspace as! TestWindow).isMacosAppHiddenForTests = true
+        TestApp.shared.focusedWindow = otherWorkspace
+        assertEquals(updateFocusCache(otherWorkspace), false)
+        assertEquals(focus.workspace.name, "focused")
+        assertTrue(TestApp.shared.focusedWindow === otherWorkspace)
+    }
+
+    /// In `always` mode, the app macOS picks after cmd-h is followed when it's on the same workspace.
+    func testAlwaysModeFollowsMacOsWithinTheWorkspaceAfterHide() {
+        config.preventFocusStealing = .always
+        (current as! TestWindow).isMacosAppHiddenForTests = true
+        assertTrue(updateFocusCache(sameWorkspace))
+        assertTrue(focus.windowOrNil === sameWorkspace)
+    }
+
+    /// With automatically-unhide-macos-hidden-apps, Airlock unhides the app anyway, so the steal is
+    /// pushed back to the focused window as usual.
+    func testAutomaticUnhideKeepsPushingBackToTheHiddenWindow() {
+        config.automaticallyUnhideMacosHiddenApps = true
+        (current as! TestWindow).isMacosAppHiddenForTests = true
+        assertEquals(updateFocusCache(otherWorkspace), false)
+        assertTrue(focus.windowOrNil === current)
+        assertTrue(TestApp.shared.focusedWindow === current)
+    }
 }
