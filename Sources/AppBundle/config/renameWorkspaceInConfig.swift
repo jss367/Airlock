@@ -15,15 +15,18 @@ func renameWorkspaceInConfig(_ text: String, from old: String, to new: String) -
     var key = ""
     var arrayDepth = 0
     var openMultiLineString: String? = nil
-    let lines = text.components(separatedBy: "\n").map { line -> String in
+    let lines = text.components(separatedBy: "\n").map { rawLine -> String in
+        // Scan a `\r\n` line without its `\r`, like `readConfigLines` does, and put the `\r` back after
+        let ending = rawLine.hasSuffix("\r") ? "\r" : ""
+        let line = ending.isEmpty ? rawLine : String(rawLine.dropLast())
         if let delimiter = openMultiLineString {
             // The rest of a line that closes a multi-line string is left alone too
             if line.contains(delimiter) { openMultiLineString = nil }
-            return line
+            return rawLine
         }
         if arrayDepth <= 0, let header = tomlTableHeader(line) {
             table = header
-            return line
+            return rawLine
         }
         var tokens = tomlLineTokens(line)[...]
         var replacements: [(Range<String.Index>, String)] = []
@@ -63,7 +66,7 @@ func renameWorkspaceInConfig(_ text: String, from old: String, to new: String) -
         for (range, replacement) in replacements.reversed() {
             result.replaceSubrange(range, with: replacement)
         }
-        return result
+        return result + ending
     }
     return lines.joined(separator: "\n")
 }

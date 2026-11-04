@@ -38,10 +38,11 @@ enum ConfigWriterError: LocalizedError {
 
 /// `key` is the physical key as the visualizer names it (qwerty notation). `keyMapping` is the
 /// active `[key-mapping]`, which the config parser uses to turn the written key name back into a key code.
+/// With no config file yet, it starts from a copy of the default config, like `setConfigValue`.
 @MainActor
 func addBinding(key: String, appName: String, modifierPrefix: NSEvent.ModifierFlags, keyMapping: [String: Key]) throws {
     guard canRepresentAppName(appName) else { throw ConfigWriterError.unrepresentableAppName(appName) }
-    let file = try configFileForEditing(contentIfMissing: ["[mode.main.binding]", ""])
+    let file = try configFileForEditing(contentIfMissing: newConfigFileLines())
     let content = try addBindingToLines(file.lines, key: key, appName: appName, modifierPrefix: modifierPrefix, keyMapping: keyMapping)
     try writeConfigEdit(from: file.lines, to: content, url: file.url, separator: file.separator)
 }
@@ -130,7 +131,7 @@ private func summonAppCommand(appName: String) -> String {
 /// starts from a copy of the default config, so defaults like `persistent-workspaces` survive.
 @MainActor
 func setConfigValue(table: String?, key: String, value: String) throws {
-    let file = try configFileForEditing(contentIfMissing: readConfigLines(from: defaultConfigUrl).lines)
+    let file = try configFileForEditing(contentIfMissing: newConfigFileLines())
     let content = try setTomlValueInLines(file.lines, table: table, key: key, value: value)
     try writeConfigEdit(from: file.lines, to: content, url: file.url, separator: file.separator)
 }
@@ -516,6 +517,12 @@ func writeConfigEdit(from original: [String], to edited: [String], url: URL, sep
         throw ConfigWriterError.rejectedConfig(description)
     }
     try writeConfigLines(edited, to: url, separator: separator)
+}
+
+/// The lines an edit starts from when there's no config file yet: a copy of the default config. The parser
+/// merges only the default bindings into a custom config, so starting from less drops every other default
+func newConfigFileLines() throws -> [String] {
+    try readConfigLines(from: defaultConfigUrl).lines
 }
 
 /// The config file to edit and its current lines. With no config file yet, it is `~/.airlock.toml` with

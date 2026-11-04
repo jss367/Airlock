@@ -103,6 +103,14 @@ final class RenameWorkspaceInConfigTest: XCTestCase {
         assertTrue(!parsed.persistentWorkspaces.contains("1"))
     }
 
+    func testRenamesCrlfConfigAndKeepsLineEndings() {
+        let config = "config-version = 2\r\n[workspaces.names]\r\n    1 = \"1\"\r\n[mode.main.binding]\r\n    option-a = 'workspace 1'\r\n"
+        let renamed = renameWorkspaceInConfig(config, from: "1", to: "Web")
+        assertEquals(renamed, "config-version = 2\r\n[workspaces.names]\r\n    Web = \"1\"\r\n[mode.main.binding]\r\n    option-a = 'workspace Web'\r\n")
+        assertEquals(parseConfig(renamed).errors.map(\.description), [])
+        assertTrue(!configStillReferences(parseConfig(renamed, mergeWithDefaults: false).config, workspace: "1"))
+    }
+
     func testRenamesWindowDetectedMatcherAndRun() {
         let config = """
             [[on-window-detected]]
