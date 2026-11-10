@@ -4,6 +4,26 @@ set -euo pipefail
 cd "$(dirname "$0")"
 codesign_identity="$(./script/find-code-signing-identity.sh)"
 
+# Generation changes tracked sources. Restore their original contents, including
+# local edits, on both success and failure rather than resetting them to Git HEAD.
+generated_sources=(
+  Sources/Common/versionGenerated.swift
+  Sources/Common/gitHashGenerated.swift
+  Sources/Cli/subcommandDescriptionsGenerated.swift
+)
+metadata_backup="$(mktemp -d)"
+if ! cp "${generated_sources[@]}" "$metadata_backup/"; then
+  rm -rf "$metadata_backup"
+  exit 1
+fi
+restore_generated_sources() {
+  for source in "${generated_sources[@]}"; do
+    cp "$metadata_backup/${source##*/}" "$source" || return
+  done
+  rm -rf "$metadata_backup"
+}
+trap restore_generated_sources EXIT
+
 echo "Stamping build version and Git commit..."
 ./generate.sh --generate-git-hash --ignore-xcodeproj --ignore-cmd-help --ignore-shell-parser
 
@@ -19,6 +39,9 @@ swift test --quiet
 
 echo "Building CLI..."
 swift build --product airlock -c release --quiet
+
+restore_generated_sources
+trap - EXIT
 
 # Stop the running app only after everything above succeeded, so a failed build or test leaves it running.
 echo "Killing Airlock..."
