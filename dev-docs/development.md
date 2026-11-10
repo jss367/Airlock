@@ -113,7 +113,7 @@ To publish a release:
        --title "Airlock $release_version" --notes-file /path/to/release-notes.md
    ```
 
-4. Install the packaged `Airlock.app` and `bin/airlock` together. After launching the app, verify that `airlock --version` reports the release version and the same commit for both client and server. Local `deploy.sh` builds do not regenerate version or commit information, so use the packaged files to install an exact release.
+4. Install the packaged `Airlock.app` and `bin/airlock` together. After launching the app, verify that `airlock --version` reports the release version and the same commit for both client and server. Local `deploy.sh` builds stamp the version and Git commit from the current checkout, adding `-dirty` to the commit when it contains uncommitted changes. Use the packaged files to install an exact published release.
 
 ## Useful tools
 

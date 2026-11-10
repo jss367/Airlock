@@ -3,6 +3,7 @@ cd "$(dirname "$0")"
 source ./script/setup.sh
 
 ./script/check-uncommitted-files.sh
+bash ./script/test-deploy-build-metadata.sh
 
 ./build-debug.sh -Xswiftc -warnings-as-errors
 ./run-swift-test.sh
