@@ -4,8 +4,12 @@ set -euo pipefail
 cd "$(dirname "$0")"
 codesign_identity="$(./script/find-code-signing-identity.sh)"
 
+echo "Stamping build version and Git commit..."
+./generate.sh --generate-git-hash --ignore-xcodeproj --ignore-cmd-help --ignore-shell-parser
+
 echo "Building with stable code-signing identity $codesign_identity..."
 xcodebuild -project Airlock.xcodeproj -scheme Airlock -configuration Release build \
+  MARKETING_VERSION="$(cat VERSION)" \
   CODE_SIGN_IDENTITY="$codesign_identity" CODE_SIGNING_REQUIRED=YES \
   -derivedDataPath .xcode-build \
   -quiet
