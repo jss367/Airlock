@@ -25,7 +25,7 @@ restore_generated_sources() {
 trap restore_generated_sources EXIT
 
 echo "Stamping build version and Git commit..."
-./generate.sh --generate-git-hash --ignore-xcodeproj --ignore-cmd-help --ignore-shell-parser
+./generate.sh --generate-git-hash --mark-dirty --ignore-xcodeproj --ignore-cmd-help --ignore-shell-parser
 
 echo "Building with stable code-signing identity $codesign_identity..."
 xcodebuild -project Airlock.xcodeproj -scheme Airlock -configuration Release build \

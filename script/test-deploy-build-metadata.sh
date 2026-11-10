@@ -18,7 +18,7 @@ STUB
 cat > "$fixture/generate.sh" <<'STUB'
 #!/bin/bash
 set -euo pipefail
-test "$*" = '--generate-git-hash --ignore-xcodeproj --ignore-cmd-help --ignore-shell-parser'
+test "$*" = '--generate-git-hash --mark-dirty --ignore-xcodeproj --ignore-cmd-help --ignore-shell-parser'
 echo generate >> calls
 for source in Sources/Common/versionGenerated.swift Sources/Common/gitHashGenerated.swift Sources/Cli/subcommandDescriptionsGenerated.swift; do
   echo generated > "$source"
@@ -76,3 +76,41 @@ for original in snapshot local-edits; do
     echo "PASS: $original restored after $failure"
   done
 done
+
+# Run the real metadata generator in a disposable Git repository. Verify that
+# generation itself does not mark a clean build dirty, but initial edits do.
+generator_fixture="$fixture/generator"
+mkdir -p "$generator_fixture/script" "$generator_fixture/docs" \
+  "$generator_fixture/Sources/Common" "$generator_fixture/Sources/Cli"
+cp generate.sh VERSION "$generator_fixture/"
+cp script/setup.sh "$generator_fixture/script/"
+echo '/.deps/' > "$generator_fixture/.gitignore"
+echo ':manpurpose: Fixture command' > "$generator_fixture/docs/airlock-test.adoc"
+(
+  cd "$generator_fixture"
+  git init -q
+  git config user.name 'Metadata Test'
+  git config user.email 'metadata-test@example.invalid'
+  ./generate.sh --ignore-xcodeproj --ignore-cmd-help --ignore-shell-parser
+  git add .
+  git -c commit.gpgsign=false commit -qm 'Metadata fixture'
+  head="$(git rev-parse HEAD)"
+  short_head="$(git rev-parse --short HEAD)"
+  for state in clean tracked staged untracked; do
+    git restore --staged --worktree Sources
+    case "$state" in
+      tracked) echo '// Local edit' >> Sources/Common/versionGenerated.swift ;;
+      staged)
+        echo '// Staged edit' >> Sources/Common/versionGenerated.swift
+        git add Sources/Common/versionGenerated.swift
+        ;;
+      untracked) echo '// New source' > Sources/Common/new.swift ;;
+    esac
+    suffix=-dirty
+    if test "$state" = clean; then suffix=; fi
+    ./generate.sh --generate-git-hash --mark-dirty --ignore-xcodeproj --ignore-cmd-help --ignore-shell-parser
+    grep -qx "public let gitHash = \"$head$suffix\"" Sources/Common/gitHashGenerated.swift
+    grep -qx "public let gitShortHash = \"$short_head$suffix\"" Sources/Common/gitHashGenerated.swift
+    echo "PASS: $state provenance"
+  done
+)
