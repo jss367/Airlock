@@ -178,6 +178,27 @@ final class AppSwitcherTest: XCTestCase {
         assertEquals(state.selectedWindowIndex, 0)
     }
 
+    func testFailedCloseKeepsTheLastWindow() {
+        let state = AppSwitcherState(groups: [group(pid: 1, windows: [10])], selectedAppIndex: 0)
+        XCTAssertThrowsError(try state.closeWindow(windowId: 10) { throw NSError(domain: "test", code: 1) })
+        assertEquals(state.selectedGroup?.windows.map(\.windowId), [10])
+        state.closeWindow(windowId: 10) {}
+        assertTrue(state.groups.isEmpty)
+    }
+
+    func testClosingCapturedWindowPreservesNewSelection() {
+        let state = AppSwitcherState(groups: threeApps(), selectedAppIndex: 0)
+        state.cycleWindow(offset: 1)
+        state.closeWindow(windowId: 10) {}
+        assertEquals(state.selectedGroup?.windows[safe: state.selectedWindowIndex]?.windowId, 11)
+
+        state.cycleApp(offset: 2)
+        state.cycleWindow(offset: 1)
+        state.closeWindow(windowId: 11) {}
+        assertEquals(state.selectedGroup?.pid, 3)
+        assertEquals(state.selectedGroup?.windows[safe: state.selectedWindowIndex]?.windowId, 31)
+    }
+
     func testRefreshedTitlesApplyToTheCurrentList() async {
         let workspace = Workspace.get(byName: name)
         TestWindow.new(id: 1, parent: workspace.rootTilingContainer)

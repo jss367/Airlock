@@ -244,15 +244,29 @@ final class AppSwitcherState: ObservableObject {
 
     /// Drop the selected window from the list and return its id. An app left without windows goes too
     func removeSelectedWindow() -> UInt32? {
-        guard let window = selectedGroup?.windows[safe: selectedWindowIndex] else { return nil }
+        guard let windowId = selectedGroup?.windows[safe: selectedWindowIndex]?.windowId else { return nil }
+        removeWindow(windowId: windowId)
+        return windowId
+    }
+
+    /// Apply an admitted close before changing the list. A failed operation leaves the target intact.
+    func closeWindow(windowId: UInt32, operation: () throws -> Void) rethrows {
+        try operation()
+        removeWindow(windowId: windowId)
+    }
+
+    private func removeWindow(windowId: UInt32) {
+        guard let appIndex = groups.firstIndex(where: { $0.windows.contains(where: { $0.windowId == windowId }) }),
+              let windowIndex = groups[appIndex].windows.firstIndex(where: { $0.windowId == windowId })
+        else { return }
         markKeyboardSelection()
-        groups[selectedAppIndex].windows.remove(at: selectedWindowIndex)
-        if groups[selectedAppIndex].windows.isEmpty {
-            removeGroup(at: selectedAppIndex)
-        } else {
-            selectedWindowIndex = min(selectedWindowIndex, groups[selectedAppIndex].windows.count - 1)
+        groups[appIndex].windows.remove(at: windowIndex)
+        if groups[appIndex].windows.isEmpty {
+            removeGroup(at: appIndex)
+        } else if appIndex == selectedAppIndex {
+            if windowIndex < selectedWindowIndex { selectedWindowIndex -= 1 }
+            selectedWindowIndex = min(selectedWindowIndex, groups[appIndex].windows.count - 1)
         }
-        return window.windowId
     }
 
     /// Drop the selected app from the list and return its pid
@@ -528,10 +542,17 @@ private final class AppSwitcherPanel: NSPanelHud {
 
     private func closeSelectedWindow() {
         guard let token: RunSessionGuard = .isServerEnabled,
-              let windowId = contentState.removeSelectedWindow()
+              let windowId = contentState.selectedGroup?.windows[safe: contentState.selectedWindowIndex]?.windowId
         else { return }
         runWhileOpen(token, operation: "Closing a window from the app switcher", userMessage: "Airlock could not close the window.") {
-            Window.get(byId: windowId)?.closeAxWindow()
+            try self.contentState.closeWindow(windowId: windowId) {
+                guard let window = Window.get(byId: windowId) else {
+                    throw NSError(domain: "Airlock.AppSwitcher", code: 2, userInfo: [
+                        NSLocalizedDescriptionKey: "The window could not be found.",
+                    ])
+                }
+                window.closeAxWindow()
+            }
         }
     }
 
