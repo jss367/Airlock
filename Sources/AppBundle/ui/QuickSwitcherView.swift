@@ -303,17 +303,7 @@ struct QuickSwitcherContent: View {
         var result: [SwitcherItem] = []
 
         // Add workspaces
-        let persistentOrder = config.persistentWorkspaces
-        let workspaces = Workspace.all.sorted { a, b in
-            let ai = persistentOrder.firstIndex(of: a.name)
-            let bi = persistentOrder.firstIndex(of: b.name)
-            switch (ai, bi) {
-                case (.some(let ai), .some(let bi)): return ai < bi
-                case (.some, .none): return true
-                case (.none, .some): return false
-                case (.none, .none): return a < b
-            }
-        }
+        let workspaces = workspacesForUi()
 
         for ws in workspaces {
             let apps = ws.allLeafWindowsRecursive
