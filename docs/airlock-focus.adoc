@@ -78,6 +78,11 @@ In this mode, `--boundaries` must be `workspace` (the default) and `--boundaries
 
 (app-next|app-prev|same-app-next|same-app-prev)::
 Cycle focus between applications or between windows of the same application within the current workspace.
++
+When a binding that holds `cmd` runs `app-next` or `app-prev`, a switcher opens and stays up until `cmd` is released.
+It lists the most recently used application first, so a quick tap flips between the last two applications, and shows a thumbnail of each window of the selected application.
+Thumbnails need the Screen Recording permission; without it the switcher shows application icons instead.
+Without `cmd` held (for example from the CLI), the command switches right away and steps through applications in workspace tree order.
 
 // end::body[]
 

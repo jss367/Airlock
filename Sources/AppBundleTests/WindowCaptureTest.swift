@@ -31,4 +31,13 @@ final class WindowCaptureTest: XCTestCase {
         let size = windowThumbnailCaptureSize(contentSize: .zero, pointPixelScale: 2)
         XCTAssertEqual(size, CGSize(width: 1, height: 1))
     }
+
+    func testCallerCanAskForSmallerThumbnails() {
+        let size = windowThumbnailCaptureSize(
+            contentSize: CGSize(width: 2560, height: 1440),
+            pointPixelScale: 2,
+            maxPixelDimension: 400,
+        )
+        XCTAssertEqual(size, CGSize(width: 400, height: 225))
+    }
 }
