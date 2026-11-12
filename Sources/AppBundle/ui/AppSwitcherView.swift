@@ -5,8 +5,12 @@ import SwiftUI
 // MARK: - Global State
 
 @MainActor private var appSwitcherPanel: AppSwitcherPanel?
+@MainActor private let appSwitcherActionQueue = AppSwitcherActionQueue()
 /// The last thumbnail captured for each window, shown right away the next time the switcher opens
 @MainActor private var appSwitcherThumbnailCache: [UInt32: CGImage] = [:]
+/// The last title read for each window. Reading titles is async, so without this every open
+/// would show app names first and swap in the real titles a moment later
+@MainActor private var appSwitcherTitleCache: [UInt32: String] = [:]
 
 @MainActor var isAppSwitcherVisible: Bool {
     appSwitcherPanel?.isVisible == true
@@ -23,6 +27,7 @@ func showAppSwitcher(direction: AppCycleDirection) {
     // flips between the last two apps. Without Cmd (e.g. CLI-triggered `focus app-next`) the switch
     // commits right away, and only a fixed order lets repeated calls reach every app
     let isCmdHeld = NSEvent.modifierFlags.contains(.command)
+    appSwitcherTitleCache = appSwitcherTitleCache.filter { Window.get(byId: $0.key) != nil }
     let groups = buildAppGroups(order: isCmdHeld ? .recency : .tree)
     guard !groups.isEmpty else { return }
 
@@ -106,7 +111,7 @@ func dismissAppSwitcher(commit: Bool) {
 struct AppGroupWindow: Identifiable {
     let id: UInt32 // windowId
     let windowId: UInt32
-    let title: String
+    var title: String
 }
 
 struct AppGroup: Identifiable {
@@ -114,7 +119,7 @@ struct AppGroup: Identifiable {
     let pid: Int32
     let name: String
     let icon: NSImage
-    let windows: [AppGroupWindow]
+    var windows: [AppGroupWindow]
 }
 
 enum AppSwitcherOrder {
@@ -146,7 +151,7 @@ private func buildAppGroups(order: AppSwitcherOrder) -> [AppGroup] {
             AppGroupWindow(
                 id: window.windowId,
                 windowId: window.windowId,
-                title: window.app.name ?? "Window \(window.windowId)",
+                title: appSwitcherTitleCache[window.windowId] ?? window.app.name ?? "Window \(window.windowId)",
             )
         }
         return AppGroup(id: pid, pid: pid, name: name, icon: icon, windows: groupWindows)
@@ -189,11 +194,32 @@ final class AppSwitcherState: ObservableObject {
     @Published var selectedAppIndex: Int
     @Published var selectedWindowIndex: Int = 0
     @Published var thumbnails: [UInt32: CGImage]
+    private let actionQueue: AppSwitcherActionQueue
 
-    init(groups: [AppGroup], selectedAppIndex: Int, thumbnails: [UInt32: CGImage] = [:]) {
+    /// Reads the pointer position in screen coordinates
+    private let pointerLocation: @MainActor () -> CGPoint
+    /// Where the pointer was at the last keyboard selection. Hovering only selects once the pointer has
+    /// moved away from here, so a pointer resting where the panel opens, or under a row that
+    /// scrolls, doesn't override the keyboard
+    private var pointerAnchor: CGPoint
+    /// Rows scroll to keyboard selections only. Scrolling to a hovered item would move it out
+    /// from under the pointer and select its neighbor
+    private(set) var selectionCameFromKeyboard = true
+
+    init(
+        groups: [AppGroup],
+        selectedAppIndex: Int,
+        thumbnails: [UInt32: CGImage] = [:],
+        pointerLocation: @escaping @MainActor () -> CGPoint = { NSEvent.mouseLocation },
+        actionQueue: AppSwitcherActionQueue = AppSwitcherActionQueue(),
+    ) {
         self.groups = groups
         self.selectedAppIndex = selectedAppIndex
         self.thumbnails = thumbnails
+        self.pointerLocation = pointerLocation
+        self.pointerAnchor = pointerLocation()
+        self.actionQueue = actionQueue
+        actionQueue.register(self)
     }
 
     /// Every window, starting with the selected app's so the thumbnails on screen load first
@@ -206,43 +232,260 @@ final class AppSwitcherState: ObservableObject {
         groups[safe: selectedAppIndex]
     }
 
+    // MARK: Keyboard
+
     func cycleApp(offset: Int) {
         guard !groups.isEmpty else { return }
+        markKeyboardSelection()
         selectedAppIndex = (selectedAppIndex + offset + groups.count) % groups.count
         selectedWindowIndex = 0
     }
 
     func cycleWindow(offset: Int) {
         guard let group = selectedGroup, !group.windows.isEmpty else { return }
+        markKeyboardSelection()
         selectedWindowIndex = (selectedWindowIndex + offset + group.windows.count) % group.windows.count
     }
 
-    func refreshWindowTitles() async {
-        var updatedGroups = groups
-        for groupIndex in updatedGroups.indices {
-            var updatedWindows = updatedGroups[groupIndex].windows
-            for windowIndex in updatedWindows.indices {
-                let windowId = updatedWindows[windowIndex].windowId
-                if let window = Window.get(byId: windowId),
-                   let realTitle = try? await window.title,
-                   !realTitle.isEmpty
-                {
-                    updatedWindows[windowIndex] = AppGroupWindow(
-                        id: updatedWindows[windowIndex].id,
-                        windowId: windowId,
-                        title: realTitle,
-                    )
-                }
-            }
-            updatedGroups[groupIndex] = AppGroup(
-                id: updatedGroups[groupIndex].id,
-                pid: updatedGroups[groupIndex].pid,
-                name: updatedGroups[groupIndex].name,
-                icon: updatedGroups[groupIndex].icon,
-                windows: updatedWindows,
-            )
+    /// Drop the selected window from the list and return its id. An app left without windows goes too
+    func removeSelectedWindow() -> UInt32? {
+        guard let windowId = selectedGroup?.windows[safe: selectedWindowIndex]?.windowId else { return nil }
+        actionQueue.didCloseWindow(windowId)
+        return windowId
+    }
+
+    /// Reserve a logical selection without hiding entries before their close is admitted.
+    /// Repeated distinct presses advance through the list as if pending closes had succeeded.
+    func reserveWindowForClose() -> UInt32? {
+        let available = groups.enumerated().compactMap { index, group -> (Int, [AppGroupWindow])? in
+            if actionQueue.pendingQuitPids.contains(group.pid) { return nil }
+            let windows = group.windows.filter { !actionQueue.pendingCloseWindowIds.contains($0.windowId) }
+            return windows.isEmpty ? nil : (index, windows)
         }
-        groups = updatedGroups
+        guard !available.isEmpty else { return nil }
+        let removedBeforeApp = groups.indices.prefix(selectedAppIndex).count(where: { index in
+            isPendingRemoval(groups[index])
+        })
+        let appIndex = min(selectedAppIndex - removedBeforeApp, available.count - 1)
+        let (originalIndex, windows) = available[appIndex]
+        let removedBeforeWindow = groups[originalIndex].windows.prefix(selectedWindowIndex).count(where: {
+            actionQueue.pendingCloseWindowIds.contains($0.windowId)
+        })
+        let windowIndex = originalIndex == selectedAppIndex
+            ? min(selectedWindowIndex - removedBeforeWindow, windows.count - 1)
+            : 0
+        let windowId = windows[windowIndex].windowId
+        actionQueue.pendingCloseWindowIds.insert(windowId)
+        return windowId
+    }
+
+    func finishClosingWindow(_ windowId: UInt32) {
+        actionQueue.pendingCloseWindowIds.remove(windowId)
+    }
+
+    /// Apply an admitted close before changing the list. A failed operation leaves the target intact.
+    func closeWindow(windowId: UInt32, operation: () throws -> Void) rethrows {
+        try operation()
+        actionQueue.didCloseWindow(windowId)
+    }
+
+    func closeWindowAfterConfirmation(windowId: UInt32, operation: () async throws -> Bool) async throws -> Bool {
+        guard try await operation() else { return false }
+        actionQueue.didCloseWindow(windowId)
+        return true
+    }
+
+    fileprivate func removeWindow(windowId: UInt32) {
+        guard let appIndex = groups.firstIndex(where: { $0.windows.contains(where: { $0.windowId == windowId }) }),
+              let windowIndex = groups[appIndex].windows.firstIndex(where: { $0.windowId == windowId })
+        else { return }
+        markKeyboardSelection()
+        groups[appIndex].windows.remove(at: windowIndex)
+        if groups[appIndex].windows.isEmpty {
+            removeGroup(at: appIndex)
+        } else if appIndex == selectedAppIndex {
+            if windowIndex < selectedWindowIndex { selectedWindowIndex -= 1 }
+            selectedWindowIndex = min(selectedWindowIndex, groups[appIndex].windows.count - 1)
+        }
+    }
+
+    /// Drop the selected app from the list and return its pid
+    func removeSelectedApp() -> Int32? {
+        guard let group = selectedGroup else { return nil }
+        markKeyboardSelection()
+        removeGroup(at: selectedAppIndex)
+        return group.pid
+    }
+
+    private func isPendingRemoval(_ group: AppGroup) -> Bool {
+        actionQueue.pendingQuitPids.contains(group.pid) || group.windows.allSatisfy { actionQueue.pendingCloseWindowIds.contains($0.windowId) }
+    }
+
+    /// Reserve each queued quit independently while keeping failed targets in the visible list.
+    func reserveAppForQuit() -> Int32? {
+        let available = groups.filter { !isPendingRemoval($0) }
+        guard !available.isEmpty else { return nil }
+        let removedBeforeSelection = groups.prefix(selectedAppIndex).count(where: { isPendingRemoval($0) })
+        let index = min(selectedAppIndex - removedBeforeSelection, available.count - 1)
+        let pid = available[index].pid
+        actionQueue.pendingQuitPids.insert(pid)
+        return pid
+    }
+
+    func finishQuittingApp(_ pid: Int32) {
+        actionQueue.pendingQuitPids.remove(pid)
+    }
+
+    /// Keep the target visible until its quit request succeeds, even if selection changed while waiting.
+    func quitApp(pid: Int32, requestQuit: () -> Bool) -> Bool {
+        guard groups.contains(where: { $0.pid == pid }), requestQuit() else { return false }
+        actionQueue.didQuitApp(pid)
+        return true
+    }
+
+    fileprivate func removeApp(pid: Int32) {
+        guard let index = groups.firstIndex(where: { $0.pid == pid }) else { return }
+        markKeyboardSelection()
+        removeGroup(at: index)
+    }
+
+    private func removeGroup(at index: Int) {
+        let removedSelectedGroup = index == selectedAppIndex
+        groups.remove(at: index)
+        if index < selectedAppIndex { selectedAppIndex -= 1 }
+        selectedAppIndex = max(0, min(selectedAppIndex, groups.count - 1))
+        if removedSelectedGroup { selectedWindowIndex = 0 }
+    }
+
+    private func markKeyboardSelection() {
+        selectionCameFromKeyboard = true
+        pointerAnchor = pointerLocation()
+    }
+
+    // MARK: Pointer
+
+    func hoverApp(at index: Int) {
+        if pointerHasMoved { selectApp(at: index) }
+    }
+
+    func hoverWindow(at index: Int) {
+        if pointerHasMoved { selectWindow(at: index) }
+    }
+
+    func selectApp(at index: Int) {
+        guard groups.indices.contains(index), index != selectedAppIndex else { return }
+        selectionCameFromKeyboard = false
+        selectedAppIndex = index
+        selectedWindowIndex = 0
+    }
+
+    func selectWindow(at index: Int) {
+        guard let group = selectedGroup, group.windows.indices.contains(index), index != selectedWindowIndex else { return }
+        selectionCameFromKeyboard = false
+        selectedWindowIndex = index
+    }
+
+    private var pointerHasMoved: Bool {
+        let location = pointerLocation()
+        return hypot(location.x - pointerAnchor.x, location.y - pointerAnchor.y) > 2
+    }
+
+    // MARK: Titles
+
+    /// Read each window's real title, handing over every title found. Windows can be closed from
+    /// the switcher while this runs, so each title is applied to whatever the list holds by then
+    func refreshWindowTitles(onTitle: @MainActor (UInt32, String) -> Void = { _, _ in }) async {
+        for windowId in windowIdsFromSelectedApp {
+            guard let window = Window.get(byId: windowId),
+                  let title = try? await window.title,
+                  !title.isEmpty
+            else { continue }
+            onTitle(windowId, title)
+            setTitle(title, forWindow: windowId)
+        }
+    }
+
+    private func setTitle(_ title: String, forWindow windowId: UInt32) {
+        for groupIndex in groups.indices {
+            guard let windowIndex = groups[groupIndex].windows.firstIndex(where: { $0.windowId == windowId }) else { continue }
+            if groups[groupIndex].windows[windowIndex].title != title {
+                groups[groupIndex].windows[windowIndex].title = title
+            }
+            return
+        }
+    }
+}
+
+/// What a key does while the switcher is open
+enum AppSwitcherKeyAction: Equatable {
+    case cycleApp(offset: Int)
+    case cycleWindow(offset: Int)
+    case closeWindow
+    case quitApp
+    case cancel
+    /// Swallow the key without acting on it
+    case ignore
+}
+
+/// The switcher's action for a key press, or nil for keys it doesn't use
+func appSwitcherKeyAction(keyCode: UInt16, hasShift: Bool, isRepeat: Bool) -> AppSwitcherKeyAction? {
+    switch keyCode {
+        case 48: .cycleApp(offset: hasShift ? -1 : 1) // Tab
+        case 124: .cycleApp(offset: 1) // Right arrow
+        case 123: .cycleApp(offset: -1) // Left arrow
+        case 38, 125: .cycleWindow(offset: 1) // j, Down arrow
+        case 40, 126: .cycleWindow(offset: -1) // k, Up arrow
+        // Holding the key down must not close one window after another
+        case 13: isRepeat ? .ignore : .closeWindow // w
+        case 12: isRepeat ? .ignore : .quitApp // q
+        case 53: .cancel // Escape
+        default: nil
+    }
+}
+
+/// Close and quit requests run in key-press order, including their asynchronous admission and AX work.
+@MainActor
+final class AppSwitcherActionQueue {
+    private var tail: Task<Void, Never>?
+    fileprivate var pendingCloseWindowIds: Set<UInt32> = []
+    fileprivate var pendingQuitPids: Set<Int32> = []
+    private var states: [WeakState] = []
+
+    private final class WeakState {
+        weak var value: AppSwitcherState?
+        init(_ value: AppSwitcherState) { self.value = value }
+    }
+
+    fileprivate func register(_ state: AppSwitcherState) {
+        states.removeAll { $0.value == nil }
+        states.append(WeakState(state))
+    }
+
+    fileprivate func didCloseWindow(_ windowId: UInt32) {
+        for state in states { state.value?.removeWindow(windowId: windowId) }
+        dismissEmptyPanel()
+    }
+
+    fileprivate func didQuitApp(_ pid: Int32) {
+        for state in states { state.value?.removeApp(pid: pid) }
+        dismissEmptyPanel()
+    }
+
+    private func dismissEmptyPanel() {
+        if self === appSwitcherActionQueue, appSwitcherPanel?.contentState.groups.isEmpty == true {
+            dismissAppSwitcher(commit: false)
+        }
+    }
+
+    @discardableResult
+    func enqueue(_ body: @escaping @MainActor () async -> Void) -> Task<Void, Never> {
+        let previous = tail
+        let task = Task {
+            await previous?.value
+            await body()
+        }
+        tail = task
+        return task
     }
 }
 
@@ -287,11 +530,12 @@ private final class AppSwitcherPanel: NSPanelHud {
     private var localMonitor: Any?
     private var globalMonitor: Any?
     private var detailTasks: [Task<Void, Never>] = []
+    private let actionQueue = appSwitcherActionQueue
 
     override var canBecomeKey: Bool { true }
 
     init(groups: [AppGroup], selectedAppIndex: Int, thumbnails: [UInt32: CGImage]) {
-        self.contentState = AppSwitcherState(groups: groups, selectedAppIndex: selectedAppIndex, thumbnails: thumbnails)
+        self.contentState = AppSwitcherState(groups: groups, selectedAppIndex: selectedAppIndex, thumbnails: thumbnails, actionQueue: appSwitcherActionQueue)
         super.init()
 
         let screen = NSScreen.main
@@ -333,7 +577,7 @@ private final class AppSwitcherPanel: NSPanelHud {
     /// Fill in real window titles and thumbnails after the panel is already on screen
     func loadWindowDetails(captureThumbnails: Bool) {
         detailTasks.append(Task { [contentState] in
-            await contentState.refreshWindowTitles()
+            await contentState.refreshWindowTitles { appSwitcherTitleCache[$0] = $1 }
         })
         guard captureThumbnails else { return }
         let windowIds = contentState.windowIdsFromSelectedApp
@@ -390,29 +634,87 @@ private final class AppSwitcherPanel: NSPanelHud {
     }
 
     private func handleKeyDown(_ event: NSEvent) -> Bool {
-        let hasShift = event.modifierFlags.contains(.shift)
+        let action = appSwitcherKeyAction(
+            keyCode: event.keyCode,
+            hasShift: event.modifierFlags.contains(.shift),
+            isRepeat: event.isARepeat,
+        )
+        switch action {
+            case .cycleApp(let offset): contentState.cycleApp(offset: offset)
+            case .cycleWindow(let offset): contentState.cycleWindow(offset: offset)
+            case .closeWindow: closeSelectedWindow()
+            case .quitApp: quitSelectedApp()
+            case .cancel: Task { @MainActor in dismissAppSwitcher(commit: false) }
+            case .ignore: break
+            case nil: return false
+        }
+        return true
+    }
 
-        switch event.keyCode {
-            case 48: // Tab
-                if hasShift {
-                    contentState.cycleApp(offset: -1)
-                } else {
-                    contentState.cycleApp(offset: 1)
+    private func closeSelectedWindow() {
+        guard let token: RunSessionGuard = .isServerEnabled,
+              let windowId = contentState.reserveWindowForClose()
+        else { return }
+        runWhileOpen(
+            token,
+            operation: "Closing a window from the app switcher",
+            userMessage: "Airlock could not close the window.",
+            onCompletion: { self.contentState.finishClosingWindow(windowId) },
+        ) {
+            guard try await self.contentState.closeWindowAfterConfirmation(windowId: windowId, operation: {
+                guard let window = Window.get(byId: windowId) as? MacWindow else { return false }
+                return try await window.closeAxWindowConfirmed()
+            }) else {
+                throw NSError(domain: "Airlock.AppSwitcher", code: 2, userInfo: [
+                    NSLocalizedDescriptionKey: "The window could not be closed. It may be unavailable, read-only, or lack a close button.",
+                ])
+            }
+        }
+    }
+
+    private func quitSelectedApp() {
+        guard let token: RunSessionGuard = .isServerEnabled,
+              let pid = contentState.reserveAppForQuit()
+        else { return }
+        runWhileOpen(
+            token,
+            operation: "Quitting an app from the app switcher",
+            userMessage: "Airlock could not quit the app.",
+            onCompletion: { self.contentState.finishQuittingApp(pid) },
+        ) {
+            guard self.contentState.quitApp(pid: pid, requestQuit: {
+                MacApp.allAppsMap[pid]?.nsApp.terminate() == true
+            }) else {
+                throw NSError(domain: "Airlock.AppSwitcher", code: 1, userInfo: [
+                    NSLocalizedDescriptionKey: "The app could not be found or refused the quit request.",
+                ])
+            }
+            for workspace in Workspace.all {
+                for window in workspace.allLeafWindowsRecursive where window.app.pid == pid {
+                    (window as? MacWindow)?.garbageCollect(skipClosedWindowsCache: true)
                 }
-                return true
-            case 38: // j
-                contentState.cycleWindow(offset: 1)
-                return true
-            case 40: // k
-                contentState.cycleWindow(offset: -1)
-                return true
-            case 53: // Escape
-                Task { @MainActor in
+            }
+        }
+    }
+
+    /// Run an action that leaves the switcher open, unless it just removed the last entry
+    private func runWhileOpen(
+        _ token: RunSessionGuard,
+        operation: String,
+        userMessage: String,
+        onCompletion: @escaping @MainActor () -> Void = {},
+        _ body: @escaping @MainActor () async throws -> Void,
+    ) {
+        // Closing the panel does not cancel explicit close/quit requests already accepted.
+        // Each request still validates session admission, and may dismiss only its own panel.
+        actionQueue.enqueue {
+            defer { onCompletion() }
+            await withErrorReporting(operation, userMessage: userMessage) {
+                try await runLightSession(.menuBarButton, token) { try await body() }
+                if self.contentState.groups.isEmpty, appSwitcherPanel === self {
                     dismissAppSwitcher(commit: false)
                 }
-                return true
-            default:
-                return false
+            }
         }
     }
 }
@@ -435,6 +737,14 @@ struct AppSwitcherContent: View {
                                 isSelected: index == state.selectedAppIndex,
                             )
                             .id(group.id)
+                            .contentShape(Rectangle())
+                            .onContinuousHover { phase in
+                                if case .active = phase { state.hoverApp(at: index) }
+                            }
+                            .onTapGesture {
+                                state.selectApp(at: index)
+                                dismissAppSwitcher(commit: true)
+                            }
                         }
                     }
                     .padding(.horizontal, AppSwitcherLayout.rowPadding.width)
@@ -448,7 +758,7 @@ struct AppSwitcherContent: View {
                     }
                 }
                 .onChange(of: state.selectedAppIndex) {
-                    if let group = state.selectedGroup {
+                    if state.selectionCameFromKeyboard, let group = state.selectedGroup {
                         withAnimation(.easeInOut(duration: 0.15)) {
                             proxy.scrollTo(group.id, anchor: .center)
                         }
@@ -472,6 +782,14 @@ struct AppSwitcherContent: View {
                                     isSelected: index == state.selectedWindowIndex,
                                 )
                                 .id(window.id)
+                                .contentShape(Rectangle())
+                                .onContinuousHover { phase in
+                                    if case .active = phase { state.hoverWindow(at: index) }
+                                }
+                                .onTapGesture {
+                                    state.selectWindow(at: index)
+                                    dismissAppSwitcher(commit: true)
+                                }
                             }
                         }
                         .padding(.horizontal, AppSwitcherLayout.rowPadding.width)
@@ -479,7 +797,7 @@ struct AppSwitcherContent: View {
                         .frame(minWidth: width)
                     }
                     .onChange(of: state.selectedWindowIndex) {
-                        if let window = group.windows[safe: state.selectedWindowIndex] {
+                        if state.selectionCameFromKeyboard, let window = group.windows[safe: state.selectedWindowIndex] {
                             withAnimation(.easeInOut(duration: 0.15)) {
                                 proxy.scrollTo(window.id, anchor: .center)
                             }

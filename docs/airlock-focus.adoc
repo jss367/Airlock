@@ -82,6 +82,9 @@ Cycle focus between applications or between windows of the same application with
 When a binding that holds `cmd` runs `app-next` or `app-prev`, a switcher opens and stays up until `cmd` is released.
 It lists the most recently used application first, so a quick tap flips between the last two applications, and shows a thumbnail of each window of the selected application.
 Thumbnails need the Screen Recording permission; without it the switcher shows application icons instead.
+While the switcher is open, `tab`, `shift-tab` and the left and right arrows move between applications, and `j`, `k` and the down and up arrows move between the selected application's windows.
+`w` closes the selected window, `q` quits the selected application, and `escape` cancels.
+Moving the pointer over an application or window selects it, and clicking switches to it.
 Without `cmd` held (for example from the CLI), the command switches right away and steps through applications in workspace tree order.
 
 // end::body[]
