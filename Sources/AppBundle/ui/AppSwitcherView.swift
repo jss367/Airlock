@@ -194,6 +194,7 @@ final class AppSwitcherState: ObservableObject {
     @Published var selectedWindowIndex: Int = 0
     @Published var thumbnails: [UInt32: CGImage]
     private var pendingCloseWindowIds: Set<UInt32> = []
+    private var pendingQuitPids: Set<Int32> = []
 
     /// Reads the pointer position in screen coordinates
     private let pointerLocation: @MainActor () -> CGPoint
@@ -254,12 +255,13 @@ final class AppSwitcherState: ObservableObject {
     /// Repeated distinct presses advance through the list as if pending closes had succeeded.
     func reserveWindowForClose() -> UInt32? {
         let available = groups.enumerated().compactMap { index, group -> (Int, [AppGroupWindow])? in
+            if pendingQuitPids.contains(group.pid) { return nil }
             let windows = group.windows.filter { !pendingCloseWindowIds.contains($0.windowId) }
             return windows.isEmpty ? nil : (index, windows)
         }
         guard !available.isEmpty else { return nil }
         let removedBeforeApp = groups.indices.prefix(selectedAppIndex).count(where: { index in
-            groups[index].windows.allSatisfy { pendingCloseWindowIds.contains($0.windowId) }
+            pendingQuitPids.contains(groups[index].pid) || groups[index].windows.allSatisfy { pendingCloseWindowIds.contains($0.windowId) }
         })
         let appIndex = min(selectedAppIndex - removedBeforeApp, available.count - 1)
         let (originalIndex, windows) = available[appIndex]
@@ -310,6 +312,21 @@ final class AppSwitcherState: ObservableObject {
         markKeyboardSelection()
         removeGroup(at: selectedAppIndex)
         return group.pid
+    }
+
+    /// Reserve each queued quit independently while keeping failed targets in the visible list.
+    func reserveAppForQuit() -> Int32? {
+        let available = groups.filter { !pendingQuitPids.contains($0.pid) }
+        guard !available.isEmpty else { return nil }
+        let removedBeforeSelection = groups.prefix(selectedAppIndex).count(where: { pendingQuitPids.contains($0.pid) })
+        let index = min(selectedAppIndex - removedBeforeSelection, available.count - 1)
+        let pid = available[index].pid
+        pendingQuitPids.insert(pid)
+        return pid
+    }
+
+    func finishQuittingApp(_ pid: Int32) {
+        pendingQuitPids.remove(pid)
     }
 
     /// Keep the target visible until its quit request succeeds, even if selection changed while waiting.
@@ -598,9 +615,14 @@ private final class AppSwitcherPanel: NSPanelHud {
 
     private func quitSelectedApp() {
         guard let token: RunSessionGuard = .isServerEnabled,
-              let pid = contentState.selectedGroup?.pid
+              let pid = contentState.reserveAppForQuit()
         else { return }
-        runWhileOpen(token, operation: "Quitting an app from the app switcher", userMessage: "Airlock could not quit the app.") {
+        runWhileOpen(
+            token,
+            operation: "Quitting an app from the app switcher",
+            userMessage: "Airlock could not quit the app.",
+            onCompletion: { self.contentState.finishQuittingApp(pid) },
+        ) {
             guard self.contentState.quitApp(pid: pid, requestQuit: {
                 MacApp.allAppsMap[pid]?.nsApp.terminate() == true
             }) else {

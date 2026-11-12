@@ -248,6 +248,33 @@ final class AppSwitcherTest: XCTestCase {
         assertTrue(state.groups.isEmpty)
     }
 
+    func testRapidQuitReservationsAdvanceAndReleaseOnFailure() {
+        let state = AppSwitcherState(groups: threeApps(), selectedAppIndex: 0)
+        assertEquals(state.reserveAppForQuit(), 1)
+        assertEquals(state.reserveAppForQuit(), 2)
+        assertEquals(state.reserveAppForQuit(), 3)
+        assertNil(state.reserveAppForQuit())
+        assertEquals(state.groups.map(\.pid), [1, 2, 3])
+        assertEquals(state.quitApp(pid: 1, requestQuit: { false }), false)
+        state.finishQuittingApp(1)
+        assertEquals(state.reserveAppForQuit(), 1)
+        assertEquals(state.quitApp(pid: 2, requestQuit: { true }), true)
+        state.finishQuittingApp(2)
+        assertNil(state.reserveAppForQuit())
+    }
+
+    func testQuitReservationsRespectNewSelectionAndCloseSkipsQuittingApps() {
+        let state = AppSwitcherState(groups: threeApps(), selectedAppIndex: 2)
+        assertEquals(state.reserveAppForQuit(), 3)
+        assertEquals(state.reserveWindowForClose(), 20)
+        state.selectApp(at: 0)
+        assertEquals(state.reserveAppForQuit(), 1)
+        assertEquals(state.reserveAppForQuit(), 2)
+        assertNil(state.reserveWindowForClose())
+        state.finishQuittingApp(1)
+        assertEquals(state.reserveWindowForClose(), 10)
+    }
+
     func testRefreshedTitlesApplyToTheCurrentList() async {
         let workspace = Workspace.get(byName: name)
         TestWindow.new(id: 1, parent: workspace.rootTilingContainer)
