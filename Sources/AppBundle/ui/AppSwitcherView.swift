@@ -435,6 +435,23 @@ func appSwitcherKeyAction(keyCode: UInt16, hasShift: Bool, isRepeat: Bool) -> Ap
     }
 }
 
+/// Close and quit requests run in key-press order, including their asynchronous admission and AX work.
+@MainActor
+final class AppSwitcherActionQueue {
+    private var tail: Task<Void, Never>?
+
+    @discardableResult
+    func enqueue(_ body: @escaping @MainActor () async -> Void) -> Task<Void, Never> {
+        let previous = tail
+        let task = Task {
+            await previous?.value
+            await body()
+        }
+        tail = task
+        return task
+    }
+}
+
 // MARK: - Panel
 
 enum AppSwitcherLayout {
@@ -476,6 +493,7 @@ private final class AppSwitcherPanel: NSPanelHud {
     private var localMonitor: Any?
     private var globalMonitor: Any?
     private var detailTasks: [Task<Void, Never>] = []
+    private let actionQueue = AppSwitcherActionQueue()
 
     override var canBecomeKey: Bool { true }
 
@@ -650,7 +668,9 @@ private final class AppSwitcherPanel: NSPanelHud {
         onCompletion: @escaping @MainActor () -> Void = {},
         _ body: @escaping @MainActor () async throws -> Void,
     ) {
-        Task {
+        // Closing the panel does not cancel explicit close/quit requests already accepted.
+        // Each request still validates session admission, and may dismiss only its own panel.
+        actionQueue.enqueue {
             defer { onCompletion() }
             await withErrorReporting(operation, userMessage: userMessage) {
                 try await runLightSession(.menuBarButton, token) { try await body() }

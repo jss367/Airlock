@@ -269,7 +269,7 @@ final class AppSwitcherTest: XCTestCase {
         assertEquals(state.reserveWindowForClose(), 20)
         state.selectApp(at: 0)
         assertEquals(state.reserveAppForQuit(), 1)
-        assertEquals(state.reserveAppForQuit(), 2)
+        assertNil(state.reserveAppForQuit()) // App 2's only window is already reserved for close.
         assertNil(state.reserveWindowForClose())
         state.finishQuittingApp(1)
         assertEquals(state.reserveWindowForClose(), 10)
@@ -300,6 +300,45 @@ final class AppSwitcherTest: XCTestCase {
         assertEquals(state.reserveAppForQuit(), 2)
         assertEquals(state.reserveAppForQuit(), 1)
         assertNil(state.reserveAppForQuit())
+    }
+
+    func testQueuedQuitWaitsForPartialCloseSuccessOrFailure() async {
+        for closeSucceeds in [true, false] {
+            let state = AppSwitcherState(groups: threeApps(), selectedAppIndex: 0)
+            let queue = AppSwitcherActionQueue()
+            let windowId = state.reserveWindowForClose()!
+            let pid = state.reserveAppForQuit()!
+            assertEquals(windowId, 10)
+            assertEquals(pid, 1)
+            var resumeClose: CheckedContinuation<Void, Never>?
+            var order: [String] = []
+            queue.enqueue {
+                defer { state.finishClosingWindow(windowId) }
+                order.append("close started")
+                _ = try? await state.closeWindowAfterConfirmation(windowId: windowId) {
+                    await withCheckedContinuation { resumeClose = $0 }
+                    if !closeSucceeds { throw NSError(domain: "test", code: 1) }
+                    return true
+                }
+                order.append("close finished")
+            }
+            while resumeClose == nil { await Task.yield() }
+            let finished = queue.enqueue {
+                defer { state.finishQuittingApp(pid) }
+                order.append("quit")
+                assertEquals(state.groups.first?.windows.count, closeSucceeds ? 1 : 2)
+                assertEquals(state.quitApp(pid: pid, requestQuit: { true }), true)
+            }
+            state.selectApp(at: 2)
+            state.selectWindow(at: 1)
+            await Task.yield()
+            assertEquals(order, ["close started"])
+            resumeClose?.resume()
+            await finished.value
+            assertEquals(order, ["close started", "close finished", "quit"])
+            assertEquals(state.selectedGroup?.pid, 3)
+            assertEquals(state.selectedGroup?.windows[safe: state.selectedWindowIndex]?.windowId, 31)
+        }
     }
 
     func testRefreshedTitlesApplyToTheCurrentList() async {
