@@ -35,7 +35,12 @@ func showAppSwitcher(direction: AppCycleDirection) {
         startIndex = 0
     }
 
-    appSwitcherThumbnailCache = appSwitcherThumbnailCache.filter { Window.get(byId: $0.key) != nil }
+    // Capturing without screen-recording access makes macOS prompt for it. Cmd+Tab must never do
+    // that, so without access the tiles show app icons, even for windows captured before it was revoked
+    let canCaptureWindows = CGPreflightScreenCaptureAccess()
+    appSwitcherThumbnailCache = canCaptureWindows
+        ? appSwitcherThumbnailCache.filter { Window.get(byId: $0.key) != nil }
+        : [:]
     let panel = AppSwitcherPanel(groups: groups, selectedAppIndex: startIndex, thumbnails: appSwitcherThumbnailCache)
     appSwitcherPanel = panel
     panel.show()
@@ -48,7 +53,7 @@ func showAppSwitcher(direction: AppCycleDirection) {
         return
     }
 
-    panel.loadWindowDetails()
+    panel.loadWindowDetails(captureThumbnails: canCaptureWindows)
 }
 
 /// Move the app highlight in the given direction. Only meaningful when the panel is already visible.
@@ -326,13 +331,11 @@ private final class AppSwitcherPanel: NSPanelHud {
     }
 
     /// Fill in real window titles and thumbnails after the panel is already on screen
-    func loadWindowDetails() {
+    func loadWindowDetails(captureThumbnails: Bool) {
         detailTasks.append(Task { [contentState] in
             await contentState.refreshWindowTitles()
         })
-        // Capturing without screen-recording access makes macOS prompt for it. Cmd+Tab must never
-        // do that, so the tiles keep showing app icons until the user grants access elsewhere
-        guard CGPreflightScreenCaptureAccess() else { return }
+        guard captureThumbnails else { return }
         let windowIds = contentState.windowIdsFromSelectedApp
         detailTasks.append(Task { [contentState] in
             await captureWindowImages(
@@ -437,6 +440,12 @@ struct AppSwitcherContent: View {
                     .padding(.horizontal, AppSwitcherLayout.rowPadding.width)
                     .padding(.vertical, AppSwitcherLayout.rowPadding.height)
                     .frame(minWidth: width) // center the row when it's narrower than the panel
+                }
+                .onAppear {
+                    // Cmd+Shift+Tab opens on the last app, which a long row would leave off screen
+                    if let group = state.selectedGroup {
+                        proxy.scrollTo(group.id, anchor: .center)
+                    }
                 }
                 .onChange(of: state.selectedAppIndex) {
                     if let group = state.selectedGroup {
