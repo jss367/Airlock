@@ -261,7 +261,7 @@ final class AppSwitcherState: ObservableObject {
         }
         guard !available.isEmpty else { return nil }
         let removedBeforeApp = groups.indices.prefix(selectedAppIndex).count(where: { index in
-            pendingQuitPids.contains(groups[index].pid) || groups[index].windows.allSatisfy { pendingCloseWindowIds.contains($0.windowId) }
+            isPendingRemoval(groups[index])
         })
         let appIndex = min(selectedAppIndex - removedBeforeApp, available.count - 1)
         let (originalIndex, windows) = available[appIndex]
@@ -314,11 +314,15 @@ final class AppSwitcherState: ObservableObject {
         return group.pid
     }
 
+    private func isPendingRemoval(_ group: AppGroup) -> Bool {
+        pendingQuitPids.contains(group.pid) || group.windows.allSatisfy { pendingCloseWindowIds.contains($0.windowId) }
+    }
+
     /// Reserve each queued quit independently while keeping failed targets in the visible list.
     func reserveAppForQuit() -> Int32? {
-        let available = groups.filter { !pendingQuitPids.contains($0.pid) }
+        let available = groups.filter { !isPendingRemoval($0) }
         guard !available.isEmpty else { return nil }
-        let removedBeforeSelection = groups.prefix(selectedAppIndex).count(where: { pendingQuitPids.contains($0.pid) })
+        let removedBeforeSelection = groups.prefix(selectedAppIndex).count(where: { isPendingRemoval($0) })
         let index = min(selectedAppIndex - removedBeforeSelection, available.count - 1)
         let pid = available[index].pid
         pendingQuitPids.insert(pid)

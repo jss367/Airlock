@@ -275,6 +275,33 @@ final class AppSwitcherTest: XCTestCase {
         assertEquals(state.reserveWindowForClose(), 10)
     }
 
+    func testQuitSkipsFullyCloseReservedAppsAndRecoversAfterFailure() {
+        let state = AppSwitcherState(groups: threeApps(), selectedAppIndex: 0)
+        assertEquals(state.reserveWindowForClose(), 10)
+        assertEquals(state.reserveWindowForClose(), 11)
+        assertEquals(state.reserveAppForQuit(), 2)
+        assertEquals(state.reserveAppForQuit(), 3)
+        assertNil(state.reserveAppForQuit())
+
+        // A failed close restores eligibility without disturbing other pending quits.
+        state.finishClosingWindow(10)
+        assertEquals(state.reserveAppForQuit(), 1)
+        state.finishQuittingApp(1)
+        state.closeWindow(windowId: 11) {}
+        state.finishClosingWindow(11)
+        assertEquals(state.reserveAppForQuit(), 1)
+        assertEquals(state.selectedGroup?.windows.map(\.windowId), [10])
+    }
+
+    func testQuitFallsBackPastASelectedAppWithItsLastWindowReserved() {
+        let state = AppSwitcherState(groups: threeApps(), selectedAppIndex: 2)
+        assertEquals(state.reserveWindowForClose(), 30)
+        assertEquals(state.reserveWindowForClose(), 31)
+        assertEquals(state.reserveAppForQuit(), 2)
+        assertEquals(state.reserveAppForQuit(), 1)
+        assertNil(state.reserveAppForQuit())
+    }
+
     func testRefreshedTitlesApplyToTheCurrentList() async {
         let workspace = Workspace.get(byName: name)
         TestWindow.new(id: 1, parent: workspace.rootTilingContainer)
