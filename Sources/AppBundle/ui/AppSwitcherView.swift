@@ -5,6 +5,7 @@ import SwiftUI
 // MARK: - Global State
 
 @MainActor private var appSwitcherPanel: AppSwitcherPanel?
+@MainActor private let appSwitcherActionQueue = AppSwitcherActionQueue()
 /// The last thumbnail captured for each window, shown right away the next time the switcher opens
 @MainActor private var appSwitcherThumbnailCache: [UInt32: CGImage] = [:]
 /// The last title read for each window. Reading titles is async, so without this every open
@@ -193,8 +194,7 @@ final class AppSwitcherState: ObservableObject {
     @Published var selectedAppIndex: Int
     @Published var selectedWindowIndex: Int = 0
     @Published var thumbnails: [UInt32: CGImage]
-    private var pendingCloseWindowIds: Set<UInt32> = []
-    private var pendingQuitPids: Set<Int32> = []
+    private let actionQueue: AppSwitcherActionQueue
 
     /// Reads the pointer position in screen coordinates
     private let pointerLocation: @MainActor () -> CGPoint
@@ -211,12 +211,15 @@ final class AppSwitcherState: ObservableObject {
         selectedAppIndex: Int,
         thumbnails: [UInt32: CGImage] = [:],
         pointerLocation: @escaping @MainActor () -> CGPoint = { NSEvent.mouseLocation },
+        actionQueue: AppSwitcherActionQueue = AppSwitcherActionQueue(),
     ) {
         self.groups = groups
         self.selectedAppIndex = selectedAppIndex
         self.thumbnails = thumbnails
         self.pointerLocation = pointerLocation
         self.pointerAnchor = pointerLocation()
+        self.actionQueue = actionQueue
+        actionQueue.register(self)
     }
 
     /// Every window, starting with the selected app's so the thumbnails on screen load first
@@ -247,7 +250,7 @@ final class AppSwitcherState: ObservableObject {
     /// Drop the selected window from the list and return its id. An app left without windows goes too
     func removeSelectedWindow() -> UInt32? {
         guard let windowId = selectedGroup?.windows[safe: selectedWindowIndex]?.windowId else { return nil }
-        removeWindow(windowId: windowId)
+        actionQueue.didCloseWindow(windowId)
         return windowId
     }
 
@@ -255,8 +258,8 @@ final class AppSwitcherState: ObservableObject {
     /// Repeated distinct presses advance through the list as if pending closes had succeeded.
     func reserveWindowForClose() -> UInt32? {
         let available = groups.enumerated().compactMap { index, group -> (Int, [AppGroupWindow])? in
-            if pendingQuitPids.contains(group.pid) { return nil }
-            let windows = group.windows.filter { !pendingCloseWindowIds.contains($0.windowId) }
+            if actionQueue.pendingQuitPids.contains(group.pid) { return nil }
+            let windows = group.windows.filter { !actionQueue.pendingCloseWindowIds.contains($0.windowId) }
             return windows.isEmpty ? nil : (index, windows)
         }
         guard !available.isEmpty else { return nil }
@@ -266,33 +269,33 @@ final class AppSwitcherState: ObservableObject {
         let appIndex = min(selectedAppIndex - removedBeforeApp, available.count - 1)
         let (originalIndex, windows) = available[appIndex]
         let removedBeforeWindow = groups[originalIndex].windows.prefix(selectedWindowIndex).count(where: {
-            pendingCloseWindowIds.contains($0.windowId)
+            actionQueue.pendingCloseWindowIds.contains($0.windowId)
         })
         let windowIndex = originalIndex == selectedAppIndex
             ? min(selectedWindowIndex - removedBeforeWindow, windows.count - 1)
             : 0
         let windowId = windows[windowIndex].windowId
-        pendingCloseWindowIds.insert(windowId)
+        actionQueue.pendingCloseWindowIds.insert(windowId)
         return windowId
     }
 
     func finishClosingWindow(_ windowId: UInt32) {
-        pendingCloseWindowIds.remove(windowId)
+        actionQueue.pendingCloseWindowIds.remove(windowId)
     }
 
     /// Apply an admitted close before changing the list. A failed operation leaves the target intact.
     func closeWindow(windowId: UInt32, operation: () throws -> Void) rethrows {
         try operation()
-        removeWindow(windowId: windowId)
+        actionQueue.didCloseWindow(windowId)
     }
 
     func closeWindowAfterConfirmation(windowId: UInt32, operation: () async throws -> Bool) async throws -> Bool {
         guard try await operation() else { return false }
-        removeWindow(windowId: windowId)
+        actionQueue.didCloseWindow(windowId)
         return true
     }
 
-    private func removeWindow(windowId: UInt32) {
+    fileprivate func removeWindow(windowId: UInt32) {
         guard let appIndex = groups.firstIndex(where: { $0.windows.contains(where: { $0.windowId == windowId }) }),
               let windowIndex = groups[appIndex].windows.firstIndex(where: { $0.windowId == windowId })
         else { return }
@@ -315,7 +318,7 @@ final class AppSwitcherState: ObservableObject {
     }
 
     private func isPendingRemoval(_ group: AppGroup) -> Bool {
-        pendingQuitPids.contains(group.pid) || group.windows.allSatisfy { pendingCloseWindowIds.contains($0.windowId) }
+        actionQueue.pendingQuitPids.contains(group.pid) || group.windows.allSatisfy { actionQueue.pendingCloseWindowIds.contains($0.windowId) }
     }
 
     /// Reserve each queued quit independently while keeping failed targets in the visible list.
@@ -325,20 +328,25 @@ final class AppSwitcherState: ObservableObject {
         let removedBeforeSelection = groups.prefix(selectedAppIndex).count(where: { isPendingRemoval($0) })
         let index = min(selectedAppIndex - removedBeforeSelection, available.count - 1)
         let pid = available[index].pid
-        pendingQuitPids.insert(pid)
+        actionQueue.pendingQuitPids.insert(pid)
         return pid
     }
 
     func finishQuittingApp(_ pid: Int32) {
-        pendingQuitPids.remove(pid)
+        actionQueue.pendingQuitPids.remove(pid)
     }
 
     /// Keep the target visible until its quit request succeeds, even if selection changed while waiting.
     func quitApp(pid: Int32, requestQuit: () -> Bool) -> Bool {
-        guard let index = groups.firstIndex(where: { $0.pid == pid }), requestQuit() else { return false }
+        guard groups.contains(where: { $0.pid == pid }), requestQuit() else { return false }
+        actionQueue.didQuitApp(pid)
+        return true
+    }
+
+    fileprivate func removeApp(pid: Int32) {
+        guard let index = groups.firstIndex(where: { $0.pid == pid }) else { return }
         markKeyboardSelection()
         removeGroup(at: index)
-        return true
     }
 
     private func removeGroup(at index: Int) {
@@ -439,6 +447,35 @@ func appSwitcherKeyAction(keyCode: UInt16, hasShift: Bool, isRepeat: Bool) -> Ap
 @MainActor
 final class AppSwitcherActionQueue {
     private var tail: Task<Void, Never>?
+    fileprivate var pendingCloseWindowIds: Set<UInt32> = []
+    fileprivate var pendingQuitPids: Set<Int32> = []
+    private var states: [WeakState] = []
+
+    private final class WeakState {
+        weak var value: AppSwitcherState?
+        init(_ value: AppSwitcherState) { self.value = value }
+    }
+
+    fileprivate func register(_ state: AppSwitcherState) {
+        states.removeAll { $0.value == nil }
+        states.append(WeakState(state))
+    }
+
+    fileprivate func didCloseWindow(_ windowId: UInt32) {
+        for state in states { state.value?.removeWindow(windowId: windowId) }
+        dismissEmptyPanel()
+    }
+
+    fileprivate func didQuitApp(_ pid: Int32) {
+        for state in states { state.value?.removeApp(pid: pid) }
+        dismissEmptyPanel()
+    }
+
+    private func dismissEmptyPanel() {
+        if self === appSwitcherActionQueue, appSwitcherPanel?.contentState.groups.isEmpty == true {
+            dismissAppSwitcher(commit: false)
+        }
+    }
 
     @discardableResult
     func enqueue(_ body: @escaping @MainActor () async -> Void) -> Task<Void, Never> {
@@ -493,12 +530,12 @@ private final class AppSwitcherPanel: NSPanelHud {
     private var localMonitor: Any?
     private var globalMonitor: Any?
     private var detailTasks: [Task<Void, Never>] = []
-    private let actionQueue = AppSwitcherActionQueue()
+    private let actionQueue = appSwitcherActionQueue
 
     override var canBecomeKey: Bool { true }
 
     init(groups: [AppGroup], selectedAppIndex: Int, thumbnails: [UInt32: CGImage]) {
-        self.contentState = AppSwitcherState(groups: groups, selectedAppIndex: selectedAppIndex, thumbnails: thumbnails)
+        self.contentState = AppSwitcherState(groups: groups, selectedAppIndex: selectedAppIndex, thumbnails: thumbnails, actionQueue: appSwitcherActionQueue)
         super.init()
 
         let screen = NSScreen.main

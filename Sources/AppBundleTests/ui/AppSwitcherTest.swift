@@ -341,6 +341,42 @@ final class AppSwitcherTest: XCTestCase {
         }
     }
 
+    func testReopenedPanelSharesPendingTargetsAndOrdering() async {
+        for closeSucceeds in [true, false] {
+            let queue = AppSwitcherActionQueue()
+            let oldState = AppSwitcherState(groups: threeApps(), selectedAppIndex: 0, actionQueue: queue)
+            let first = oldState.reserveWindowForClose()!
+            var resumeClose: CheckedContinuation<Void, Never>?
+            var order: [UInt32] = []
+            queue.enqueue {
+                defer { oldState.finishClosingWindow(first) }
+                _ = try? await oldState.closeWindowAfterConfirmation(windowId: first) {
+                    await withCheckedContinuation { resumeClose = $0 }
+                    order.append(first)
+                    return closeSucceeds
+                }
+            }
+            while resumeClose == nil { await Task.yield() }
+            // The panel is replaced while its previously accepted action is suspended.
+            let reopened = AppSwitcherState(groups: threeApps(), selectedAppIndex: 0, actionQueue: queue)
+            let second = reopened.reserveWindowForClose()!
+            assertEquals(second, 11)
+            let finished = queue.enqueue {
+                defer { reopened.finishClosingWindow(second) }
+                order.append(second)
+                reopened.closeWindow(windowId: second) {}
+            }
+            await Task.yield()
+            assertTrue(order.isEmpty)
+            resumeClose?.resume()
+            await finished.value
+            assertEquals(order, [10, 11])
+            assertEquals(reopened.groups.first?.windows.map(\.windowId), closeSucceeds ? [20] : [10])
+            assertEquals(oldState.groups.map(\.pid), reopened.groups.map(\.pid))
+            assertEquals(reopened.reserveWindowForClose(), closeSucceeds ? 20 : 10)
+        }
+    }
+
     func testRefreshedTitlesApplyToTheCurrentList() async {
         let workspace = Workspace.get(byName: name)
         TestWindow.new(id: 1, parent: workspace.rootTilingContainer)
