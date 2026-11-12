@@ -7,6 +7,9 @@ import SwiftUI
 @MainActor private var appSwitcherPanel: AppSwitcherPanel?
 /// The last thumbnail captured for each window, shown right away the next time the switcher opens
 @MainActor private var appSwitcherThumbnailCache: [UInt32: CGImage] = [:]
+/// The last title read for each window. Reading titles is async, so without this every open
+/// would show app names first and swap in the real titles a moment later
+@MainActor private var appSwitcherTitleCache: [UInt32: String] = [:]
 
 @MainActor var isAppSwitcherVisible: Bool {
     appSwitcherPanel?.isVisible == true
@@ -23,6 +26,7 @@ func showAppSwitcher(direction: AppCycleDirection) {
     // flips between the last two apps. Without Cmd (e.g. CLI-triggered `focus app-next`) the switch
     // commits right away, and only a fixed order lets repeated calls reach every app
     let isCmdHeld = NSEvent.modifierFlags.contains(.command)
+    appSwitcherTitleCache = appSwitcherTitleCache.filter { Window.get(byId: $0.key) != nil }
     let groups = buildAppGroups(order: isCmdHeld ? .recency : .tree)
     guard !groups.isEmpty else { return }
 
@@ -106,7 +110,7 @@ func dismissAppSwitcher(commit: Bool) {
 struct AppGroupWindow: Identifiable {
     let id: UInt32 // windowId
     let windowId: UInt32
-    let title: String
+    var title: String
 }
 
 struct AppGroup: Identifiable {
@@ -114,7 +118,7 @@ struct AppGroup: Identifiable {
     let pid: Int32
     let name: String
     let icon: NSImage
-    let windows: [AppGroupWindow]
+    var windows: [AppGroupWindow]
 }
 
 enum AppSwitcherOrder {
@@ -146,7 +150,7 @@ private func buildAppGroups(order: AppSwitcherOrder) -> [AppGroup] {
             AppGroupWindow(
                 id: window.windowId,
                 windowId: window.windowId,
-                title: window.app.name ?? "Window \(window.windowId)",
+                title: appSwitcherTitleCache[window.windowId] ?? window.app.name ?? "Window \(window.windowId)",
             )
         }
         return AppGroup(id: pid, pid: pid, name: name, icon: icon, windows: groupWindows)
@@ -190,10 +194,27 @@ final class AppSwitcherState: ObservableObject {
     @Published var selectedWindowIndex: Int = 0
     @Published var thumbnails: [UInt32: CGImage]
 
-    init(groups: [AppGroup], selectedAppIndex: Int, thumbnails: [UInt32: CGImage] = [:]) {
+    /// Reads the pointer position in screen coordinates
+    private let pointerLocation: @MainActor () -> CGPoint
+    /// Where the pointer was at the last keyboard selection. Hovering only selects once the pointer has
+    /// moved away from here, so a pointer resting where the panel opens, or under a row that
+    /// scrolls, doesn't override the keyboard
+    private var pointerAnchor: CGPoint
+    /// Rows scroll to keyboard selections only. Scrolling to a hovered item would move it out
+    /// from under the pointer and select its neighbor
+    private(set) var selectionCameFromKeyboard = true
+
+    init(
+        groups: [AppGroup],
+        selectedAppIndex: Int,
+        thumbnails: [UInt32: CGImage] = [:],
+        pointerLocation: @escaping @MainActor () -> CGPoint = { NSEvent.mouseLocation },
+    ) {
         self.groups = groups
         self.selectedAppIndex = selectedAppIndex
         self.thumbnails = thumbnails
+        self.pointerLocation = pointerLocation
+        self.pointerAnchor = pointerLocation()
     }
 
     /// Every window, starting with the selected app's so the thumbnails on screen load first
@@ -206,43 +227,131 @@ final class AppSwitcherState: ObservableObject {
         groups[safe: selectedAppIndex]
     }
 
+    // MARK: Keyboard
+
     func cycleApp(offset: Int) {
         guard !groups.isEmpty else { return }
+        markKeyboardSelection()
         selectedAppIndex = (selectedAppIndex + offset + groups.count) % groups.count
         selectedWindowIndex = 0
     }
 
     func cycleWindow(offset: Int) {
         guard let group = selectedGroup, !group.windows.isEmpty else { return }
+        markKeyboardSelection()
         selectedWindowIndex = (selectedWindowIndex + offset + group.windows.count) % group.windows.count
     }
 
-    func refreshWindowTitles() async {
-        var updatedGroups = groups
-        for groupIndex in updatedGroups.indices {
-            var updatedWindows = updatedGroups[groupIndex].windows
-            for windowIndex in updatedWindows.indices {
-                let windowId = updatedWindows[windowIndex].windowId
-                if let window = Window.get(byId: windowId),
-                   let realTitle = try? await window.title,
-                   !realTitle.isEmpty
-                {
-                    updatedWindows[windowIndex] = AppGroupWindow(
-                        id: updatedWindows[windowIndex].id,
-                        windowId: windowId,
-                        title: realTitle,
-                    )
-                }
-            }
-            updatedGroups[groupIndex] = AppGroup(
-                id: updatedGroups[groupIndex].id,
-                pid: updatedGroups[groupIndex].pid,
-                name: updatedGroups[groupIndex].name,
-                icon: updatedGroups[groupIndex].icon,
-                windows: updatedWindows,
-            )
+    /// Drop the selected window from the list and return its id. An app left without windows goes too
+    func removeSelectedWindow() -> UInt32? {
+        guard let window = selectedGroup?.windows[safe: selectedWindowIndex] else { return nil }
+        markKeyboardSelection()
+        groups[selectedAppIndex].windows.remove(at: selectedWindowIndex)
+        if groups[selectedAppIndex].windows.isEmpty {
+            removeGroup(at: selectedAppIndex)
+        } else {
+            selectedWindowIndex = min(selectedWindowIndex, groups[selectedAppIndex].windows.count - 1)
         }
-        groups = updatedGroups
+        return window.windowId
+    }
+
+    /// Drop the selected app from the list and return its pid
+    func removeSelectedApp() -> Int32? {
+        guard let group = selectedGroup else { return nil }
+        markKeyboardSelection()
+        removeGroup(at: selectedAppIndex)
+        return group.pid
+    }
+
+    private func removeGroup(at index: Int) {
+        groups.remove(at: index)
+        selectedAppIndex = max(0, min(selectedAppIndex, groups.count - 1))
+        selectedWindowIndex = 0
+    }
+
+    private func markKeyboardSelection() {
+        selectionCameFromKeyboard = true
+        pointerAnchor = pointerLocation()
+    }
+
+    // MARK: Pointer
+
+    func hoverApp(at index: Int) {
+        if pointerHasMoved { selectApp(at: index) }
+    }
+
+    func hoverWindow(at index: Int) {
+        if pointerHasMoved { selectWindow(at: index) }
+    }
+
+    func selectApp(at index: Int) {
+        guard groups.indices.contains(index), index != selectedAppIndex else { return }
+        selectionCameFromKeyboard = false
+        selectedAppIndex = index
+        selectedWindowIndex = 0
+    }
+
+    func selectWindow(at index: Int) {
+        guard let group = selectedGroup, group.windows.indices.contains(index), index != selectedWindowIndex else { return }
+        selectionCameFromKeyboard = false
+        selectedWindowIndex = index
+    }
+
+    private var pointerHasMoved: Bool {
+        let location = pointerLocation()
+        return hypot(location.x - pointerAnchor.x, location.y - pointerAnchor.y) > 2
+    }
+
+    // MARK: Titles
+
+    /// Read each window's real title, handing over every title found. Windows can be closed from
+    /// the switcher while this runs, so each title is applied to whatever the list holds by then
+    func refreshWindowTitles(onTitle: @MainActor (UInt32, String) -> Void = { _, _ in }) async {
+        for windowId in windowIdsFromSelectedApp {
+            guard let window = Window.get(byId: windowId),
+                  let title = try? await window.title,
+                  !title.isEmpty
+            else { continue }
+            onTitle(windowId, title)
+            setTitle(title, forWindow: windowId)
+        }
+    }
+
+    private func setTitle(_ title: String, forWindow windowId: UInt32) {
+        for groupIndex in groups.indices {
+            guard let windowIndex = groups[groupIndex].windows.firstIndex(where: { $0.windowId == windowId }) else { continue }
+            if groups[groupIndex].windows[windowIndex].title != title {
+                groups[groupIndex].windows[windowIndex].title = title
+            }
+            return
+        }
+    }
+}
+
+/// What a key does while the switcher is open
+enum AppSwitcherKeyAction: Equatable {
+    case cycleApp(offset: Int)
+    case cycleWindow(offset: Int)
+    case closeWindow
+    case quitApp
+    case cancel
+    /// Swallow the key without acting on it
+    case ignore
+}
+
+/// The switcher's action for a key press, or nil for keys it doesn't use
+func appSwitcherKeyAction(keyCode: UInt16, hasShift: Bool, isRepeat: Bool) -> AppSwitcherKeyAction? {
+    switch keyCode {
+        case 48: .cycleApp(offset: hasShift ? -1 : 1) // Tab
+        case 124: .cycleApp(offset: 1) // Right arrow
+        case 123: .cycleApp(offset: -1) // Left arrow
+        case 38, 125: .cycleWindow(offset: 1) // j, Down arrow
+        case 40, 126: .cycleWindow(offset: -1) // k, Up arrow
+        // Holding the key down must not close one window after another
+        case 13: isRepeat ? .ignore : .closeWindow // w
+        case 12: isRepeat ? .ignore : .quitApp // q
+        case 53: .cancel // Escape
+        default: nil
     }
 }
 
@@ -333,7 +442,7 @@ private final class AppSwitcherPanel: NSPanelHud {
     /// Fill in real window titles and thumbnails after the panel is already on screen
     func loadWindowDetails(captureThumbnails: Bool) {
         detailTasks.append(Task { [contentState] in
-            await contentState.refreshWindowTitles()
+            await contentState.refreshWindowTitles { appSwitcherTitleCache[$0] = $1 }
         })
         guard captureThumbnails else { return }
         let windowIds = contentState.windowIdsFromSelectedApp
@@ -390,29 +499,60 @@ private final class AppSwitcherPanel: NSPanelHud {
     }
 
     private func handleKeyDown(_ event: NSEvent) -> Bool {
-        let hasShift = event.modifierFlags.contains(.shift)
+        let action = appSwitcherKeyAction(
+            keyCode: event.keyCode,
+            hasShift: event.modifierFlags.contains(.shift),
+            isRepeat: event.isARepeat,
+        )
+        switch action {
+            case .cycleApp(let offset): contentState.cycleApp(offset: offset)
+            case .cycleWindow(let offset): contentState.cycleWindow(offset: offset)
+            case .closeWindow: closeSelectedWindow()
+            case .quitApp: quitSelectedApp()
+            case .cancel: Task { @MainActor in dismissAppSwitcher(commit: false) }
+            case .ignore: break
+            case nil: return false
+        }
+        return true
+    }
 
-        switch event.keyCode {
-            case 48: // Tab
-                if hasShift {
-                    contentState.cycleApp(offset: -1)
-                } else {
-                    contentState.cycleApp(offset: 1)
+    private func closeSelectedWindow() {
+        guard let token: RunSessionGuard = .isServerEnabled,
+              let windowId = contentState.removeSelectedWindow()
+        else { return }
+        runWhileOpen(token, operation: "Closing a window from the app switcher", userMessage: "Airlock could not close the window.") {
+            Window.get(byId: windowId)?.closeAxWindow()
+        }
+    }
+
+    private func quitSelectedApp() {
+        guard let token: RunSessionGuard = .isServerEnabled,
+              let pid = contentState.removeSelectedApp()
+        else { return }
+        runWhileOpen(token, operation: "Quitting an app from the app switcher", userMessage: "Airlock could not quit the app.") {
+            guard let app = MacApp.allAppsMap[pid], app.nsApp.terminate() else { return }
+            for workspace in Workspace.all {
+                for window in workspace.allLeafWindowsRecursive where window.app.pid == pid {
+                    (window as? MacWindow)?.garbageCollect(skipClosedWindowsCache: true)
                 }
-                return true
-            case 38: // j
-                contentState.cycleWindow(offset: 1)
-                return true
-            case 40: // k
-                contentState.cycleWindow(offset: -1)
-                return true
-            case 53: // Escape
-                Task { @MainActor in
-                    dismissAppSwitcher(commit: false)
-                }
-                return true
-            default:
-                return false
+            }
+        }
+    }
+
+    /// Run an action that leaves the switcher open, unless it just removed the last entry
+    private func runWhileOpen(
+        _ token: RunSessionGuard,
+        operation: String,
+        userMessage: String,
+        _ body: @escaping @MainActor () -> Void,
+    ) {
+        if contentState.groups.isEmpty {
+            Task { @MainActor in dismissAppSwitcher(commit: false) }
+        }
+        Task {
+            await withErrorReporting(operation, userMessage: userMessage) {
+                try await runLightSession(.menuBarButton, token) { body() }
+            }
         }
     }
 }
@@ -435,6 +575,14 @@ struct AppSwitcherContent: View {
                                 isSelected: index == state.selectedAppIndex,
                             )
                             .id(group.id)
+                            .contentShape(Rectangle())
+                            .onContinuousHover { phase in
+                                if case .active = phase { state.hoverApp(at: index) }
+                            }
+                            .onTapGesture {
+                                state.selectApp(at: index)
+                                dismissAppSwitcher(commit: true)
+                            }
                         }
                     }
                     .padding(.horizontal, AppSwitcherLayout.rowPadding.width)
@@ -448,7 +596,7 @@ struct AppSwitcherContent: View {
                     }
                 }
                 .onChange(of: state.selectedAppIndex) {
-                    if let group = state.selectedGroup {
+                    if state.selectionCameFromKeyboard, let group = state.selectedGroup {
                         withAnimation(.easeInOut(duration: 0.15)) {
                             proxy.scrollTo(group.id, anchor: .center)
                         }
@@ -472,6 +620,14 @@ struct AppSwitcherContent: View {
                                     isSelected: index == state.selectedWindowIndex,
                                 )
                                 .id(window.id)
+                                .contentShape(Rectangle())
+                                .onContinuousHover { phase in
+                                    if case .active = phase { state.hoverWindow(at: index) }
+                                }
+                                .onTapGesture {
+                                    state.selectWindow(at: index)
+                                    dismissAppSwitcher(commit: true)
+                                }
                             }
                         }
                         .padding(.horizontal, AppSwitcherLayout.rowPadding.width)
@@ -479,7 +635,7 @@ struct AppSwitcherContent: View {
                         .frame(minWidth: width)
                     }
                     .onChange(of: state.selectedWindowIndex) {
-                        if let window = group.windows[safe: state.selectedWindowIndex] {
+                        if state.selectionCameFromKeyboard, let window = group.windows[safe: state.selectedWindowIndex] {
                             withAnimation(.easeInOut(duration: 0.15)) {
                                 proxy.scrollTo(window.id, anchor: .center)
                             }
