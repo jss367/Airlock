@@ -199,6 +199,37 @@ final class AppSwitcherTest: XCTestCase {
         assertEquals(state.selectedGroup?.windows[safe: state.selectedWindowIndex]?.windowId, 31)
     }
 
+    func testRapidCloseReservationsAdvanceWithoutHidingWindows() {
+        let state = AppSwitcherState(groups: threeApps(), selectedAppIndex: 0)
+        assertEquals(state.reserveWindowForClose(), 10)
+        assertEquals(state.reserveWindowForClose(), 11)
+        assertEquals(state.reserveWindowForClose(), 20)
+        assertEquals(state.groups.flatMap { $0.windows.map(\.windowId) }, [10, 11, 20, 30, 31])
+        assertEquals(state.reserveWindowForClose(), 30)
+        assertEquals(state.reserveWindowForClose(), 31)
+        assertNil(state.reserveWindowForClose())
+
+        // A failed admission releases its target without removing it or another reservation.
+        state.finishClosingWindow(10)
+        assertEquals(state.reserveWindowForClose(), 10)
+        state.closeWindow(windowId: 11) {}
+        state.finishClosingWindow(11)
+        assertNil(state.reserveWindowForClose())
+    }
+
+    func testCloseReservationsRespectNewSelectionsAndLastWindowFallback() {
+        let state = AppSwitcherState(groups: threeApps(), selectedAppIndex: 2)
+        state.cycleWindow(offset: 1)
+        assertEquals(state.reserveWindowForClose(), 31)
+        assertEquals(state.reserveWindowForClose(), 30)
+        assertEquals(state.reserveWindowForClose(), 20)
+        state.selectApp(at: 0)
+        state.selectWindow(at: 1)
+        assertEquals(state.reserveWindowForClose(), 11)
+        assertEquals(state.reserveWindowForClose(), 10)
+        assertNil(state.reserveWindowForClose())
+    }
+
     func testRefreshedTitlesApplyToTheCurrentList() async {
         let workspace = Workspace.get(byName: name)
         TestWindow.new(id: 1, parent: workspace.rootTilingContainer)

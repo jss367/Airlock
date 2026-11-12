@@ -193,6 +193,7 @@ final class AppSwitcherState: ObservableObject {
     @Published var selectedAppIndex: Int
     @Published var selectedWindowIndex: Int = 0
     @Published var thumbnails: [UInt32: CGImage]
+    private var pendingCloseWindowIds: Set<UInt32> = []
 
     /// Reads the pointer position in screen coordinates
     private let pointerLocation: @MainActor () -> CGPoint
@@ -247,6 +248,34 @@ final class AppSwitcherState: ObservableObject {
         guard let windowId = selectedGroup?.windows[safe: selectedWindowIndex]?.windowId else { return nil }
         removeWindow(windowId: windowId)
         return windowId
+    }
+
+    /// Reserve a logical selection without hiding entries before their close is admitted.
+    /// Repeated distinct presses advance through the list as if pending closes had succeeded.
+    func reserveWindowForClose() -> UInt32? {
+        let available = groups.enumerated().compactMap { index, group -> (Int, [AppGroupWindow])? in
+            let windows = group.windows.filter { !pendingCloseWindowIds.contains($0.windowId) }
+            return windows.isEmpty ? nil : (index, windows)
+        }
+        guard !available.isEmpty else { return nil }
+        let removedBeforeApp = groups.indices.prefix(selectedAppIndex).filter { index in
+            groups[index].windows.allSatisfy { pendingCloseWindowIds.contains($0.windowId) }
+        }.count
+        let appIndex = min(selectedAppIndex - removedBeforeApp, available.count - 1)
+        let (originalIndex, windows) = available[appIndex]
+        let removedBeforeWindow = groups[originalIndex].windows.prefix(selectedWindowIndex).filter {
+            pendingCloseWindowIds.contains($0.windowId)
+        }.count
+        let windowIndex = originalIndex == selectedAppIndex
+            ? min(selectedWindowIndex - removedBeforeWindow, windows.count - 1)
+            : 0
+        let windowId = windows[windowIndex].windowId
+        pendingCloseWindowIds.insert(windowId)
+        return windowId
+    }
+
+    func finishClosingWindow(_ windowId: UInt32) {
+        pendingCloseWindowIds.remove(windowId)
     }
 
     /// Apply an admitted close before changing the list. A failed operation leaves the target intact.
@@ -542,9 +571,14 @@ private final class AppSwitcherPanel: NSPanelHud {
 
     private func closeSelectedWindow() {
         guard let token: RunSessionGuard = .isServerEnabled,
-              let windowId = contentState.selectedGroup?.windows[safe: contentState.selectedWindowIndex]?.windowId
+              let windowId = contentState.reserveWindowForClose()
         else { return }
-        runWhileOpen(token, operation: "Closing a window from the app switcher", userMessage: "Airlock could not close the window.") {
+        runWhileOpen(
+            token,
+            operation: "Closing a window from the app switcher",
+            userMessage: "Airlock could not close the window.",
+            onCompletion: { self.contentState.finishClosingWindow(windowId) },
+        ) {
             try self.contentState.closeWindow(windowId: windowId) {
                 guard let window = Window.get(byId: windowId) else {
                     throw NSError(domain: "Airlock.AppSwitcher", code: 2, userInfo: [
@@ -581,9 +615,11 @@ private final class AppSwitcherPanel: NSPanelHud {
         _ token: RunSessionGuard,
         operation: String,
         userMessage: String,
+        onCompletion: @escaping @MainActor () -> Void = {},
         _ body: @escaping @MainActor () throws -> Void,
     ) {
         Task {
+            defer { onCompletion() }
             await withErrorReporting(operation, userMessage: userMessage) {
                 try await runLightSession(.menuBarButton, token) { try body() }
                 if self.contentState.groups.isEmpty, appSwitcherPanel === self {
