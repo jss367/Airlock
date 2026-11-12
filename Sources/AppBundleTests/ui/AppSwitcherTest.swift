@@ -230,6 +230,24 @@ final class AppSwitcherTest: XCTestCase {
         assertNil(state.reserveWindowForClose())
     }
 
+    func testCloseWaitsForConfirmationAndRetainsRejectedTarget() async throws {
+        let state = AppSwitcherState(groups: [group(pid: 1, windows: [10])], selectedAppIndex: 0)
+        let rejected = try await state.closeWindowAfterConfirmation(windowId: 10) {
+            await Task.yield()
+            assertEquals(state.selectedGroup?.windows.map(\.windowId), [10])
+            return false
+        }
+        assertEquals(rejected, false)
+        assertEquals(state.selectedGroup?.windows.map(\.windowId), [10])
+        let accepted = try await state.closeWindowAfterConfirmation(windowId: 10) {
+            await Task.yield()
+            assertEquals(state.selectedGroup?.windows.map(\.windowId), [10])
+            return true
+        }
+        assertEquals(accepted, true)
+        assertTrue(state.groups.isEmpty)
+    }
+
     func testRefreshedTitlesApplyToTheCurrentList() async {
         let workspace = Workspace.get(byName: name)
         TestWindow.new(id: 1, parent: workspace.rootTilingContainer)

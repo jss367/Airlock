@@ -98,6 +98,19 @@ final class MacApp: AbstractApp {
         }
     }
 
+    /// Await the AX result so interactive callers can retain failed close targets.
+    func closeAndUnregisterAxWindowConfirmed(_ windowId: UInt32) async throws -> Bool {
+        if serverArgs.isReadOnly { return false }
+        setFrameJobs.removeValue(forKey: windowId)?.cancel()
+        return try await withWindow(windowId) { [windows] window, job in
+            guard let closeButton = window.get(Ax.closeButtonAttr),
+                  AXUIElementPerformAction(closeButton.cast, kAXPressAction as CFString) == .success
+            else { return false }
+            windows.threadGuarded.removeValue(forKey: windowId)
+            return true
+        } == true
+    }
+
     func getAxSize(_ windowId: UInt32) async throws -> CGSize? {
         try await withWindow(windowId) { window, job in
             window.get(Ax.sizeAttr)

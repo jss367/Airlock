@@ -258,14 +258,14 @@ final class AppSwitcherState: ObservableObject {
             return windows.isEmpty ? nil : (index, windows)
         }
         guard !available.isEmpty else { return nil }
-        let removedBeforeApp = groups.indices.prefix(selectedAppIndex).filter { index in
+        let removedBeforeApp = groups.indices.prefix(selectedAppIndex).count(where: { index in
             groups[index].windows.allSatisfy { pendingCloseWindowIds.contains($0.windowId) }
-        }.count
+        })
         let appIndex = min(selectedAppIndex - removedBeforeApp, available.count - 1)
         let (originalIndex, windows) = available[appIndex]
-        let removedBeforeWindow = groups[originalIndex].windows.prefix(selectedWindowIndex).filter {
+        let removedBeforeWindow = groups[originalIndex].windows.prefix(selectedWindowIndex).count(where: {
             pendingCloseWindowIds.contains($0.windowId)
-        }.count
+        })
         let windowIndex = originalIndex == selectedAppIndex
             ? min(selectedWindowIndex - removedBeforeWindow, windows.count - 1)
             : 0
@@ -282,6 +282,12 @@ final class AppSwitcherState: ObservableObject {
     func closeWindow(windowId: UInt32, operation: () throws -> Void) rethrows {
         try operation()
         removeWindow(windowId: windowId)
+    }
+
+    func closeWindowAfterConfirmation(windowId: UInt32, operation: () async throws -> Bool) async throws -> Bool {
+        guard try await operation() else { return false }
+        removeWindow(windowId: windowId)
+        return true
     }
 
     private func removeWindow(windowId: UInt32) {
@@ -579,13 +585,13 @@ private final class AppSwitcherPanel: NSPanelHud {
             userMessage: "Airlock could not close the window.",
             onCompletion: { self.contentState.finishClosingWindow(windowId) },
         ) {
-            try self.contentState.closeWindow(windowId: windowId) {
-                guard let window = Window.get(byId: windowId) else {
-                    throw NSError(domain: "Airlock.AppSwitcher", code: 2, userInfo: [
-                        NSLocalizedDescriptionKey: "The window could not be found.",
-                    ])
-                }
-                window.closeAxWindow()
+            guard try await self.contentState.closeWindowAfterConfirmation(windowId: windowId, operation: {
+                guard let window = Window.get(byId: windowId) as? MacWindow else { return false }
+                return try await window.closeAxWindowConfirmed()
+            }) else {
+                throw NSError(domain: "Airlock.AppSwitcher", code: 2, userInfo: [
+                    NSLocalizedDescriptionKey: "The window could not be closed. It may be unavailable, read-only, or lack a close button.",
+                ])
             }
         }
     }
@@ -616,12 +622,12 @@ private final class AppSwitcherPanel: NSPanelHud {
         operation: String,
         userMessage: String,
         onCompletion: @escaping @MainActor () -> Void = {},
-        _ body: @escaping @MainActor () throws -> Void,
+        _ body: @escaping @MainActor () async throws -> Void,
     ) {
         Task {
             defer { onCompletion() }
             await withErrorReporting(operation, userMessage: userMessage) {
-                try await runLightSession(.menuBarButton, token) { try body() }
+                try await runLightSession(.menuBarButton, token) { try await body() }
                 if self.contentState.groups.isEmpty, appSwitcherPanel === self {
                     dismissAppSwitcher(commit: false)
                 }
