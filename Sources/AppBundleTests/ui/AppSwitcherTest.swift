@@ -141,6 +141,28 @@ final class AppSwitcherTest: XCTestCase {
         assertNil(state.removeSelectedWindow())
     }
 
+    func testFailedQuitKeepsTheLastAppAndSelection() {
+        let state = AppSwitcherState(groups: [group(pid: 1, windows: [10, 11])], selectedAppIndex: 0)
+        state.cycleWindow(offset: 1)
+        assertEquals(state.quitApp(pid: 1, requestQuit: { false }), false)
+        assertEquals(state.groups.map(\.pid), [1])
+        assertEquals(state.selectedWindowIndex, 1)
+        assertEquals(state.quitApp(pid: 1, requestQuit: { true }), true)
+        assertTrue(state.groups.isEmpty)
+    }
+
+    func testQuitRemovesTheRequestedAppAfterSelectionChanges() {
+        let state = AppSwitcherState(groups: threeApps(), selectedAppIndex: 0)
+        let target = state.selectedGroup!.pid
+        state.cycleApp(offset: 1)
+        assertEquals(state.quitApp(pid: target, requestQuit: { true }), true)
+        assertEquals(state.groups.map(\.pid), [2, 3])
+        assertEquals(state.selectedGroup?.pid, 2)
+        var requestedMissingApp = false
+        assertEquals(state.quitApp(pid: target, requestQuit: { requestedMissingApp = true; return true }), false)
+        assertEquals(requestedMissingApp, false)
+    }
+
     func testRefreshedTitlesApplyToTheCurrentList() async {
         let workspace = Workspace.get(byName: name)
         TestWindow.new(id: 1, parent: workspace.rootTilingContainer)

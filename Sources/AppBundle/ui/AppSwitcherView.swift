@@ -263,6 +263,15 @@ final class AppSwitcherState: ObservableObject {
         return group.pid
     }
 
+    /// Keep the target visible until its quit request succeeds, even if selection changed while waiting.
+    func quitApp(pid: Int32, requestQuit: () -> Bool) -> Bool {
+        guard let index = groups.firstIndex(where: { $0.pid == pid }), requestQuit() else { return false }
+        markKeyboardSelection()
+        if index < selectedAppIndex { selectedAppIndex -= 1 }
+        removeGroup(at: index)
+        return true
+    }
+
     private func removeGroup(at index: Int) {
         groups.remove(at: index)
         selectedAppIndex = max(0, min(selectedAppIndex, groups.count - 1))
@@ -527,10 +536,16 @@ private final class AppSwitcherPanel: NSPanelHud {
 
     private func quitSelectedApp() {
         guard let token: RunSessionGuard = .isServerEnabled,
-              let pid = contentState.removeSelectedApp()
+              let pid = contentState.selectedGroup?.pid
         else { return }
         runWhileOpen(token, operation: "Quitting an app from the app switcher", userMessage: "Airlock could not quit the app.") {
-            guard let app = MacApp.allAppsMap[pid], app.nsApp.terminate() else { return }
+            guard self.contentState.quitApp(pid: pid, requestQuit: {
+                MacApp.allAppsMap[pid]?.nsApp.terminate() == true
+            }) else {
+                throw NSError(domain: "Airlock.AppSwitcher", code: 1, userInfo: [
+                    NSLocalizedDescriptionKey: "The app could not be found or refused the quit request.",
+                ])
+            }
             for workspace in Workspace.all {
                 for window in workspace.allLeafWindowsRecursive where window.app.pid == pid {
                     (window as? MacWindow)?.garbageCollect(skipClosedWindowsCache: true)
@@ -544,14 +559,14 @@ private final class AppSwitcherPanel: NSPanelHud {
         _ token: RunSessionGuard,
         operation: String,
         userMessage: String,
-        _ body: @escaping @MainActor () -> Void,
+        _ body: @escaping @MainActor () throws -> Void,
     ) {
-        if contentState.groups.isEmpty {
-            Task { @MainActor in dismissAppSwitcher(commit: false) }
-        }
         Task {
             await withErrorReporting(operation, userMessage: userMessage) {
-                try await runLightSession(.menuBarButton, token) { body() }
+                try await runLightSession(.menuBarButton, token) { try body() }
+                if self.contentState.groups.isEmpty, appSwitcherPanel === self {
+                    dismissAppSwitcher(commit: false)
+                }
             }
         }
     }
