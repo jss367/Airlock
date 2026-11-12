@@ -267,15 +267,16 @@ final class AppSwitcherState: ObservableObject {
     func quitApp(pid: Int32, requestQuit: () -> Bool) -> Bool {
         guard let index = groups.firstIndex(where: { $0.pid == pid }), requestQuit() else { return false }
         markKeyboardSelection()
-        if index < selectedAppIndex { selectedAppIndex -= 1 }
         removeGroup(at: index)
         return true
     }
 
     private func removeGroup(at index: Int) {
+        let removedSelectedGroup = index == selectedAppIndex
         groups.remove(at: index)
+        if index < selectedAppIndex { selectedAppIndex -= 1 }
         selectedAppIndex = max(0, min(selectedAppIndex, groups.count - 1))
-        selectedWindowIndex = 0
+        if removedSelectedGroup { selectedWindowIndex = 0 }
     }
 
     private func markKeyboardSelection() {

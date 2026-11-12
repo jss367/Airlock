@@ -154,13 +154,28 @@ final class AppSwitcherTest: XCTestCase {
     func testQuitRemovesTheRequestedAppAfterSelectionChanges() {
         let state = AppSwitcherState(groups: threeApps(), selectedAppIndex: 0)
         let target = state.selectedGroup!.pid
-        state.cycleApp(offset: 1)
+        state.cycleApp(offset: 2)
+        state.cycleWindow(offset: 1)
         assertEquals(state.quitApp(pid: target, requestQuit: { true }), true)
         assertEquals(state.groups.map(\.pid), [2, 3])
-        assertEquals(state.selectedGroup?.pid, 2)
+        assertEquals(state.selectedGroup?.pid, 3)
+        assertEquals(state.selectedWindowIndex, 1)
         var requestedMissingApp = false
         assertEquals(state.quitApp(pid: target, requestQuit: { requestedMissingApp = true; return true }), false)
         assertEquals(requestedMissingApp, false)
+    }
+
+    func testQuittingALaterAppPreservesTheSelectedWindow() {
+        let state = AppSwitcherState(groups: threeApps(), selectedAppIndex: 0)
+        state.cycleWindow(offset: 1)
+        assertEquals(state.quitApp(pid: 3, requestQuit: { true }), true)
+        assertEquals(state.selectedGroup?.pid, 1)
+        assertEquals(state.selectedWindowIndex, 1)
+
+        // Removing the selected app still selects the next app's first window.
+        assertEquals(state.quitApp(pid: 1, requestQuit: { true }), true)
+        assertEquals(state.selectedGroup?.pid, 2)
+        assertEquals(state.selectedWindowIndex, 0)
     }
 
     func testRefreshedTitlesApplyToTheCurrentList() async {
