@@ -71,4 +71,50 @@ final class SettingsTest: XCTestCase {
         assertEquals(errors.descriptions, [])
         assertEquals(parsed.focusFlash.color, "0xcc336699")
     }
+
+    func testClosingOrLeavingAppearanceFlushesTheLatestRapidEditOnce() async {
+        var writes: [Int] = []
+        let edit = DebouncedConfigEdit<Int>(wait: { try await Task.sleep(for: .seconds(30)) }, write: { writes.append($0) })
+        edit.set(2, saved: 1)
+        edit.set(3, saved: 1)
+        edit.flush() // The view's onDisappear, before the debounce elapsed.
+        edit.flush() // Closing the window after changing tabs must not write twice.
+        for _ in 0 ..< 10 { await Task.yield() }
+        assertEquals(writes, [3])
+        edit.synchronize(saved: 3)
+        assertNil(edit.draft)
+    }
+
+    func testCanceledDebounceCannotWriteAgainAfterTeardown() async {
+        var resume: CheckedContinuation<Void, Never>?
+        var writes: [Int] = []
+        let edit = DebouncedConfigEdit<Int>(wait: { await withCheckedContinuation { resume = $0 } }, write: { writes.append($0) })
+        edit.set(2, saved: 1)
+        while resume == nil { await Task.yield() }
+        edit.flush()
+        resume?.resume()
+        for _ in 0 ..< 10 { await Task.yield() }
+        assertEquals(writes, [2])
+    }
+
+    func testCompletedDebounceIsNotWrittenAgainOnClose() async {
+        var resume: CheckedContinuation<Void, Never>?
+        var writes: [Int] = []
+        let edit = DebouncedConfigEdit<Int>(wait: { await withCheckedContinuation { resume = $0 } }, write: { writes.append($0) })
+        edit.set(2, saved: 1)
+        while resume == nil { await Task.yield() }
+        resume?.resume()
+        while writes.isEmpty { await Task.yield() }
+        edit.flush()
+        assertEquals(writes, [2])
+    }
+
+    func testReturningToSavedValueCancelsThePendingEdit() {
+        var writes: [Int] = []
+        let edit = DebouncedConfigEdit<Int>(write: { writes.append($0) })
+        edit.set(2, saved: 1)
+        edit.set(1, saved: 1)
+        edit.flush()
+        assertEquals(writes, [])
+    }
 }
