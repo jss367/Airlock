@@ -157,4 +157,40 @@ final class SettingsTest: XCTestCase {
         edit.flush()
         assertEquals(writes, [2, 1])
     }
+
+    func testCmdWClosesSettingsWithCapsLockOnOrOff() throws {
+        for (modifiers, characters): (NSEvent.ModifierFlags, String) in [
+            (.command, "w"), ([.command, .capsLock], "w"), ([.command, .capsLock], "W"),
+        ] {
+            let result = try settingsCloseShortcut(modifiers: modifiers, characters: characters)
+            assertTrue(result.handled)
+            assertEquals(result.closes, 1)
+        }
+    }
+
+    func testSettingsCloseShortcutRejectsMeaningfulExtraModifiersAndOtherKeys() throws {
+        for modifiers: NSEvent.ModifierFlags in [
+            [], .capsLock, [.command, .shift], [.command, .option], [.command, .control],
+            [.command, .capsLock, .shift], [.command, .function],
+        ] {
+            let result = try settingsCloseShortcut(modifiers: modifiers, characters: "w")
+            assertEquals(result.closes, 0)
+        }
+        assertEquals(try settingsCloseShortcut(modifiers: .command, characters: "q").closes, 0)
+    }
+
+    private func settingsCloseShortcut(modifiers: NSEvent.ModifierFlags, characters: String) throws -> (handled: Bool, closes: Int) {
+        _ = NSApplication.shared
+        // This test window is never shown or activated. Only the synthetic event has Caps Lock set.
+        let window = SettingsWindow(contentRect: NSRect(x: 0, y: 0, width: 200, height: 100), styleMask: [.titled, .closable], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        defer { window.close() }
+        var closes = 0
+        let observation = NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: .main) { _ in
+            MainActor.assumeIsolated { closes += 1 }
+        }
+        defer { NotificationCenter.default.removeObserver(observation) }
+        let event = try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: modifiers, timestamp: 0, windowNumber: window.windowNumber, context: nil, characters: characters, charactersIgnoringModifiers: characters, isARepeat: false, keyCode: 13))
+        return (window.performKeyEquivalent(with: event), closes)
+    }
 }
