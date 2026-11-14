@@ -5,6 +5,12 @@ import SwiftUI
 
 @MainActor private var quickSwitcherPanel: QuickSwitcherPanel?
 @MainActor private var quickSwitcherHotkey: HotKey?
+/// The last title read for each window. Reading titles is async, so without this every open
+/// would show app names first and swap in the real titles a moment later
+@MainActor private var quickSwitcherTitleCache: [UInt32: String] = [:]
+/// The installed apps found by the last scan, listed right away the next time the panel opens
+@MainActor private var quickSwitcherAppCache: [InstalledAppInfo] = []
+@MainActor private var quickSwitcherIconCache: [String: NSImage] = [:]
 
 @MainActor
 func registerQuickSwitcherHotkey() {
@@ -32,12 +38,24 @@ func toggleQuickSwitcher() {
     if let panel = quickSwitcherPanel, panel.isVisible {
         dismissQuickSwitcher()
     } else {
-        // Paused Airlock can't act on a selection, and pausing closes the panel. Stay closed
-        guard sessionCoordinator.isEnabled else { return }
-        let panel = QuickSwitcherPanel()
-        quickSwitcherPanel = panel
-        panel.show()
+        showQuickSwitcher(scope: .all)
     }
+}
+
+/// Open the panel in `scope`, replacing a panel that is open in another scope
+@MainActor
+func showQuickSwitcher(scope: QuickSwitcherScope) {
+    // Paused Airlock can't act on a selection, and pausing closes the panel. Stay closed
+    guard sessionCoordinator.isEnabled else { return }
+    if let panel = quickSwitcherPanel, panel.isVisible {
+        if panel.model.scope == scope { return }
+        dismissQuickSwitcher(restoreFocus: false)
+    }
+    quickSwitcherTitleCache = quickSwitcherTitleCache.filter { Window.get(byId: $0.key) != nil }
+    let panel = QuickSwitcherPanel(scope: scope)
+    quickSwitcherPanel = panel
+    if scope == .apps { appLauncherPresentation = panel }
+    panel.show()
 }
 
 /// Pass `restoreFocus: false` when another app is about to take focus (launch, web search).
@@ -47,31 +65,36 @@ func dismissQuickSwitcher(restoreFocus: Bool = true) {
     // Clear the global before closing: close() resigns key, and resignKey dismisses only the current panel
     guard let panel = quickSwitcherPanel else { return }
     quickSwitcherPanel = nil
+    if appLauncherPresentation === panel { appLauncherPresentation = nil }
     panel.close()
     if restoreFocus {
         focus.windowOrNil?.nativeFocus()
     }
 }
 
-private final class QuickSwitcherPanel: NSPanelHud {
+private final class QuickSwitcherPanel: NSPanelHud, AppLauncherPresentation {
+    let model: QuickSwitcherModel
     private var hostingView: NSHostingView<QuickSwitcherContent>?
     private let keyMonitor = PanelKeyMonitor()
+    private var detailTasks: [Task<Void, Never>] = []
 
     override var canBecomeKey: Bool { true }
 
-    override init() {
+    init(scope: QuickSwitcherScope) {
+        let treeItems = scope == .all ? quickSwitcherTreeItems(titles: quickSwitcherTitleCache) : []
+        model = QuickSwitcherModel(scope: scope, items: treeItems + quickSwitcherAppItems(quickSwitcherAppCache, scope: scope))
         super.init()
-        let content = QuickSwitcherContent(keyMonitor: keyMonitor)
+        let content = QuickSwitcherContent(model: model, onActivate: { [weak self] in self?.activate($0) })
         let hosting = NSHostingView(rootView: content)
         self.contentView = hosting
         self.hostingView = hosting
 
-        let width: CGFloat = 500
-        let height: CGFloat = 350
+        let size = CGSize(width: 620, height: 420)
         if let screen = NSScreen.main {
-            let x = screen.frame.midX - width / 2
-            let y = screen.frame.midY - height / 2 + 100
-            self.setFrame(NSRect(x: x, y: y, width: width, height: height), display: true)
+            let x = screen.frame.midX - size.width / 2
+            // A little above the middle of the screen, without running off the top
+            let y = min(screen.frame.midY - size.height / 2 + 100, screen.visibleFrame.maxY - size.height)
+            self.setFrame(NSRect(origin: CGPoint(x: x, y: y), size: size), display: true)
         }
 
         self.level = .floating
@@ -81,6 +104,8 @@ private final class QuickSwitcherPanel: NSPanelHud {
 
     override func close() {
         keyMonitor.remove()
+        detailTasks.forEach { $0.cancel() }
+        detailTasks = []
         super.close()
     }
 
@@ -90,9 +115,15 @@ private final class QuickSwitcherPanel: NSPanelHud {
         if quickSwitcherPanel === self { dismissQuickSwitcher(restoreFocus: false) }
     }
 
+    /*conforms*/ func dismiss(restoreFocus: Bool) {
+        if quickSwitcherPanel === self { dismissQuickSwitcher(restoreFocus: restoreFocus) }
+    }
+
     func show() {
         makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+        keyMonitor.install { [weak self] in self?.handleKeyEvent($0) ?? false }
+        loadDetails()
         // SwiftUI @FocusState doesn't reliably focus fields in NSPanel.
         // Explicitly walk the view hierarchy to find and focus the text field.
         DispatchQueue.main.async { [weak self] in
@@ -110,6 +141,100 @@ private final class QuickSwitcherPanel: NSPanelHud {
         }
         return nil
     }
+
+    /// Fill in real window titles and the installed apps after the panel is already on screen
+    private func loadDetails() {
+        // One task per window: an app that is slow to answer must not hold up the other titles
+        for windowId in model.windowIds {
+            detailTasks.append(Task { [model] in
+                await loadQuickSwitcherTitle(windowId: windowId) { id, title in
+                    quickSwitcherTitleCache[id] = title
+                    model.setTitle(title, forWindow: id)
+                }
+            })
+        }
+        model.isLoadingApps = quickSwitcherAppCache.isEmpty
+        detailTasks.append(Task { [model] in
+            let installed = await discoverInstalledAppInfo()
+            model.isLoadingApps = false
+            // A canceled scan stops early with a partial list
+            guard !Task.isCancelled, installed != quickSwitcherAppCache else { return }
+            quickSwitcherAppCache = installed
+            model.setApps(quickSwitcherAppItems(installed, scope: model.scope))
+        })
+    }
+
+    private func handleKeyEvent(_ event: NSEvent) -> Bool {
+        // An input method composing text needs the arrows, Return, and Escape for itself
+        if let editor = firstResponder as? NSTextView, editor.hasMarkedText() { return false }
+        switch event.keyCode {
+            case 125: // Down arrow
+                moveSelection(by: 1)
+                return true
+            case 126: // Up arrow
+                moveSelection(by: -1)
+                return true
+            case 36, 76: // Return, Enter
+                if let item = model.selectedItem { activate(item) }
+                return true
+            case 53: // Escape
+                Task { @MainActor in dismissQuickSwitcher() }
+                return true
+            default:
+                return false
+        }
+    }
+
+    private func moveSelection(by offset: Int) {
+        let previous = model.selectedIndex
+        model.moveSelection(by: offset)
+        // Keyboard focus stays in the search field, so VoiceOver has to be told about the selected row
+        guard model.selectedIndex != previous, NSWorkspace.shared.isVoiceOverEnabled, let item = model.selectedItem else { return }
+        NSAccessibility.post(element: self, notification: .announcementRequested, userInfo: [
+            .announcement: "\(item.title), \(item.subtitle)",
+            .priority: NSAccessibilityPriorityLevel.high.rawValue,
+        ])
+    }
+
+    private func activate(_ item: SwitcherItem) {
+        switch item.kind {
+            case .installedApp(let url, let bundleIdentifier):
+                openAppFromLauncher(url: url, bundleIdentifier: bundleIdentifier) { dismiss(restoreFocus: $0) }
+            case .webSearch(let query):
+                if let url = webSearchUrl(query: query) {
+                    NSWorkspace.shared.open(url)
+                }
+                dismiss(restoreFocus: false)
+            case .workspace, .window:
+                guard let token: RunSessionGuard = .isServerEnabled else {
+                    // Airlock's focus is stale while paused, so don't send the user back to it
+                    dismiss(restoreFocus: false)
+                    return
+                }
+                Task {
+                    do {
+                        try await runLightSession(.menuBarButton, token) {
+                            switch item.kind {
+                                case .workspace(let name):
+                                    focusWorkspaceFromUi(Workspace.get(byName: name))
+                                case .window(let id, _, _):
+                                    if let window = Window.get(byId: id) {
+                                        focusWindowFromUi(window)
+                                    }
+                                default:
+                                    break
+                            }
+                        }
+                    } catch is CancellationError {
+                        dismiss(restoreFocus: false)
+                        return
+                    } catch {
+                        reportAppError(error, operation: "Selecting an item in Quick Switcher", userMessage: "Airlock could not switch to the selected item.")
+                    }
+                    dismiss(restoreFocus: true)
+                }
+        }
+    }
 }
 
 func webSearchUrl(query: String) -> URL? {
@@ -120,296 +245,110 @@ func webSearchUrl(query: String) -> URL? {
     return URL(string: "https://google.com/search?q=\(encoded)")
 }
 
-struct SwitcherItem: Identifiable, Hashable {
-    let id: String
-    let title: String
-    let subtitle: String
-    let kind: Kind
-    let icon: NSImage?
-
-    enum Kind: Hashable {
-        case workspace(name: String)
-        case window(id: UInt32)
-        case installedApp(url: URL)
-        case webSearch(query: String)
-    }
-
-    var sectionTitle: String {
-        switch kind {
-            case .workspace: return "Workspaces"
-            case .window: return "Windows"
-            case .installedApp: return "Applications"
-            case .webSearch: return "Web"
-        }
-    }
-
-    func hash(into hasher: inout Hasher) {
-        hasher.combine(id)
-    }
-
-    static func == (lhs: SwitcherItem, rhs: SwitcherItem) -> Bool {
-        lhs.id == rhs.id
-    }
-}
-
-private struct IndexedItem {
-    let index: Int
-    let item: SwitcherItem
-}
+// MARK: - SwiftUI Views
 
 struct QuickSwitcherContent: View {
-    let keyMonitor: PanelKeyMonitor
-    @State private var query: String = ""
-    @State private var items: [SwitcherItem] = []
-    @State private var selectedIndex: Int = 0
-    @State private var discoveryTask: Task<Void, Never>?
+    @ObservedObject var model: QuickSwitcherModel
+    let onActivate: @MainActor (SwitcherItem) -> Void
     @FocusState private var isFocused: Bool
 
-    var filteredItems: [SwitcherItem] {
-        let base: [SwitcherItem]
-        if query.isEmpty {
-            base = items
-        } else {
-            let q = query.lowercased()
-            base = items.filter {
-                $0.title.lowercased().contains(q) || $0.subtitle.lowercased().contains(q)
-            }
-        }
-        if base.isEmpty && !query.trimmingCharacters(in: .whitespaces).isEmpty {
-            return [SwitcherItem(
-                id: "web-search",
-                title: "Search Google for '\(query)'",
-                subtitle: "Open in browser",
-                kind: .webSearch(query: query),
-                icon: nil,
-            )]
-        }
-        return base
-    }
-
-    private var groupedItems: [(String, [IndexedItem])] {
-        var sections: [(String, [IndexedItem])] = []
-        var currentSection: String?
-        var currentItems: [IndexedItem] = []
-
-        for (index, item) in filteredItems.enumerated() {
-            let section = item.sectionTitle
-            if section != currentSection {
-                if let current = currentSection {
-                    sections.append((current, currentItems))
-                }
-                currentSection = section
-                currentItems = []
-            }
-            currentItems.append(IndexedItem(index: index, item: item))
-        }
-        if let current = currentSection {
-            sections.append((current, currentItems))
-        }
-        return sections
-    }
+    private static let topId = "top"
 
     var body: some View {
         VStack(spacing: 0) {
             // Search field
-            HStack {
+            HStack(spacing: 10) {
                 Image(systemName: "magnifyingglass")
                     .font(.system(size: 18))
                     .foregroundStyle(.secondary)
-                TextField("Search workspaces and windows...", text: $query)
+                    .accessibilityHidden(true)
+                TextField(model.scope.placeholder, text: $model.query)
                     .focused($isFocused)
                     .textFieldStyle(.plain)
                     .font(.system(size: 20))
-                    .onSubmit { activateSelected() }
+                    .onSubmit {
+                        if let item = model.selectedItem { onActivate(item) }
+                    }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 14)
-            .background(.ultraThickMaterial)
 
             Divider()
 
-            // Results
-            ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(spacing: 0) {
-                        ForEach(groupedItems, id: \.0) { sectionTitle, sectionItems in
-                            // Section header
-                            HStack {
-                                Text(sectionTitle.uppercased())
-                                    .font(.system(size: 11, weight: .semibold))
-                                    .foregroundStyle(.secondary)
-                                Spacer()
-                            }
-                            .padding(.horizontal, 18)
-                            .padding(.top, 10)
-                            .padding(.bottom, 4)
-
-                            ForEach(sectionItems, id: \.item.id) { indexed in
-                                SwitcherRow(item: indexed.item, isSelected: indexed.index == selectedIndex)
-                                    .id(indexed.item.id)
-                                    .onTapGesture {
-                                        selectedIndex = indexed.index
-                                        activateSelected()
-                                    }
-                            }
-                        }
-                    }
-                }
-                .onChange(of: selectedIndex) { _, newIndex in
-                    if let item = filteredItems[safe: newIndex] {
-                        proxy.scrollTo(item.id, anchor: .center)
-                    }
-                }
+            if model.rows.isEmpty {
+                emptyState
+            } else {
+                results
             }
-            .background(.ultraThickMaterial)
         }
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .background(.ultraThickMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .shadow(color: .black.opacity(0.3), radius: 20, y: 5)
-        .onAppear {
-            loadItems()
-            isFocused = true
-            keyMonitor.install(handleKeyEvent)
-        }
-        .onDisappear {
-            discoveryTask?.cancel()
-            discoveryTask = nil
-        }
-        .onChange(of: query) {
-            selectedIndex = 0
-        }
+        .onAppear { isFocused = true }
     }
 
-    private func handleKeyEvent(_ event: NSEvent) -> Bool {
-        switch event.keyCode {
-            case 125: // Down arrow
-                if selectedIndex < filteredItems.count - 1 { selectedIndex += 1 }
-                return true
-            case 126: // Up arrow
-                if selectedIndex > 0 { selectedIndex -= 1 }
-                return true
-            case 36: // Return
-                activateSelected()
-                return true
-            case 53: // Escape
-                Task { @MainActor in dismissQuickSwitcher() }
-                return true
-            default:
-                return false
-        }
-    }
-
-    @MainActor
-    private func loadItems() {
-        var result: [SwitcherItem] = []
-
-        // Add workspaces
-        let workspaces = workspacesForUi()
-
-        for ws in workspaces {
-            let apps = ws.allLeafWindowsRecursive
-                .compactMap { $0.app.name?.takeIf { !$0.isEmpty } }
-                .toSet()
-                .sorted()
-                .joined(separator: ", ")
-            let subtitle = apps.isEmpty ? (ws.isVisible ? ws.workspaceMonitor.name : "empty") : apps
-            result.append(SwitcherItem(
-                id: "ws-\(ws.name)",
-                title: ws.name,
-                subtitle: subtitle,
-                kind: .workspace(name: ws.name),
-                icon: nil,
-            ))
-        }
-
-        // Add individual windows
-        for ws in workspaces {
-            for window in ws.allLeafWindowsRecursive {
-                let appName = window.app.name ?? "Unknown"
-                let icon = (window.app as? MacApp).flatMap { $0.bundlePath }.map { NSWorkspace.shared.icon(forFile: $0) }
-                result.append(SwitcherItem(
-                    id: "win-\(window.windowId)",
-                    title: appName,
-                    subtitle: "on \(ws.name)",
-                    kind: .window(id: window.windowId),
-                    icon: icon,
-                ))
-            }
-        }
-
-        items = result
-
-        // Discover installed apps on a background thread to avoid blocking the UI
-        discoveryTask = Task {
-            let runningBundleIds = await MainActor.run {
-                Set(MacApp.allAppsMap.values.compactMap { $0.rawAppBundleId })
-            }
-            let installed = await discoverInstalledAppInfo()
-            guard !Task.isCancelled else { return }
-            let appItems = installed.compactMap { app -> SwitcherItem? in
-                if let bundleId = app.bundleIdentifier, runningBundleIds.contains(bundleId) {
-                    return nil
-                }
-                let icon = NSWorkspace.shared.icon(forFile: app.url.path)
-                return SwitcherItem(
-                    id: "app-\(app.url.path)",
-                    title: app.name,
-                    subtitle: "Launch application",
-                    kind: .installedApp(url: app.url),
-                    icon: icon,
-                )
-            }
-            guard !Task.isCancelled else { return }
-            await MainActor.run {
-                items.append(contentsOf: appItems)
-            }
-        }
-    }
-
-    @MainActor
-    private func activateSelected() {
-        guard let item = filteredItems[safe: selectedIndex] else { return }
-
-        switch item.kind {
-            case .installedApp(let url):
-                let config = NSWorkspace.OpenConfiguration()
-                config.activates = true
-                NSWorkspace.shared.openApplication(at: url, configuration: config)
-                dismissQuickSwitcher(restoreFocus: false)
-            case .webSearch(let query):
-                if let url = webSearchUrl(query: query) {
-                    NSWorkspace.shared.open(url)
-                }
-                dismissQuickSwitcher(restoreFocus: false)
-            case .workspace, .window:
-                guard let token: RunSessionGuard = .isServerEnabled else {
-                    // Airlock's focus is stale while paused, so don't send the user back to it
-                    dismissQuickSwitcher(restoreFocus: false)
-                    return
-                }
-                let selectedPanel = quickSwitcherPanel
-                Task {
-                    do {
-                        try await runLightSession(.menuBarButton, token) {
-                            switch item.kind {
-                                case .workspace(let name):
-                                    focusWorkspaceFromUi(Workspace.get(byName: name))
-                                case .window(let id):
-                                    if let window = Window.get(byId: id) {
-                                        focusWindowFromUi(window)
-                                    }
-                                default:
-                                    break
-                            }
+    private var results: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    Color.clear.frame(height: 0).id(Self.topId)
+                    ForEach(model.rowGroups) { group in
+                        HStack {
+                            Text(group.section.title.uppercased())
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(.secondary)
+                                .accessibilityAddTraits(.isHeader)
+                            Spacer()
                         }
-                    } catch is CancellationError {
-                        if quickSwitcherPanel === selectedPanel { dismissQuickSwitcher(restoreFocus: false) }
-                        return
-                    } catch {
-                        reportAppError(error, operation: "Selecting an item in Quick Switcher", userMessage: "Airlock could not switch to the selected item.")
+                        .padding(.horizontal, 18)
+                        .padding(.top, 10)
+                        .padding(.bottom, 4)
+
+                        ForEach(group.rows, id: \.item.id) { index, item in
+                            SwitcherRow(item: item, isSelected: index == model.selectedIndex)
+                                .id(item.id)
+                                .onContinuousHover { phase in
+                                    if case .active = phase { model.hover(at: index) }
+                                }
+                                .onTapGesture {
+                                    model.select(at: index)
+                                    onActivate(item)
+                                }
+                                .accessibilityAction { onActivate(item) }
+                        }
                     }
-                    if quickSwitcherPanel === selectedPanel { dismissQuickSwitcher() }
                 }
+                .padding(.bottom, 6)
+            }
+            .onChange(of: model.selectedIndex) { _, index in
+                guard model.selectionCameFromKeyboard else { return }
+                if index == 0 {
+                    // Back to the very top, so the first section's header is on screen too
+                    proxy.scrollTo(Self.topId, anchor: .top)
+                } else if let item = model.selectedItem {
+                    proxy.scrollTo(item.id)
+                }
+            }
+            .onChange(of: model.query) {
+                proxy.scrollTo(Self.topId, anchor: .top)
+            }
         }
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 28))
+                .foregroundStyle(.tertiary)
+                .accessibilityHidden(true)
+            Text(model.emptyMessage)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+                .multilineTextAlignment(.center)
+        }
+        .padding(24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
@@ -419,12 +358,12 @@ private struct SwitcherRow: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            if let nsIcon = item.icon {
-                Image(nsImage: nsIcon)
+            if let path = item.iconPath {
+                Image(nsImage: quickSwitcherIcon(forFile: path))
                     .resizable()
                     .frame(width: 28, height: 28)
             } else {
-                Image(systemName: iconName)
+                Image(systemName: symbolName)
                     .font(.system(size: 16))
                     .frame(width: 28, height: 28)
                     .foregroundStyle(isSelected ? .white : .secondary)
@@ -433,9 +372,11 @@ private struct SwitcherRow: View {
                 Text(item.title)
                     .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(isSelected ? .white : .primary)
+                    .lineLimit(1)
                 Text(item.subtitle)
                     .font(.system(size: 11))
                     .foregroundStyle(isSelected ? .white.opacity(0.7) : .secondary)
+                    .lineLimit(1)
             }
             Spacer()
         }
@@ -447,16 +388,29 @@ private struct SwitcherRow: View {
                 .padding(.horizontal, 6),
         )
         .contentShape(Rectangle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(item.title)
+        .accessibilityValue(item.subtitle)
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
 
-    private var iconName: String {
+    private var symbolName: String {
         switch item.kind {
-            case .workspace: return "square.grid.2x2"
-            case .window: return "macwindow"
-            case .installedApp: return "app.badge"
-            case .webSearch: return "magnifyingglass"
+            case .workspace: "square.grid.2x2"
+            case .window: "macwindow"
+            case .installedApp: "app.badge"
+            case .webSearch: "magnifyingglass"
         }
     }
+}
+
+/// Rows are drawn again on every keystroke, so each file's icon is looked up once
+@MainActor
+private func quickSwitcherIcon(forFile path: String) -> NSImage {
+    if let icon = quickSwitcherIconCache[path] { return icon }
+    let icon = NSWorkspace.shared.icon(forFile: path)
+    quickSwitcherIconCache[path] = icon
+    return icon
 }
 
 extension Array {

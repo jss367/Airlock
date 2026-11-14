@@ -7,7 +7,8 @@ struct AppLauncherCommand: Command {
 
     func run(_ env: CmdEnv, _ io: CmdIo) -> Bool {
         guard sessionCoordinator.isEnabled else { return false }
-        AppLauncherPanel.shared.show()
+        // The launcher is the Quick Switcher panel, narrowed down to installed apps
+        showQuickSwitcher(scope: .apps)
         return true
     }
 }
