@@ -10,7 +10,7 @@ func reportWindowManagementIsOff(_ io: CmdIo, _ action: String) -> Bool {
 }
 
 private func windowManagementIsOffMessage(_ action: String) -> String {
-    "\(action) requires window management. Turn on Window management in Feature Settings, or set enable-window-management = true"
+    "\(action) requires window management. Turn on Window management in Settings, or set enable-window-management = true"
 }
 
 /// Focusing a workspace that some monitor already shows is fine without window management: nothing is moved.
