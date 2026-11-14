@@ -121,6 +121,8 @@ private struct DebouncedConfigValue<Value: Equatable & Sendable, Control: View>:
 final class DebouncedConfigEdit<Value: Equatable & Sendable>: ObservableObject {
     @Published private(set) var draft: Value?
     private var pending: Value?
+    /// The latest value handed to the writer, until the loaded config acknowledges it.
+    private var submitted: Value?
     private var pendingWait: Task<Void, Never>?
     private let wait: @MainActor () async throws -> Void
     private let write: @MainActor (Value) -> Void
@@ -137,7 +139,9 @@ final class DebouncedConfigEdit<Value: Equatable & Sendable>: ObservableObject {
         draft = value
         pendingWait?.cancel()
         pendingWait = nil
-        pending = value == saved ? nil : value
+        // The UI's saved value can lag behind a write. Reverting to it still needs a write
+        // when a different value has already been submitted.
+        pending = value == (submitted ?? saved) ? nil : value
         guard pending != nil else { return }
         let wait = wait
         pendingWait = Task { [weak self] in
@@ -152,11 +156,13 @@ final class DebouncedConfigEdit<Value: Equatable & Sendable>: ObservableObject {
         pendingWait = nil
         guard let value = pending else { return }
         pending = nil
+        submitted = value
         write(value)
     }
 
     func synchronize(saved: Value) {
-        guard draft == saved else { return }
+        if submitted == saved { submitted = nil }
+        guard draft == saved, submitted == nil else { return }
         draft = nil
         pending = nil
         pendingWait?.cancel()

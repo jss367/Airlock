@@ -117,4 +117,44 @@ final class SettingsTest: XCTestCase {
         edit.flush()
         assertEquals(writes, [])
     }
+
+    func testRevertingBeforeReloadPreservesTheLatestEdit() {
+        var writes: [Int] = []
+        let edit = DebouncedConfigEdit<Int>(write: { writes.append($0) })
+        edit.set(2, saved: 1)
+        edit.flush() // Disk write started, but the UI still sees saved == 1.
+        edit.set(1, saved: 1)
+        edit.synchronize(saved: 2) // Delayed reload of the first write.
+        assertEquals(edit.draft, 1)
+        edit.flush()
+        assertEquals(writes, [2, 1])
+        edit.synchronize(saved: 1)
+        assertNil(edit.draft)
+    }
+
+    func testClosingBeforeReloadStillWritesTheRevertedValue() {
+        var writes: [Int] = []
+        let edit = DebouncedConfigEdit<Int>(write: { writes.append($0) })
+        edit.set(2, saved: 1)
+        edit.flush()
+        edit.set(1, saved: 1)
+        edit.flush() // Window/tab teardown before either reload has acknowledged a write.
+        assertEquals(writes, [2, 1])
+        edit.synchronize(saved: 2)
+        assertEquals(edit.draft, 1)
+        edit.synchronize(saved: 1)
+        assertNil(edit.draft)
+    }
+
+    func testStaleMatchingReloadCannotCancelARevertBehindAnOutstandingWrite() {
+        var writes: [Int] = []
+        let edit = DebouncedConfigEdit<Int>(write: { writes.append($0) })
+        edit.set(2, saved: 1)
+        edit.flush()
+        edit.set(1, saved: 1)
+        edit.synchronize(saved: 1) // This value predates the outstanding write of 2.
+        assertEquals(edit.draft, 1)
+        edit.flush()
+        assertEquals(writes, [2, 1])
+    }
 }
