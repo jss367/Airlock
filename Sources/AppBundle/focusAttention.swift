@@ -18,7 +18,7 @@ struct FocusAttentionRequest: Equatable {
 /// missed when a command sequence or interrupted session leaves before the next read.
 @MainActor
 final class FocusAttentionState {
-    private struct FocusSnapshot: Equatable {
+    private struct FocusSnapshot {
         let windowId: UInt32?
         let workspaceName: String
     }
@@ -69,7 +69,8 @@ final class FocusAttentionState {
         guard isDeferringFocus else { return reset() }
         let focus = focus
         let currentFocus = FocusSnapshot(windowId: focus.windowOrNil?.windowId, workspaceName: focus.workspace.name)
-        let arrivedAt = currentFocus != seenFocus ? currentFocus.workspaceName : nil
+        let focusChanged = currentFocus.windowId != seenFocus?.windowId || currentFocus.workspaceName != seenFocus?.workspaceName
+        let arrivedAt = focusChanged ? currentFocus.workspaceName : nil
         seenFocus = currentFocus
         requests = requests.filter { _, request in
             // The user went to the window, or to its workspace and picked something else
