@@ -425,6 +425,41 @@ final class AppSwitcherTest: XCTestCase {
         assertEquals(action(12, isRepeat: true), .ignore)
     }
 
+    func testFooterHintsComeFromTheKeysTheSwitcherHandles() {
+        assertEquals(appSwitcherKeyHints.map(\.title), ["Apps", "Windows", "Close window", "Quit app", "Cancel"])
+        assertEquals(appSwitcherKeyHints.first?.symbols, ["⇥", "←", "→"])
+        assertEquals(appSwitcherKeyHints.first?.accessibilityLabel, "Apps: Tab, Left Arrow, Right Arrow")
+
+        // Every key is handled as the table says, and shows up in exactly one hint
+        assertEquals(Set(appSwitcherKeys.map(\.keyCode)).count, appSwitcherKeys.count)
+        for key in appSwitcherKeys {
+            assertEquals(appSwitcherKeyAction(keyCode: key.keyCode, hasShift: false, isRepeat: false), key.action)
+            assertEquals(appSwitcherKeyHints.count { $0.title == key.action.hintTitle && $0.symbols.contains(key.symbol) }, 1)
+        }
+        assertEquals(appSwitcherKeyHints.flatMap(\.symbols).count, appSwitcherKeys.count)
+    }
+
+    func testFooterHintsWrapIntoEvenLines() {
+        func lines(_ widths: [CGFloat], maxWidth: CGFloat) -> [Range<Int>] {
+            AppSwitcherLayout.wrappedLines(itemWidths: widths, spacing: 10, maxWidth: maxWidth)
+        }
+        let widths: [CGFloat] = [80, 120, 100, 70, 60]
+        // Everything fits on one line: 430 of items plus 40 of spacing
+        assertEquals(lines(widths, maxWidth: 470), [0 ..< 5])
+        // One point short. Filling the first line would strand the last item, so the lines are evened out
+        assertEquals(lines(widths, maxWidth: 469), [0 ..< 2, 2 ..< 5])
+        assertEquals(lines(widths, maxWidth: 260), [0 ..< 2, 2 ..< 5])
+        assertEquals(lines(widths, maxWidth: 240), [0 ..< 2, 2 ..< 4, 4 ..< 5])
+        // An item wider than the row still gets a line
+        assertEquals(lines(widths, maxWidth: 50), [0 ..< 1, 1 ..< 2, 2 ..< 3, 3 ..< 4, 4 ..< 5])
+        assertEquals(lines([], maxWidth: 100), [])
+    }
+
+    func testAppAccessibilityLabelCountsWindows() {
+        assertEquals(group(pid: 1, windows: [10]).accessibilityLabel, "App 1, 1 window")
+        assertEquals(group(pid: 3, windows: [30, 31]).accessibilityLabel, "App 3, 2 windows")
+    }
+
     /// Close a window the way the panel does once the close is confirmed
     private func confirmClose(_ windowId: UInt32, in state: AppSwitcherState) async throws {
         let closed = try await state.closeWindowAfterConfirmation(windowId: windowId) { true }

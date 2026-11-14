@@ -191,21 +191,71 @@ enum AppSwitcherKeyAction: Equatable {
     case ignore
 }
 
+/// A key the switcher answers to. Key handling and the footer's hints both read `appSwitcherKeys`,
+/// so the hints can't drift from what the keys do
+struct AppSwitcherKey {
+    let keyCode: UInt16
+    /// Shown in the footer. Key codes are positions, so letters are the ones a QWERTY layout types there
+    let symbol: String
+    /// Read by VoiceOver
+    let name: String
+    let action: AppSwitcherKeyAction
+    /// Shift turns the cycle around
+    var shiftReverses = false
+    /// Whether holding the key down repeats its action
+    var repeats = true
+}
+
+let appSwitcherKeys: [AppSwitcherKey] = [
+    AppSwitcherKey(keyCode: 48, symbol: "⇥", name: "Tab", action: .cycleApp(offset: 1), shiftReverses: true),
+    AppSwitcherKey(keyCode: 123, symbol: "←", name: "Left Arrow", action: .cycleApp(offset: -1)),
+    AppSwitcherKey(keyCode: 124, symbol: "→", name: "Right Arrow", action: .cycleApp(offset: 1)),
+    AppSwitcherKey(keyCode: 126, symbol: "↑", name: "Up Arrow", action: .cycleWindow(offset: -1)),
+    AppSwitcherKey(keyCode: 125, symbol: "↓", name: "Down Arrow", action: .cycleWindow(offset: 1)),
+    AppSwitcherKey(keyCode: 38, symbol: "J", name: "J", action: .cycleWindow(offset: 1)),
+    AppSwitcherKey(keyCode: 40, symbol: "K", name: "K", action: .cycleWindow(offset: -1)),
+    // Holding the key down must not close one window after another
+    AppSwitcherKey(keyCode: 13, symbol: "W", name: "W", action: .closeWindow, repeats: false),
+    AppSwitcherKey(keyCode: 12, symbol: "Q", name: "Q", action: .quitApp, repeats: false),
+    AppSwitcherKey(keyCode: 53, symbol: "esc", name: "Escape", action: .cancel),
+]
+
 /// The switcher's action for a key press, or nil for keys it doesn't use
 func appSwitcherKeyAction(keyCode: UInt16, hasShift: Bool, isRepeat: Bool) -> AppSwitcherKeyAction? {
-    switch keyCode {
-        case 48: .cycleApp(offset: hasShift ? -1 : 1) // Tab
-        case 124: .cycleApp(offset: 1) // Right arrow
-        case 123: .cycleApp(offset: -1) // Left arrow
-        case 38, 125: .cycleWindow(offset: 1) // j, Down arrow
-        case 40, 126: .cycleWindow(offset: -1) // k, Up arrow
-        // Holding the key down must not close one window after another
-        case 13: isRepeat ? .ignore : .closeWindow // w
-        case 12: isRepeat ? .ignore : .quitApp // q
-        case 53: .cancel // Escape
-        default: nil
+    guard let key = appSwitcherKeys.first(where: { $0.keyCode == keyCode }) else { return nil }
+    if isRepeat && !key.repeats { return .ignore }
+    if hasShift && key.shiftReverses, case .cycleApp(let offset) = key.action { return .cycleApp(offset: -offset) }
+    return key.action
+}
+
+/// One footer entry: an action and every key that performs it
+struct AppSwitcherKeyHint: Equatable {
+    let title: String
+    let symbols: [String]
+    let names: [String]
+
+    var accessibilityLabel: String { "\(title): \(names.joined(separator: ", "))" }
+}
+
+extension AppSwitcherKeyAction {
+    /// The footer's name for the action. Both directions of a cycle share one entry
+    var hintTitle: String? {
+        switch self {
+            case .cycleApp: "Apps"
+            case .cycleWindow: "Windows"
+            case .closeWindow: "Close window"
+            case .quitApp: "Quit app"
+            case .cancel: "Cancel"
+            case .ignore: nil
+        }
     }
 }
+
+/// The footer's hints, in the order their first key appears in `appSwitcherKeys`
+let appSwitcherKeyHints: [AppSwitcherKeyHint] = groupedPreservingOrder(appSwitcherKeys, by: { $0.action.hintTitle })
+    .compactMap { title, keys in
+        title.map { AppSwitcherKeyHint(title: $0, symbols: keys.map(\.symbol), names: keys.map(\.name)) }
+    }
 
 // MARK: - Panel
 

@@ -74,5 +74,8 @@ struct VolumeView: View {
         }
         .frame(width: bar.width, height: bar.height)
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Volume")
+        .accessibilityValue(volume.map { "\(Int($0 * 100)) percent" } ?? "")
     }
 }
