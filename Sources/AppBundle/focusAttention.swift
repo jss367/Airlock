@@ -56,6 +56,18 @@ final class FocusAttentionState {
 
     func didChangeFocus() { prune() }
 
+    /// Renaming keeps the same workspace and does not answer its requests.
+    func renameWorkspace(from oldName: String, to newName: String) {
+        requests = requests.mapValues { request in
+            request.workspaceName == oldName
+                ? FocusAttentionRequest(windowId: request.windowId, workspaceName: newName, order: request.order)
+                : request
+        }
+        if let seenFocus, seenFocus.workspaceName == oldName {
+            self.seenFocus = FocusSnapshot(windowId: seenFocus.windowId, workspaceName: newName)
+        }
+    }
+
     func reset() {
         requests = [:]
         seenFocus = nil
