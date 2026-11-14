@@ -141,7 +141,9 @@ final class DebouncedConfigEdit<Value: Equatable & Sendable>: ObservableObject {
 
     func set(_ value: Value, saved: Value) {
         revision += 1
-        draft = value
+        // A canceled edit must follow future config changes again. Keep a visible revert
+        // when a submitted write could still advance the loaded value behind it.
+        draft = value == saved && submitted == nil ? nil : value
         // The UI's saved value can lag behind a write. Reverting to it still needs a write
         // when a different value has already been submitted.
         pending = value == (submitted?.value ?? saved) ? nil : value

@@ -114,6 +114,9 @@ final class SettingsTest: XCTestCase {
         let edit = DebouncedConfigEdit<Int>(write: { writes.append($0) })
         edit.set(2, saved: 1)
         edit.set(1, saved: 1)
+        assertNil(edit.draft)
+        edit.synchronize(saved: 3) // A later external reload must reach the control.
+        assertNil(edit.draft)
         await edit.flush()?.value
         assertEquals(writes, [])
     }
@@ -453,6 +456,141 @@ final class SettingsTest: XCTestCase {
         assertEquals(failures, 1)
         assertNil(edit.draft)
         XCTAssertFalse(coordinator.isEnabled)
+    }
+
+    func testNoOpDraftCannotMaskExternalReloadAfterCanceledNoncooperativeDebounce() async {
+        var resume: CheckedContinuation<Void, Never>?
+        var writes: [Int] = []
+        let edit = DebouncedConfigEdit<Int>(wait: { await withCheckedContinuation { resume = $0 } }, write: { writes.append($0) })
+        edit.set(2, saved: 1)
+        while resume == nil { await Task.yield() }
+        edit.set(1, saved: 1)
+        assertNil(edit.draft)
+        edit.synchronize(saved: 3)
+        resume?.resume()
+        for _ in 0 ..< 10 { await Task.yield() }
+        await edit.flush()?.value
+        assertEquals(writes, [])
+        assertNil(edit.draft)
+    }
+
+    func testExternalReloadAcknowledgesAnUnsubmittedDraftAndCancelsItsDebounce() async {
+        var resume: CheckedContinuation<Void, Never>?
+        var writes: [Int] = []
+        let edit = DebouncedConfigEdit<Int>(wait: { await withCheckedContinuation { resume = $0 } }, write: { writes.append($0) })
+        edit.set(2, saved: 1)
+        while resume == nil { await Task.yield() }
+        edit.synchronize(saved: 2)
+        assertNil(edit.draft)
+        resume?.resume()
+        for _ in 0 ..< 10 { await Task.yield() }
+        await edit.flush()?.value
+        assertEquals(writes, [])
+        edit.synchronize(saved: 3)
+        assertNil(edit.draft)
+    }
+
+    func testDifferentExternalReloadPreservesAnUnsubmittedUserEdit() async {
+        var writes: [Int] = []
+        let edit = DebouncedConfigEdit<Int>(write: { writes.append($0) })
+        edit.set(2, saved: 1)
+        edit.synchronize(saved: 3)
+        assertEquals(edit.draft, 2)
+        await edit.flush()?.value
+        assertEquals(writes, [2])
+        edit.synchronize(saved: 2)
+        assertNil(edit.draft)
+        edit.synchronize(saved: 4)
+        assertNil(edit.draft)
+    }
+
+    func testRejectedUiReloadFailsAppearanceSubmissionWhenEnabledOrPaused() async {
+        let originalApp = appForTests
+        appForTests = nil
+        defer { appForTests = originalApp }
+        let originalEnabled = sessionCoordinator.isEnabled
+        defer { sessionCoordinator.setEnabled(originalEnabled) }
+        // This is valid TOML but not an Airlock config. The writer validates before writing;
+        // an external edit between write and reload can still make the reload reject its input.
+        let invalid = "[focus-flash]\nmode = 'bogus'"
+        XCTAssertFalse(parseConfig(invalid).errors.isEmpty)
+        for enabled in [false, true] {
+            sessionCoordinator.setEnabled(enabled)
+            var writes: [Int] = []
+            var reloads = 0
+            var failures = 0
+            let edit = DebouncedConfigEdit<Int>(write: { value in
+                writes.append(value)
+                try await reloadSettingsConfigAfterWrite {
+                    try await reloadConfigFromUi(.menuBarButton) {
+                        reloads += 1
+                        return parseConfig(invalid).errors.isEmpty
+                    }
+                }
+            }, onFailure: { _ in failures += 1 })
+            edit.set(2, saved: 1)
+            await edit.flush()?.value
+            assertEquals(writes, [2])
+            assertEquals(reloads, 1)
+            assertEquals(failures, 1)
+            assertNil(edit.draft)
+            assertEquals(sessionCoordinator.isEnabled, enabled)
+            edit.synchronize(saved: 3)
+            assertNil(edit.draft)
+        }
+    }
+
+    func testAcceptedUiReloadPreservesRunningStateAndRunsOnce() async throws {
+        let originalApp = appForTests
+        appForTests = nil
+        defer { appForTests = originalApp }
+        let originalEnabled = sessionCoordinator.isEnabled
+        defer { sessionCoordinator.setEnabled(originalEnabled) }
+        for enabled in [false, true] {
+            sessionCoordinator.setEnabled(enabled)
+            var reloads = 0
+            try await reloadConfigFromUi(.menuBarButton) {
+                reloads += 1
+                return true
+            }
+            assertEquals(reloads, 1)
+            assertEquals(sessionCoordinator.isEnabled, enabled)
+        }
+    }
+
+    func testRejectedOlderUiReloadPreservesANewerSubmissionAndItsRevert() async {
+        let originalEnabled = sessionCoordinator.isEnabled
+        sessionCoordinator.setEnabled(false)
+        defer { sessionCoordinator.setEnabled(originalEnabled) }
+        var resume: CheckedContinuation<Void, Never>?
+        var writes: [Int] = []
+        var failures = 0
+        let edit = DebouncedConfigEdit<Int>(write: { value in
+            writes.append(value)
+            try await reloadSettingsConfigAfterWrite {
+                try await reloadConfigFromUi(.menuBarButton) {
+                    if value == 2 {
+                        await withCheckedContinuation { resume = $0 }
+                        return false
+                    }
+                    return true
+                }
+            }
+        }, onFailure: { _ in failures += 1 })
+        edit.set(2, saved: 1)
+        let firstWrite = edit.flush()
+        while resume == nil { await Task.yield() }
+        edit.set(3, saved: 1)
+        await edit.flush()?.value
+        resume?.resume()
+        await firstWrite?.value
+        assertEquals(failures, 1)
+        assertEquals(edit.draft, 3)
+        edit.set(1, saved: 1)
+        await edit.flush()?.value
+        assertEquals(writes, [2, 3, 1])
+        edit.synchronize(saved: 1)
+        assertNil(edit.draft)
     }
 
     func testCmdWClosesSettingsWithCapsLockOnOrOff() throws {

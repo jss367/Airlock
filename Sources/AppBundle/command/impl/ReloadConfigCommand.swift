@@ -38,15 +38,29 @@ struct ReloadConfigCommand: Command {
 
 /// Reloads the config for a UI action or the config file watcher. Works while Airlock is paused too.
 /// The reload keeps the paused state, so the new config lands in `config` and takes effect on resume
-@MainActor func reloadConfigFromUi(_ event: RefreshSessionEvent) async throws {
+@MainActor func reloadConfigFromUi(
+    _ event: RefreshSessionEvent,
+    reload: @MainActor @escaping () async throws -> Bool = { try await reloadConfig() },
+) async throws {
+    let apply: @MainActor () async throws -> Void = {
+        guard try await reload() else { throw ConfigReloadError.rejected }
+    }
     if let token: RunSessionGuard = .isServerEnabled {
-        try await runLightSession(event, token) { _ = try await reloadConfig() }
+        try await runLightSession(event, token, body: apply)
     } else {
         // No session while paused. Its focus sync would trust the stale focus cache and
         // pull focus back to whatever window was focused before the pause
-        _ = try await reloadConfig()
+        try await apply()
         // The session would have republished TrayMenuModel. Do it here so the menu redraws
         TrayMenuModel.shared.objectWillChange.send()
+    }
+}
+
+private enum ConfigReloadError: LocalizedError {
+    case rejected
+
+    var errorDescription: String? {
+        "The configuration file was rejected. Fix the errors in the config and reload it."
     }
 }
 
