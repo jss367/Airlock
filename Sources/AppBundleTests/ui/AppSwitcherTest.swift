@@ -115,30 +115,31 @@ final class AppSwitcherTest: XCTestCase {
         assertEquals(state.selectedWindowIndex, 1)
     }
 
-    func testRemovingTheSelectedWindowKeepsASelection() {
+    func testClosingTheSelectedWindowKeepsASelection() async throws {
         let state = AppSwitcherState(groups: threeApps(), selectedAppIndex: 2, pointerLocation: { .zero })
         state.cycleWindow(offset: 1)
 
         // The last window of an app: selection falls back to the window before it
-        assertEquals(state.removeSelectedWindow(), 31)
+        try await confirmClose(31, in: state)
         assertEquals(state.selectedGroup?.windows.map(\.windowId), [30])
         assertEquals(state.selectedWindowIndex, 0)
 
         // An app's only window: the app goes too, and selection moves to the last app left
-        assertEquals(state.removeSelectedWindow(), 30)
+        try await confirmClose(30, in: state)
         assertEquals(state.groups.map(\.pid), [1, 2])
         assertEquals(state.selectedAppIndex, 1)
     }
 
-    func testRemovingAppsEmptiesTheList() {
+    func testQuittingEveryAppEmptiesTheList() {
         let state = AppSwitcherState(groups: threeApps(), selectedAppIndex: 0, pointerLocation: { .zero })
-        assertEquals(state.removeSelectedApp(), 1)
+        assertEquals(state.quitApp(pid: 1, requestQuit: { true }), true)
         assertEquals(state.selectedGroup?.pid, 2)
-        assertEquals(state.removeSelectedApp(), 2)
-        assertEquals(state.removeSelectedApp(), 3)
+        assertEquals(state.quitApp(pid: 2, requestQuit: { true }), true)
+        assertEquals(state.quitApp(pid: 3, requestQuit: { true }), true)
         assertTrue(state.groups.isEmpty)
-        assertNil(state.removeSelectedApp())
-        assertNil(state.removeSelectedWindow())
+        assertNil(state.selectedGroup)
+        assertNil(state.reserveAppForQuit())
+        assertNil(state.reserveWindowForClose())
     }
 
     func testFailedQuitKeepsTheLastAppAndSelection() {
@@ -178,28 +179,31 @@ final class AppSwitcherTest: XCTestCase {
         assertEquals(state.selectedWindowIndex, 0)
     }
 
-    func testFailedCloseKeepsTheLastWindow() {
+    func testFailedCloseKeepsTheLastWindow() async throws {
         let state = AppSwitcherState(groups: [group(pid: 1, windows: [10])], selectedAppIndex: 0)
-        XCTAssertThrowsError(try state.closeWindow(windowId: 10) { throw NSError(domain: "test", code: 1) })
+        do {
+            _ = try await state.closeWindowAfterConfirmation(windowId: 10) { throw NSError(domain: "test", code: 1) }
+            XCTFail("A failed close must rethrow")
+        } catch {}
         assertEquals(state.selectedGroup?.windows.map(\.windowId), [10])
-        state.closeWindow(windowId: 10) {}
+        try await confirmClose(10, in: state)
         assertTrue(state.groups.isEmpty)
     }
 
-    func testClosingCapturedWindowPreservesNewSelection() {
+    func testClosingCapturedWindowPreservesNewSelection() async throws {
         let state = AppSwitcherState(groups: threeApps(), selectedAppIndex: 0)
         state.cycleWindow(offset: 1)
-        state.closeWindow(windowId: 10) {}
+        try await confirmClose(10, in: state)
         assertEquals(state.selectedGroup?.windows[safe: state.selectedWindowIndex]?.windowId, 11)
 
         state.cycleApp(offset: 2)
         state.cycleWindow(offset: 1)
-        state.closeWindow(windowId: 11) {}
+        try await confirmClose(11, in: state)
         assertEquals(state.selectedGroup?.pid, 3)
         assertEquals(state.selectedGroup?.windows[safe: state.selectedWindowIndex]?.windowId, 31)
     }
 
-    func testRapidCloseReservationsAdvanceWithoutHidingWindows() {
+    func testRapidCloseReservationsAdvanceWithoutHidingWindows() async throws {
         let state = AppSwitcherState(groups: threeApps(), selectedAppIndex: 0)
         assertEquals(state.reserveWindowForClose(), 10)
         assertEquals(state.reserveWindowForClose(), 11)
@@ -212,7 +216,7 @@ final class AppSwitcherTest: XCTestCase {
         // A failed admission releases its target without removing it or another reservation.
         state.finishClosingWindow(10)
         assertEquals(state.reserveWindowForClose(), 10)
-        state.closeWindow(windowId: 11) {}
+        try await confirmClose(11, in: state)
         state.finishClosingWindow(11)
         assertNil(state.reserveWindowForClose())
     }
@@ -275,7 +279,7 @@ final class AppSwitcherTest: XCTestCase {
         assertEquals(state.reserveWindowForClose(), 10)
     }
 
-    func testQuitSkipsFullyCloseReservedAppsAndRecoversAfterFailure() {
+    func testQuitSkipsFullyCloseReservedAppsAndRecoversAfterFailure() async throws {
         let state = AppSwitcherState(groups: threeApps(), selectedAppIndex: 0)
         assertEquals(state.reserveWindowForClose(), 10)
         assertEquals(state.reserveWindowForClose(), 11)
@@ -287,7 +291,7 @@ final class AppSwitcherTest: XCTestCase {
         state.finishClosingWindow(10)
         assertEquals(state.reserveAppForQuit(), 1)
         state.finishQuittingApp(1)
-        state.closeWindow(windowId: 11) {}
+        try await confirmClose(11, in: state)
         state.finishClosingWindow(11)
         assertEquals(state.reserveAppForQuit(), 1)
         assertEquals(state.selectedGroup?.windows.map(\.windowId), [10])
@@ -364,7 +368,7 @@ final class AppSwitcherTest: XCTestCase {
             let finished = queue.enqueue {
                 defer { reopened.finishClosingWindow(second) }
                 order.append(second)
-                reopened.closeWindow(windowId: second) {}
+                _ = try? await reopened.closeWindowAfterConfirmation(windowId: second) { true }
             }
             await Task.yield()
             assertTrue(order.isEmpty)
@@ -381,17 +385,21 @@ final class AppSwitcherTest: XCTestCase {
         let workspace = Workspace.get(byName: name)
         TestWindow.new(id: 1, parent: workspace.rootTilingContainer)
         TestWindow.new(id: 2, parent: workspace.rootTilingContainer)
-        let state = AppSwitcherState(groups: [group(pid: 1, windows: [1, 2])], selectedAppIndex: 0, pointerLocation: { .zero })
+        let state = AppSwitcherState(
+            groups: [group(pid: 1, windows: [1]), group(pid: 2, windows: [2])],
+            selectedAppIndex: 0,
+            pointerLocation: { .zero },
+        )
 
         var reported: [UInt32: String] = [:]
         await state.refreshWindowTitles { windowId, title in
             reported[windowId] = title
-            // Window 2 is closed from the switcher while titles are still loading
-            if windowId == 1 { state.cycleWindow(offset: 1); _ = state.removeSelectedWindow() }
+            // Window 2's app is quit from the switcher while titles are still loading
+            if windowId == 1 { assertEquals(state.quitApp(pid: 2, requestQuit: { true }), true) }
         }
 
         assertEquals(reported, [1: "TestWindow(1)", 2: "TestWindow(2)"])
-        assertEquals(state.groups.first?.windows.map(\.title), ["TestWindow(1)"])
+        assertEquals(state.groups.map { $0.windows.map(\.title) }, [["TestWindow(1)"]])
     }
 
     func testKeyActions() {
@@ -415,6 +423,12 @@ final class AppSwitcherTest: XCTestCase {
         assertEquals(action(124, isRepeat: true), .cycleApp(offset: 1))
         assertEquals(action(13, isRepeat: true), .ignore)
         assertEquals(action(12, isRepeat: true), .ignore)
+    }
+
+    /// Close a window the way the panel does once the close is confirmed
+    private func confirmClose(_ windowId: UInt32, in state: AppSwitcherState) async throws {
+        let closed = try await state.closeWindowAfterConfirmation(windowId: windowId) { true }
+        assertTrue(closed)
     }
 
     private func threeApps() -> [AppGroup] {
