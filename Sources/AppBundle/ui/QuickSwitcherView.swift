@@ -147,12 +147,10 @@ private final class QuickSwitcherPanel: NSPanelHud, AppLauncherPresentation {
         // One task per window: an app that is slow to answer must not hold up the other titles
         for windowId in model.windowIds {
             detailTasks.append(Task { [model] in
-                guard let window = Window.get(byId: windowId),
-                      let title = try? await window.title,
-                      !title.isEmpty
-                else { return }
-                quickSwitcherTitleCache[windowId] = title
-                model.setTitle(title, forWindow: windowId)
+                await loadQuickSwitcherTitle(windowId: windowId) { id, title in
+                    quickSwitcherTitleCache[id] = title
+                    model.setTitle(title, forWindow: id)
+                }
             })
         }
         model.isLoadingApps = quickSwitcherAppCache.isEmpty

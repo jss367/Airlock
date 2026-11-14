@@ -220,6 +220,65 @@ final class QuickSwitcherTest: XCTestCase {
     }
 
     @MainActor
+    func testStationaryPointerKeepsPickedAppAfterDiscoveryReordersRows() {
+        var pointer = CGPoint.zero
+        let model = QuickSwitcherModel(scope: .apps, items: [Self.app("Books"), Self.app("Notes")], pointerLocation: { pointer })
+        pointer.x = 10
+        model.hover(at: 1)
+        assertEquals(model.selectedItem?.title, "Notes")
+        model.setApps([Self.app("Books"), Self.app("Calendar"), Self.app("Notes")])
+        // New content moved under the pointer without any pointer movement.
+        model.hover(at: 1)
+        assertEquals(model.selectedItem?.title, "Notes")
+        assertEquals(model.selectionCameFromKeyboard, false)
+        pointer.x = 20
+        model.hover(at: 1)
+        assertEquals(model.selectedItem?.title, "Calendar")
+    }
+
+    @MainActor
+    func testStationaryPointerKeepsPickedWindowAfterTitleReranksRows() {
+        var pointer = CGPoint.zero
+        let model = QuickSwitcherModel(scope: .all, items: [Self.window(1, "Build release", app: "Safari"), Self.window(2, "Release notes", app: "Safari")], pointerLocation: { pointer })
+        model.query = "release"
+        assertEquals(model.rows.map(\.id), ["win-2", "win-1"])
+        pointer.x = 10
+        model.hover(at: 1)
+        model.setTitle("Release", forWindow: 1)
+        assertEquals(model.rows.map(\.id), ["win-1", "win-2"])
+        assertEquals(model.selectedItem?.id, "win-1")
+        model.hover(at: 1)
+        assertEquals(model.selectedItem?.id, "win-1")
+    }
+
+    @MainActor
+    func testCancelledTitleReadCannotOverwriteReplacementPanelCache() async {
+        var pending: CheckedContinuation<String?, Never>?
+        var cache: [UInt32: String] = [:]
+        let closed = QuickSwitcherModel(scope: .all, items: [Self.window(1, nil, app: "Safari")])
+        let oldRead = Task {
+            await loadQuickSwitcherTitle(windowId: 1, readTitle: { _ in
+                await withCheckedContinuation { pending = $0 }
+            }) { id, title in
+                cache[id] = title
+                closed.setTitle(title, forWindow: id)
+            }
+        }
+        while pending == nil { await Task.yield() }
+        oldRead.cancel()
+        let reopened = QuickSwitcherModel(scope: .all, items: [Self.window(1, nil, app: "Safari")])
+        await loadQuickSwitcherTitle(windowId: 1, readTitle: { _ in "Current title" }) { id, title in
+            cache[id] = title
+            reopened.setTitle(title, forWindow: id)
+        }
+        pending?.resume(returning: "Stale title")
+        await oldRead.value
+        assertEquals(cache[1], "Current title")
+        assertEquals(reopened.selectedItem?.title, "Current title")
+        assertEquals(closed.selectedItem?.title, "Safari")
+    }
+
+    @MainActor
     func testRestingPointerDoesNotOverrideKeyboard() {
         var pointer = CGPoint(x: 100, y: 100)
         let model = QuickSwitcherModel(scope: .apps, items: [Self.app("Books"), Self.app("Notes"), Self.app("Safari")], pointerLocation: { pointer })

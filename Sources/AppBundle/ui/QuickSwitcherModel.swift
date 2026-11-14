@@ -287,6 +287,9 @@ final class QuickSwitcherModel: ObservableObject {
     }
 
     private func refreshRows() {
+        // Async results can move rows under a pointer that previously selected an item.
+        // Require fresh movement before another hover can replace that selection.
+        pointerAnchor = pointerLocation()
         let selectedId = selectionWasMoved ? selectedItem?.id : nil
         var rows = rankSwitcherItems(items, query: query)
         let query = query.trimmingCharacters(in: .whitespaces)
@@ -330,6 +333,20 @@ final class QuickSwitcherModel: ObservableObject {
         let location = pointerLocation()
         return hypot(location.x - pointerAnchor.x, location.y - pointerAnchor.y) > 2
     }
+}
+
+/// A closed panel must not publish a late AX answer into the title cache used by its replacement.
+@MainActor
+func loadQuickSwitcherTitle(
+    windowId: UInt32,
+    readTitle: @MainActor (UInt32) async -> String? = { id in
+        guard let window = Window.get(byId: id) else { return nil }
+        return try? await window.title
+    },
+    onTitle: @MainActor (UInt32, String) -> Void,
+) async {
+    guard !Task.isCancelled, let title = await readTitle(windowId), !title.isEmpty, !Task.isCancelled else { return }
+    onTitle(windowId, title)
 }
 
 // MARK: - Building items
