@@ -33,7 +33,7 @@ func runAppLauncherWindowAction(_ window: Window, action: () -> Void) {
 /// selection caller before Task starts, and rechecked after the session's awaited initial query.
 @MainActor
 func runAppLauncherWindowSession(_ window: Window, admission: RunSessionGuard, action: @MainActor () -> Void) async throws {
-    try await runLightSession(.menuBarButton, admission) {
+    try await runLightSession(.appLauncher, admission) {
         runAppLauncherWindowAction(window, action: action)
     }
 }

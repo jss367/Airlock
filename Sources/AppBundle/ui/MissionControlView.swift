@@ -343,7 +343,7 @@ struct MissionControlContent: View {
         let selectedPanel = missionControlPanel
         Task {
             do {
-                try await runLightSession(.menuBarButton, token) {
+                try await runLightSession(.missionControl, token) {
                     focusWorkspaceFromUi(Workspace.get(byName: ws.name))
                 }
             } catch is CancellationError {
@@ -362,7 +362,7 @@ struct MissionControlContent: View {
         let selectedPanel = missionControlPanel
         Task {
             do {
-                try await runLightSession(.menuBarButton, token) {
+                try await runLightSession(.missionControl, token) {
                     if let w = Window.get(byId: window.windowId) {
                         focusWindowFromUi(w)
                     }

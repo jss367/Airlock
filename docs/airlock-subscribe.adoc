@@ -77,6 +77,7 @@ focus stealing looks like from the outside.
 `global-observer(NSWorkspaceDidActivateApplicationNotification)`:: A macOS notification; the name in parentheses is the notification.
 `ax(kAXFocusedWindowChangedNotification)`:: An accessibility notification from an app.
 `global-observer-left-mouse-up`:: A mouse click.
+`app-switcher`, `quick-switcher`, `app-launcher`, `mission-control`:: A selection made in one of Airlock's panels.
 `startup`, `config-auto-reload`, `menu-bar-button`, `reset-manipulated-with-mouse`:: Self-explanatory.
 `on-window-detected`, `on-focus-changed`, `on-focused-monitor-changed`, `on-mode-changed`:: A callback from the config, which
 means the change was caused by an earlier change. Repeating pairs of these are the signature of a
