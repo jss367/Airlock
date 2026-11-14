@@ -28,6 +28,8 @@ airlock -h;
     | focus [<focus_dfs_relative_flag>]... (dfs-next|dfs-prev) [<focus_dfs_relative_flag>]...
     | focus [--ignore-floating] (app-next|app-prev|same-app-next|same-app-prev)
 
+    | focus-attention
+
     | focus-back-and-forth
 
     | focus-monitor [--wrap-around] (left|down|up|right) [--wrap-around]

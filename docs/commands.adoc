@@ -69,6 +69,14 @@ include::airlock-focus.adoc[tags=synopsis]
 include::airlock-focus.adoc[tags=purpose]
 include::airlock-focus.adoc[tags=body]
 
+[#focus-attention]
+== focus-attention
+----
+include::airlock-focus-attention.adoc[tags=synopsis]
+----
+include::airlock-focus-attention.adoc[tags=purpose]
+include::airlock-focus-attention.adoc[tags=body]
+
 == focus-back-and-forth
 ----
 
