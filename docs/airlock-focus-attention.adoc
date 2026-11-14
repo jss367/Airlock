@@ -1,0 +1,38 @@
+= airlock-focus-attention(1)
+include::util/man-attributes.adoc[]
+// tag::purpose[]
+:manpurpose: Focus the window that was most recently denied focus
+// end::purpose[]
+:manname: airlock-focus-attention
+
+// =========================================================== Synopsis
+== Synopsis
+[verse]
+// tag::synopsis[]
+airlock focus-attention [-h|--help]
+
+// end::synopsis[]
+
+// =========================================================== Description
+== Description
+
+// tag::body[]
+{manpurpose}.
+
+When xref:guide.adoc#prevent-focus-stealing[focus stealing prevention] keeps a window from taking focus,
+Airlock remembers that the window asked and marks its workspace in the menu bar.
+`focus-attention` focuses the window that asked last, switching to its workspace if needed.
+The request ends when you get there, so running the command again goes to the window that asked before it, on another workspace.
+
+A request also ends when you focus the window's workspace yourself, when the window closes or moves to another workspace, and when Airlock is paused.
+
+If no window is waiting, the command does nothing, prints a message, and exits with non-zero exit code.
+// end::body[]
+
+// =========================================================== Options
+include::util/conditional-options-header.adoc[]
+
+-h, --help:: Print help
+
+// =========================================================== Footer
+include::util/man-footer.adoc[]

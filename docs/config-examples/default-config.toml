@@ -266,6 +266,7 @@ on-mode-changed = []
     ' '''
 
     option-tab = 'workspace-back-and-forth'
+    option-backtick = 'focus-attention' # Go to the window that was last denied focus
     option-shift-tab = 'move-workspace-to-monitor --wrap-around next'
 
     option-shift-semicolon = 'mode service'

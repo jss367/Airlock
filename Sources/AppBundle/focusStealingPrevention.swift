@@ -41,12 +41,16 @@ final class FocusStealingPreventionState {
 @MainActor func markRecentAppActivation() { focusStealingPrevention.markRecentAppActivation() }
 @MainActor var hadRecentAppActivation: Bool { focusStealingPrevention.hadRecentAppActivation }
 
-@MainActor func resetFocusStealingPreventionForTests() { focusStealingPrevention.reset() }
+@MainActor func resetFocusStealingPreventionForTests() {
+    focusStealingPrevention.reset()
+    focusAttention.reset()
+}
 
 /// Determines whether a focus change to `newWindow` should be blocked based on the
 /// `prevent-focus-stealing` config setting.
 ///
 /// Returns `true` if the focus change should be allowed, `false` if it should be blocked.
+/// A blocked window is recorded in `focusAttention`, so the user can still get to it.
 @MainActor
 func shouldAllowFocusChange(to newWindow: Window?) -> Bool {
     guard config.enableWindowManagement else { return true }
