@@ -101,7 +101,7 @@ func dismissAppSwitcher(commit: Bool) {
         guard let token: RunSessionGuard = .isServerEnabled else { return }
         Task {
             await withErrorReporting("Switching apps", userMessage: "Airlock could not switch apps.") {
-                try await runLightSession(.menuBarButton, token) {
+                try await runLightSession(.appSwitcher, token) {
                     let windowId = group.windows[safe: selectedWindowIndex]?.windowId ?? group.windows.first?.windowId
                     if let windowId, let window = Window.get(byId: windowId) {
                         _ = window.focusWindow()
@@ -395,7 +395,7 @@ private final class AppSwitcherPanel: NSPanelHud {
         actionQueue.enqueue {
             defer { onCompletion() }
             await withErrorReporting(operation, userMessage: userMessage) {
-                try await runLightSession(.menuBarButton, token) { try await body() }
+                try await runLightSession(.appSwitcher, token) { try await body() }
                 if self.contentState.groups.isEmpty, appSwitcherPanel === self {
                     dismissAppSwitcher(commit: false)
                 }

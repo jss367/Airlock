@@ -92,6 +92,10 @@ public enum RefreshSessionEvent: Sendable, CustomStringConvertible {
     case globalObserver(String)
     case globalObserverLeftMouseUp
     case menuBarButton
+    case appSwitcher
+    case quickSwitcher
+    case appLauncher
+    case missionControl
     case hotkeyBinding
     case startup
     case socketServer(any CmdArgs)
@@ -133,6 +137,10 @@ public enum RefreshSessionEvent: Sendable, CustomStringConvertible {
             case .globalObserverLeftMouseUp: "global-observer-left-mouse-up"
             case .hotkeyBinding: "hotkey-binding"
             case .menuBarButton: "menu-bar-button"
+            case .appSwitcher: "app-switcher"
+            case .quickSwitcher: "quick-switcher"
+            case .appLauncher: "app-launcher"
+            case .missionControl: "mission-control"
             case .resetManipulatedWithMouse: "reset-manipulated-with-mouse"
             case .socketServer(let args): "socket-server(\(args.kind.rawValue))"
             case .startup: "startup"
@@ -151,6 +159,10 @@ public enum RefreshSessionEvent: Sendable, CustomStringConvertible {
             case .globalObserverLeftMouseUp: "globalObserverLeftMouseUp"
             case .hotkeyBinding: "hotkeyBinding"
             case .menuBarButton: "menuBarButton"
+            case .appSwitcher: "appSwitcher"
+            case .quickSwitcher: "quickSwitcher"
+            case .appLauncher: "appLauncher"
+            case .missionControl: "missionControl"
             case .resetManipulatedWithMouse: "resetManipulatedWithMouse"
             case .socketServer(let args): "socketServer: \(args)"
             case .startup: "startup"
