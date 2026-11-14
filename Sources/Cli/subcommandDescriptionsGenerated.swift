@@ -11,6 +11,7 @@ let subcommandDescriptions = [
     ["  enable", "Temporarily disable window management"],
     ["  flash-focus", "Flash an outline around the currently focused window"],
     ["  flatten-workspace-tree", "Flatten the tree of the focused workspace"],
+    ["  focus-attention", "Focus the window that was most recently denied focus"],
     ["  focus-back-and-forth", "Switch between the current and previously focused elements back and forth"],
     ["  focus-monitor", "Focus monitor by relative direction, by order, or by pattern"],
     ["  focus", "Set focus to a window."],

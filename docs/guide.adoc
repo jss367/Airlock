@@ -33,7 +33,7 @@ Airlock keeps app and window switching within the focused workspace. With the de
 * `option-space` opens the quick switcher for the current workspace.
 * `option-1` through `option-9` switch to the corresponding workspace.
 
-Airlock also blocks attempts by apps on other workspaces to steal focus. Use an explicit workspace command or the workspace overview to move between workspaces.
+Airlock also blocks attempts by apps on other workspaces to steal focus. A blocked window's workspace is marked in the menu bar, and `option-backtick` takes you to it; see <<prevent-focus-stealing>>. Use an explicit workspace command or the workspace overview to move between workspaces.
 
 The menu bar provides *Mission Control*, *Show Keybindings*, and *Keyboard Visualizer*. The keyboard visualizer can edit bindings in your configuration. For app launching and summoning, see xref:commands.adoc#app-launcher[app-launcher] and xref:commands.adoc#summon-app[summon-app].
 
@@ -595,6 +595,29 @@ workspace's window moves focus there.
 ----
 prevent-focus-stealing = 'cross-workspace'
 ----
+
+[#deferred-focus]
+=== Windows that want attention
+
+A blocked focus change is deferred, not dropped. Airlock remembers the window that asked and marks its
+workspace in the menu bar, so you can tell that an app on another workspace tried to come forward:
+
+* The text styles put a `●` before the workspace name and list the workspace even when it isn't visible, for example `1  ●3`.
+* The square and i3 styles draw a dot on the corner of the workspace and show it at full strength. The square style adds the workspace after a `|` when it isn't visible.
+* In the menu, the workspace's row names the app that asked, for example `3 - Slack ● Slack wants focus`.
+
+The xref:commands.adoc#focus-attention[focus-attention] command, bound to `option-backtick` in the <<default-config>>,
+focuses the window that asked last and switches to its workspace. When several workspaces are waiting, repeat it to visit them
+from the most recent to the oldest.
+
+A request ends when:
+
+* you focus the window, or go to its workspace by any means
+* the window closes or moves to another workspace
+* Airlock is paused, or `prevent-focus-stealing` is set to `off`
+
+In `always` mode a blocked window can be on the workspace you are already on. Its workspace is marked the same way and
+`focus-attention` goes to the window. The request ends as soon as you focus that window or any other window on the workspace.
 
 [#multiple-monitors]
 == Multiple monitors

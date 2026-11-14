@@ -36,6 +36,9 @@ let flash_focus_help_generated = """
 let flatten_workspace_tree_help_generated = """
     USAGE: flatten-workspace-tree [-h|--help] [--workspace <workspace>]
     """
+let focus_attention_help_generated = """
+    USAGE: focus-attention [-h|--help]
+    """
 let focus_back_and_forth_help_generated = """
     USAGE: focus-back-and-forth [-h|--help]
     """
