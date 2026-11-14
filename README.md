@@ -17,6 +17,8 @@ Airlock is in early development. Configuration and behavior may change.
 
 Download the app and command-line tool from [GitHub Releases](https://github.com/jss367/Airlock/releases/latest). The release ZIP supports Apple Silicon and Intel Macs running macOS 26 or later. Extract it, move `Airlock.app` to `/Applications`, and copy `bin/airlock` to a directory on your `PATH`, such as `~/.local/bin`. Releases are ad-hoc signed and are not notarized by Apple; macOS may require you to explicitly allow the app before opening it. Grant Airlock access in **System Settings → Privacy & Security → Accessibility** when prompted.
 
+Use **Check for Updates…** below **About Airlock** in the menu bar menu to check for a newer stable release. When an update is available, **View Release** opens its download page; download and install it manually. Checks run only when you choose the menu item.
+
 To build from source, install Xcode with Swift 6.2 or later. From a checkout of this repository:
 
 ```sh
