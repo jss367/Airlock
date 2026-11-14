@@ -15,8 +15,14 @@ final class ConfigTest: XCTestCase {
 
     func testParseDefaultConfig() {
         let toml = try! String(contentsOf: projectRoot.appending(component: "docs/config-examples/default-config.toml"), encoding: .utf8)
-        let (_, errors) = parseConfig(toml)
+        let (config, errors) = parseConfig(toml)
         assertEquals(errors, [])
+        // Workspaces 1-9 only. Lettered ones would take option-<letter> away from typing
+        assertEquals(Array(config.persistentWorkspaces), (1 ... 9).map(String.init))
+        let boundWorkspaces = config.modes[mainModeId]!.bindings.values.flatMap(\.commands).compactMap {
+            (($0 as? WorkspaceCommand)?.args.target.val ?? ($0 as? MoveNodeToWorkspaceCommand)?.args.target.val)?.workspaceNameOrNil()?.raw
+        }
+        assertEquals(Set(boundWorkspaces), Set(config.persistentWorkspaces))
     }
 
     func testConfigVersionOutOfBounds() {

@@ -65,9 +65,7 @@ automatically-unhide-macos-hidden-apps = false
 # even when they are invisible.
 # This config option is only available since 'config-version = 2'
 # Fallback value (if you omit the key): persistent-workspaces = []
-persistent-workspaces = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "A", "B",
-                         "C", "D", "E", "F", "G", "I", "M", "N", "O", "P", "Q",
-                         "R", "S", "T", "U", "V", "W", "X", "Y", "Z"]
+persistent-workspaces = ["1", "2", "3", "4", "5", "6", "7", "8", "9"]
 
 # A callback that runs every time binding mode changes
 on-mode-changed = []
@@ -198,28 +196,9 @@ on-mode-changed = []
     option-7 = 'workspace 7'
     option-8 = 'workspace 8'
     option-9 = 'workspace 9'
-    option-a = 'workspace A' # In your config, you can drop workspace bindings that you don't need
-    option-b = 'workspace B'
-    option-c = 'workspace C'
-    option-d = 'workspace D'
-    option-e = 'workspace E'
-    option-f = 'workspace F'
-    option-g = 'workspace G'
-    option-i = 'workspace I'
-    option-m = 'workspace M'
-    option-n = 'workspace N'
-    option-o = 'workspace O'
-    option-p = 'workspace P'
-    option-q = 'workspace Q'
-    option-r = 'workspace R'
-    option-s = 'workspace S'
-    option-t = 'workspace T'
-    option-u = 'workspace U'
-    option-v = 'workspace V'
-    option-w = 'workspace W'
-    option-x = 'workspace X'
-    option-y = 'workspace Y'
-    option-z = 'workspace Z'
+    # To add a lettered workspace, bind its keys here and add "A" to persistent-workspaces above:
+    # option-a = 'workspace A'
+    # option-shift-a = 'move-node-to-workspace A'
 
     option-shift-1 = 'move-node-to-workspace 1'
     option-shift-2 = 'move-node-to-workspace 2'
@@ -230,28 +209,6 @@ on-mode-changed = []
     option-shift-7 = 'move-node-to-workspace 7'
     option-shift-8 = 'move-node-to-workspace 8'
     option-shift-9 = 'move-node-to-workspace 9'
-    option-shift-a = 'move-node-to-workspace A'
-    option-shift-b = 'move-node-to-workspace B'
-    option-shift-c = 'move-node-to-workspace C'
-    option-shift-d = 'move-node-to-workspace D'
-    option-shift-e = 'move-node-to-workspace E'
-    option-shift-f = 'move-node-to-workspace F'
-    option-shift-g = 'move-node-to-workspace G'
-    option-shift-i = 'move-node-to-workspace I'
-    option-shift-m = 'move-node-to-workspace M'
-    option-shift-n = 'move-node-to-workspace N'
-    option-shift-o = 'move-node-to-workspace O'
-    option-shift-p = 'move-node-to-workspace P'
-    option-shift-q = 'move-node-to-workspace Q'
-    option-shift-r = 'move-node-to-workspace R'
-    option-shift-s = 'move-node-to-workspace S'
-    option-shift-t = 'move-node-to-workspace T'
-    option-shift-u = 'move-node-to-workspace U'
-    option-shift-v = 'move-node-to-workspace V'
-    option-shift-w = 'move-node-to-workspace W'
-    option-shift-x = 'move-node-to-workspace X'
-    option-shift-y = 'move-node-to-workspace Y'
-    option-shift-z = 'move-node-to-workspace Z'
 
     # Reset to baseline: move singleton apps back to workspace 1
     # Customize the app bundle IDs to match your setup.
