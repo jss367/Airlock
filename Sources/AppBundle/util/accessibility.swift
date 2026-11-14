@@ -5,8 +5,10 @@ import Security
 
 private let accessibilitySigningRequirementKey = "airlock-accessibility-signing-requirement"
 
+/// Returns once Airlock has Accessibility access. Without it, the welcome window asks for it and
+/// startup waits here, so it continues in this process as soon as access is granted
 @MainActor
-func checkAccessibilityPermissions() {
+func checkAccessibilityPermissions() async throws {
     if let requirement = currentDesignatedRequirement(),
        UserDefaults.standard.string(forKey: accessibilitySigningRequirementKey) != requirement
     {
@@ -18,9 +20,32 @@ func checkAccessibilityPermissions() {
             UserDefaults.standard.set(requirement, forKey: accessibilitySigningRequirementKey)
         }
     }
-    let options = [axTrustedCheckOptionPrompt: true]
-    if !AXIsProcessTrustedWithOptions(options as CFDictionary) {
-        terminateApp()
+    if AXIsProcessTrusted() { return }
+    showWelcomeWindowAtStartupIfNeeded()
+    try await waitForAccessibilityPermission()
+}
+
+/// Polls until access is granted. Throws only if the task is canceled
+@MainActor
+func waitForAccessibilityPermission() async throws {
+    while !AXIsProcessTrusted() {
+        try await Task.sleep(for: .seconds(1))
+    }
+}
+
+@MainActor private var didShowAccessibilityPrompt = false
+
+/// Opens System Settings at Privacy & Security → Accessibility
+@MainActor
+func openAccessibilitySettings() {
+    if !didShowAccessibilityPrompt {
+        didShowAccessibilityPrompt = true
+        // The system prompt is what adds Airlock to the Accessibility list. Once per launch is enough
+        let options = [axTrustedCheckOptionPrompt: true]
+        _ = AXIsProcessTrustedWithOptions(options as CFDictionary)
+    }
+    if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
+        NSWorkspace.shared.open(url)
     }
 }
 

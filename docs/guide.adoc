@@ -21,7 +21,18 @@ Alternatively, build it from a checkout of https://github.com/jss367/Airlock[the
 
 To install and launch the app, run `./deploy.sh`. This rebuilds and tests the app and builds the command-line tool before stopping any running Airlock instance. After those steps succeed, it stops Airlock, replaces `/Applications/Airlock.app`, installs `~/.local/bin/airlock`, and launches the app. A failed build or test leaves the running app untouched. Add `~/.local/bin` to your `PATH` to use the command-line tool.
 
-Grant Airlock access in *System Settings → Privacy & Security → Accessibility* when prompted. See https://github.com/jss367/Airlock/blob/main/dev-docs/development.md[development instructions] for setup and build options.
+See https://github.com/jss367/Airlock/blob/main/dev-docs/development.md[development instructions] for setup and build options.
+
+[#first-launch]
+=== First launch
+
+A welcome window opens on the first launch. It has up to three steps:
+
+. *Accessibility access.* Airlock needs it to arrange, move, and hide the windows of other apps. *Open System Settings* takes you to *Privacy & Security → Accessibility*. Turn on Airlock there, and Airlock starts as soon as access is granted, with no relaunch.
+. *A macOS setting.* If *When switching to an application, switch to a Space that has open windows for the application* is on, Airlock offers to turn it off. See <<a-note-on-displays-have-separate-spaces>>.
+. *The basics.* What a workspace is, and your shortcuts for switching workspaces, moving a window to a workspace, and opening the quick switcher.
+
+The basics are shown once. The other two steps come back on a later launch for as long as they apply.
 
 [#workspace-isolation]
 == Workspace isolation and navigation
@@ -31,7 +42,7 @@ Airlock keeps app and window switching within the focused workspace. With the de
 * `cmd-tab` and `shift-cmd-tab` cycle applications in the current workspace.
 * `cmd-backtick` and `shift-cmd-backtick` cycle windows of the same app in that workspace.
 * `option-space` opens the quick switcher for the current workspace.
-* `option-1` through `option-9` switch to the corresponding workspace.
+* `option-1` through `option-9` switch to the corresponding workspace, and `option-shift-1` through `option-shift-9` move the focused window there.
 
 Airlock also blocks attempts by apps on other workspaces to steal focus. Use an explicit workspace command or the workspace overview to move between workspaces.
 
@@ -419,7 +430,7 @@ defaults write com.apple.dock expose-group-apps -bool true && killall Dock
 
 Airlock workspaces are separate from native macOS Spaces. When troubleshooting focus or window placement across monitors, include the value of *Displays have separate Spaces* in your bug report, along with your monitor arrangement and macOS version.
 
-Airlock also checks the macOS setting *When switching to an application, switch to a Space that has open windows for the application* at startup. If it is enabled, the app offers to disable it because automatic native Space switching can interfere with Airlock's workspace management. Accepting that prompt restarts the Dock.
+Airlock also checks the macOS setting *When switching to an application, switch to a Space that has open windows for the application* at startup. If it is enabled, the welcome window offers to disable it because automatic native Space switching can interfere with Airlock's workspace management. Airlock keeps starting while the window is open. *Turn It Off* restarts the Dock, *Remind Me Later* asks again on the next launch, and *Don't Ask Again* stops the check.
 
 == Callbacks
 
