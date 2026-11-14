@@ -16,14 +16,6 @@ func windowThumbnailCaptureSize(
     return CGSize(width: max(1, floor(width * scale)), height: max(1, floor(height * scale)))
 }
 
-/// Capture windows once so individual thumbnails and workspace composites share the same images.
-@MainActor
-func captureWindowImages(windowIds: Set<CGWindowID>) async -> [CGWindowID: CGImage] {
-    var images: [CGWindowID: CGImage] = [:]
-    await captureWindowImages(orderedWindowIds: Array(windowIds)) { images[$0] = $1 }
-    return Task.isCancelled ? [:] : images
-}
-
 /// Capture windows in the given order, handing over each image as soon as it's ready.
 /// Stops early when the task is cancelled.
 ///
