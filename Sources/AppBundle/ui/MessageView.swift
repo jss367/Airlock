@@ -27,65 +27,46 @@ public let messageWindowId = "\(airlockAppName).messageView"
 struct MessageView: View {
     @StateObject private var model: MessageModel
     @Environment(\.dismiss) private var dismiss: DismissAction
-    @FocusState var focus: Bool
 
     init(model: MessageModel) {
         self._model = .init(wrappedValue: model)
     }
 
     public var body: some View {
-        VStack(alignment: .leading) {
-            HStack(alignment: .center) {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundColor(.yellow)
-                    .font(.system(size: 48))
-                Text("\(model.message?.description ?? "")")
-                    .padding(.horizontal)
-                    .focusable()
+        let type = model.message?.type ?? .notice
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .center, spacing: 10) {
+                Image(systemName: type.symbolName)
+                    .font(.system(size: 24))
+                    .foregroundStyle(type.tint)
+                    .accessibilityLabel(type.accessibilityLabel)
+                Text(model.message?.description ?? "")
+                    .font(.headline)
+                    .textSelection(.enabled)
             }
-            .padding()
+            // Read-only: nothing here takes the keyboard, so Return goes to the default button
             ScrollView {
-                VStack(alignment: .leading) {
-                    HStack {
-                        let cancelOnEnterBinding: Binding<String> = Binding(
-                            get: { model.message?.body ?? "" },
-                            set: { newText in
-                                if let prev = model.message?.body.count(where: \.isNewline), newText.count(where: \.isNewline) > prev {
-                                    model.message = nil
-                                }
-                            },
-                        )
-                        TextEditor(text: cancelOnEnterBinding)
-                            .font(.system(size: 12).monospaced())
-                            .focused($focus)
-                        //  .onKeyPress(.return) { return .handled } // enter handling alternative. Only available since macOS 14
-                        Spacer()
-                    }
-                    Spacer()
-                }
-                .padding()
+                Text(model.message?.body ?? "")
+                    .font(.system(size: 12, design: .monospaced))
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(12)
             }
+            .frame(minHeight: 60, idealHeight: idealBodyHeight)
             .background(Color(.controlBackgroundColor))
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-            .padding(.horizontal)
             HStack {
                 Spacer()
-                if let type = model.message?.type {
-                    switch type {
-                        case .config:
-                            reloadConfigButton(showShortcutGroup: true)
-                            openConfigButton(showShortcutGroup: true)
-                        case .runtime:
-                            EmptyView()
-                    }
+                if type.showsConfigButtons {
+                    reloadConfigButton(showShortcutGroup: true)
+                    openConfigButton(showShortcutGroup: true)
                 }
                 let closeButton = Button("Close") { model.message = nil }.keyboardShortcut(.defaultAction)
                 shortcutGroup(label: Image(systemName: "return.left"), content: closeButton)
             }
-            .padding()
         }
-        .textSelection(.enabled)
-        .frame(minWidth: 480, maxWidth: 960, minHeight: 200)
+        .padding()
+        .frame(minWidth: 480, idealWidth: 560, maxWidth: 960, minHeight: 200)
         .onChange(of: model.message) { _, message in
             if message == nil {
                 self.dismiss()
@@ -95,9 +76,18 @@ struct MessageView: View {
             // If user closes the screen with the macOS native close (x) button and then the error is still the same, this window will not appear again
             model.message = nil
         }
-        .onAppear {
-            focus = true
-        }
+    }
+}
+
+extension MessageView {
+    /// Roughly the body's height at the window's ideal width. A long body opens at a size that fits on
+    /// screen and scrolls, rather than at its full height
+    private var idealBodyHeight: CGFloat {
+        let charsPerLine = 64
+        let lines = (model.message?.body ?? "").split(separator: "\n", omittingEmptySubsequences: false)
+            .map { max(1, ($0.count + charsPerLine - 1) / charsPerLine) }
+            .reduce(0, +)
+        return CGFloat(min(max(lines, 2), 20)) * 15 + 24
     }
 }
 
@@ -109,8 +99,38 @@ public final class MessageModel: ObservableObject {
 }
 
 public enum MessageType {
+    /// The config has a problem. Offers to reload and open it
     case config
+    /// Something Airlock tried to do failed
     case runtime
+    /// A refusal or an explanation. Nothing is broken
+    case notice
+
+    var symbolName: String {
+        switch self {
+            case .config: "exclamationmark.triangle.fill"
+            case .runtime: "xmark.octagon.fill"
+            case .notice: "info.circle.fill"
+        }
+    }
+
+    var tint: Color {
+        switch self {
+            case .config: .yellow
+            case .runtime: .red
+            case .notice: .secondary
+        }
+    }
+
+    var accessibilityLabel: String {
+        switch self {
+            case .config: "Warning"
+            case .runtime: "Error"
+            case .notice: "Note"
+        }
+    }
+
+    var showsConfigButtons: Bool { self == .config }
 }
 
 public struct Message: Hashable, Equatable {

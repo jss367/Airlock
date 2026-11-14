@@ -13,6 +13,8 @@ struct KeyCapView: View {
     private var isNonBindable: Bool { key.id.hasPrefix("_") }
     private var keyWidth: CGFloat { key.widthMultiplier * baseKeySize }
     private let keyHeight: CGFloat = 48
+    /// The smallest text that is still readable on a key cap
+    private let labelFontSize: CGFloat = 10
 
     private var isTappable: Bool {
         guard !isNonBindable else { return false }
@@ -46,14 +48,7 @@ struct KeyCapView: View {
         .onHover { hovering in
             if isClickable { isHovered = hovering }
         }
-        .onTapGesture {
-            switch bindingInfo {
-                case .otherCommand:
-                    showCommandPopover = true
-                case .appLauncher, .unbound:
-                    if isTappable { onTap?() }
-            }
-        }
+        .onTapGesture { activate() }
         .popover(isPresented: $showCommandPopover, arrowEdge: .bottom) {
             if case .otherCommand(let description) = bindingInfo {
                 VStack(alignment: .leading, spacing: 4) {
@@ -67,6 +62,19 @@ struct KeyCapView: View {
                 .padding(10)
                 .frame(maxWidth: 300)
             }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(keyCapAccessibilityLabel(key: key, bindingInfo: bindingInfo))
+        .accessibilityAddTraits(isClickable ? .isButton : [])
+        .accessibilityAction { activate() }
+    }
+
+    private func activate() {
+        switch bindingInfo {
+            case .otherCommand:
+                showCommandPopover = true
+            case .appLauncher, .unbound:
+                if isTappable { onTap?() }
         }
     }
 
@@ -103,21 +111,24 @@ struct KeyCapView: View {
                     .font(.system(size: 18))
                     .foregroundStyle(.secondary)
             }
+            // The tooltip has the full name
             Text(appName)
-                .font(.system(size: 8))
+                .font(.system(size: labelFontSize))
                 .lineLimit(1)
                 .truncationMode(.tail)
         }
+        .padding(.horizontal, 2)
     }
 
     @ViewBuilder
     private func otherCommandContent(description: String) -> some View {
         VStack(spacing: 2) {
             Image(systemName: "gearshape")
-                .font(.system(size: 14))
+                .font(.system(size: 12))
                 .foregroundStyle(.primary)
+            // The tooltip and the popover have the full command
             Text(description)
-                .font(.system(size: 7))
+                .font(.system(size: labelFontSize))
                 .lineLimit(2)
                 .truncationMode(.tail)
                 .multilineTextAlignment(.center)
@@ -159,5 +170,17 @@ struct KeyCapView: View {
             case .unbound:
                 return Color.gray.opacity(0.08 + hoverBoost)
         }
+    }
+}
+
+/// What VoiceOver reads for a key cap: the key, then what it is bound to
+func keyCapAccessibilityLabel(key: PhysicalKey, bindingInfo: KeyBindingInfo) -> String {
+    // Modifier keys can't be bound. Their notation is internal and their label is a symbol
+    if key.id.hasPrefix("_") { return "\(key.id.dropFirst()) key" }
+    // Notations name the key in words ("semicolon"), which reads better than its symbol
+    return switch bindingInfo {
+        case .appLauncher(let appName, _): "\(key.id), opens \(appName)"
+        case .otherCommand(let description): "\(key.id), runs \(description)"
+        case .unbound: "\(key.id), unbound"
     }
 }
