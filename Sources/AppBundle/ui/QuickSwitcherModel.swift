@@ -8,6 +8,13 @@ enum QuickSwitcherScope: Equatable {
     /// Installed apps only. This is what the `app-launcher` command opens
     case apps
 
+    var sessionEvent: RefreshSessionEvent {
+        switch self {
+            case .all: .quickSwitcher
+            case .apps: .appLauncher
+        }
+    }
+
     var placeholder: String {
         switch self {
             case .all: "Search windows, workspaces, and apps, or the web"

@@ -99,6 +99,29 @@ import XCTest
         XCTAssertTrue(focus.windowOrNil === selected)
         XCTAssertTrue(TestApp.shared.focusedWindow === selected)
     }
+
+    func testSharedAppSelectionKeepsTheInitiatingPanelThroughItsQuery() async throws {
+        for scope in [QuickSwitcherScope.all, .apps] {
+            for crossWorkspace in [false, true] {
+                setUpWorkspacesForTests()
+                config.focusFlash.enabled = false
+                let here = Workspace.get(byName: "here")
+                let old = TestWindow.new(id: 307, parent: here.rootTilingContainer)
+                let selected = TestWindow.new(id: 308, parent: (crossWorkspace ? Workspace.get(byName: "there") : here).rootTilingContainer)
+                XCTAssertTrue(old.focusWindow())
+                old.nativeFocus()
+                appForTests = DelayedLauncherFixtureApp { await Task.yield(); return old }
+                var trigger: String?
+                try await runAppLauncherWindowSession(selected, admission: .enabled, event: scope.sessionEvent) {
+                    trigger = refreshSessionEvent?.trigger
+                    if crossWorkspace { _ = selected.bindAsFloatingWindow(to: here) }
+                    _ = selected.focusWindow()
+                }
+                XCTAssertEqual(trigger, scope == .all ? "quick-switcher" : "app-launcher")
+                XCTAssertTrue(focus.windowOrNil === selected)
+            }
+        }
+    }
 }
 
 private final class DelayedLauncherFixtureApp: AbstractApp {

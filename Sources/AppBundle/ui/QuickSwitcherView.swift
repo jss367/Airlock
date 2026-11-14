@@ -199,7 +199,7 @@ private final class QuickSwitcherPanel: NSPanelHud, AppLauncherPresentation {
     private func activate(_ item: SwitcherItem) {
         switch item.kind {
             case .installedApp(let url, let bundleIdentifier):
-                openAppFromLauncher(url: url, bundleIdentifier: bundleIdentifier) { dismiss(restoreFocus: $0) }
+                openAppFromLauncher(url: url, bundleIdentifier: bundleIdentifier, event: model.scope.sessionEvent) { dismiss(restoreFocus: $0) }
             case .webSearch(let query):
                 if let url = webSearchUrl(query: query) {
                     NSWorkspace.shared.open(url)
@@ -213,7 +213,7 @@ private final class QuickSwitcherPanel: NSPanelHud, AppLauncherPresentation {
                 }
                 Task {
                     do {
-                        try await runLightSession(.quickSwitcher, token) {
+                        try await runLightSession(model.scope.sessionEvent, token) {
                             switch item.kind {
                                 case .workspace(let name):
                                     focusWorkspaceFromUi(Workspace.get(byName: name))
