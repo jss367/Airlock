@@ -98,19 +98,69 @@ struct AppearanceSettingsPane: View {
 private struct DebouncedConfigValue<Value: Equatable & Sendable, Control: View>: View {
     /// The value in the loaded config
     let saved: Value
-    let write: @MainActor (Value) -> Void
-    @ViewBuilder let control: (Binding<Value>) -> Control
-    @State private var draft: Value?
+    let control: (Binding<Value>) -> Control
+    @StateObject private var edit: DebouncedConfigEdit<Value>
+
+    init(saved: Value, write: @MainActor @escaping (Value) -> Void, @ViewBuilder control: @escaping (Binding<Value>) -> Control) {
+        self.saved = saved
+        self.control = control
+        self._edit = StateObject(wrappedValue: DebouncedConfigEdit(write: write))
+    }
 
     var body: some View {
-        control(Binding(get: { draft ?? saved }, set: { draft = $0 }))
-            .task(id: draft) {
-                guard let draft, draft != saved else { return }
-                try? await Task.sleep(for: .milliseconds(300))
-                if !Task.isCancelled { write(draft) }
-            }
+        control(Binding(get: { edit.draft ?? saved }, set: { edit.set($0, saved: saved) }))
+            .onReceive(NotificationCenter.default.publisher(for: settingsWindowWillClose)) { _ in edit.flush() }
+            .onDisappear { edit.flush() }
             // The reload brought the edit back, so follow the config again
-            .onChange(of: saved) { if draft == saved { draft = nil } }
+            .onChange(of: saved) { edit.synchronize(saved: saved) }
+    }
+}
+
+/// A tab or window closing commits the visible edit before its debounce task is canceled.
+@MainActor
+final class DebouncedConfigEdit<Value: Equatable & Sendable>: ObservableObject {
+    @Published private(set) var draft: Value?
+    private var pending: Value?
+    private var pendingWait: Task<Void, Never>?
+    private let wait: @MainActor () async throws -> Void
+    private let write: @MainActor (Value) -> Void
+
+    init(
+        wait: @MainActor @escaping () async throws -> Void = { try await Task.sleep(for: .milliseconds(300)) },
+        write: @MainActor @escaping (Value) -> Void,
+    ) {
+        self.wait = wait
+        self.write = write
+    }
+
+    func set(_ value: Value, saved: Value) {
+        draft = value
+        pendingWait?.cancel()
+        pendingWait = nil
+        pending = value == saved ? nil : value
+        guard pending != nil else { return }
+        let wait = wait
+        pendingWait = Task { [weak self] in
+            guard !Task.isCancelled else { return }
+            do { try await wait() } catch { return }
+            if !Task.isCancelled { self?.flush() }
+        }
+    }
+
+    func flush() {
+        pendingWait?.cancel()
+        pendingWait = nil
+        guard let value = pending else { return }
+        pending = nil
+        write(value)
+    }
+
+    func synchronize(saved: Value) {
+        guard draft == saved else { return }
+        draft = nil
+        pending = nil
+        pendingWait?.cancel()
+        pendingWait = nil
     }
 }
 

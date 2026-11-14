@@ -160,7 +160,8 @@ func menuShortcutHints(bindings: [HotkeyBinding], quickSwitcherBinding: String?,
     for binding in bindings.sorted(by: { $0.descriptionWithKeyNotation > $1.descriptionWithKeyNotation }) {
         guard let command = binding.commands.singleOrNil(), let shortcut = menuKeyboardShortcut(binding.descriptionWithKeyNotation) else { continue }
         switch command.args {
-            case is MissionControlCmdArgs:
+            // Both names are accepted during the Workspace Overview command rename.
+            case _ where ["mission-control", "workspace-overview"].contains(command.args.kind.rawValue):
                 hints.workspaceOverview = shortcut
             case is ReloadConfigCmdArgs:
                 hints.reloadConfig = shortcut

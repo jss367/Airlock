@@ -11,6 +11,8 @@ enum ShortcutsView: Hashable {
     case list, keyboard
 }
 
+let settingsWindowWillClose = Notification.Name("AirlockSettingsWindowWillClose")
+
 /// What the Settings window shows. Lives outside the view, so a command or menu item can open
 /// the window on a particular tab and reopening keeps the last one.
 @MainActor
@@ -70,6 +72,7 @@ private final class SettingsWindowController: NSWindowController, NSWindowDelega
     }
 
     func windowWillClose(_ notification: Notification) {
+        NotificationCenter.default.post(name: settingsWindowWillClose, object: nil)
         // Dropping the hosting view tears down the views, which stops the keyboard's refresh timer
         window?.contentView = nil
     }
