@@ -25,7 +25,6 @@ let subcommandDescriptions = [
     ["  list-workspaces", "Print workspaces that satisfy conditions"],
     ["  macos-native-fullscreen", "Toggle macOS fullscreen for the focused window"],
     ["  macos-native-minimize", "Minimize focused window"],
-    ["  mission-control", "Toggle the Airlock workspace overview"],
     ["  mode", "Activate the specified binding mode"],
     ["  move-mouse", "Move mouse to the requested position"],
     ["  move-node-to-monitor", "Move window to monitor targeted by relative direction, by order, or by pattern"],
@@ -43,5 +42,6 @@ let subcommandDescriptions = [
     ["  volume", "Manipulate volume"],
     ["  window-frame", "Snap or center a window on its monitor"],
     ["  workspace-back-and-forth", "Switch between the focused workspace and previously focused workspace back and forth"],
+    ["  workspace-overview", "Toggle the Airlock workspace overview"],
     ["  workspace", "Focus the specified workspace"],
 ]

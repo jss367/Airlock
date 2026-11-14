@@ -1,8 +1,8 @@
 import AppKit
 import Common
 
-struct MissionControlCommand: Command {
-    let args: MissionControlCmdArgs
+struct WorkspaceOverviewCommand: Command {
+    let args: WorkspaceOverviewCmdArgs
     /*conforms*/ let shouldResetClosedWindowsCache = false
 
     func run(_ env: CmdEnv, _ io: CmdIo) -> Bool {

@@ -101,9 +101,6 @@ let macos_native_fullscreen_help_generated = """
 let macos_native_minimize_help_generated = """
     USAGE: macos-native-minimize [-h|--help] [--window-id <window-id>]
     """
-let mission_control_help_generated = """
-    USAGE: mission-control [-h|--help]
-    """
 let mode_help_generated = """
     USAGE: mode [-h|--help] <binding-mode>
     """
@@ -168,6 +165,9 @@ let window_frame_help_generated = """
     """
 let workspace_back_and_forth_help_generated = """
     USAGE: workspace-back-and-forth [-h|--help]
+    """
+let workspace_overview_help_generated = """
+    USAGE: workspace-overview [-h|--help]
     """
 let workspace_help_generated = """
     USAGE: workspace [-h|--help] [--auto-back-and-forth] [--fail-if-noop] <workspace-name>

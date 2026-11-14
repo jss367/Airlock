@@ -26,7 +26,6 @@ public enum CmdKind: String, CaseIterable, Equatable, Sendable {
     case listWorkspaces = "list-workspaces"
     case macosNativeFullscreen = "macos-native-fullscreen"
     case macosNativeMinimize = "macos-native-minimize"
-    case missionControl = "mission-control"
     case mode
     case move = "move"
     case moveMouse = "move-mouse"
@@ -45,6 +44,7 @@ public enum CmdKind: String, CaseIterable, Equatable, Sendable {
     case windowFrame = "window-frame"
     case workspace
     case workspaceBackAndForth = "workspace-back-and-forth"
+    case workspaceOverview = "workspace-overview"
 }
 
 func initSubcommands() -> [String: any SubCommandParserProtocol] {
@@ -99,8 +99,6 @@ func initSubcommands() -> [String: any SubCommandParserProtocol] {
                 result[kind.rawValue] = SubCommandParser(parseMacosNativeFullscreenCmdArgs)
             case .macosNativeMinimize:
                 result[kind.rawValue] = SubCommandParser(MacosNativeMinimizeCmdArgs.init)
-            case .missionControl:
-                result[kind.rawValue] = SubCommandParser(MissionControlCmdArgs.init)
             case .mode:
                 result[kind.rawValue] = SubCommandParser(ModeCmdArgs.init)
             case .move:
@@ -141,6 +139,10 @@ func initSubcommands() -> [String: any SubCommandParserProtocol] {
                 result[kind.rawValue] = SubCommandParser(parseWorkspaceCmdArgs)
             case .workspaceBackAndForth:
                 result[kind.rawValue] = SubCommandParser(WorkspaceBackAndForthCmdArgs.init)
+            case .workspaceOverview:
+                result[kind.rawValue] = SubCommandParser(WorkspaceOverviewCmdArgs.init)
+                // deprecated
+                result["mission-control"] = SubCommandParser(WorkspaceOverviewCmdArgs.init)
         }
     }
     return result
@@ -181,7 +183,6 @@ extension CmdKind {
                  .layout,
                  .macosNativeFullscreen,
                  .macosNativeMinimize,
-                 .missionControl,
                  .mode,
                  .move,
                  .moveMouse,
@@ -198,7 +199,8 @@ extension CmdKind {
                  .volume,
                  .windowFrame,
                  .workspace,
-                 .workspaceBackAndForth:
+                 .workspaceBackAndForth,
+                 .workspaceOverview:
                 true
         }
     }
