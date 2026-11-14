@@ -118,8 +118,6 @@ func setSettingsValue(table: String? = nil, key: String, value: String) {
     Task {
         do {
             try await writeSettingsValue(table: table, key: key, value: value)
-        } catch is CancellationError {
-            // A newer operation superseded this reload.
         } catch {
             reportSettingsWriteFailure(error)
         }
@@ -130,7 +128,30 @@ func setSettingsValue(table: String? = nil, key: String, value: String) {
 @MainActor
 func writeSettingsValue(table: String? = nil, key: String, value: String) async throws {
     try setConfigValue(table: table, key: key, value: value)
-    try await reloadConfigFromUi(.menuBarButton)
+    try await reloadSettingsConfigAfterWrite()
+}
+
+/// A pause/resume intent can supersede a reload before it reads the already-written file.
+/// Retry only the read/apply step, using the current state and latest file rather than rewriting
+/// an older edit. Each retry requires a new enable generation; unchanged cancellations fail,
+/// and task cancellation stops the recovery. Never create or replay an enable intent here.
+@MainActor
+func reloadSettingsConfigAfterWrite(
+    coordinator: SessionCoordinator = sessionCoordinator,
+    reload: @MainActor () async throws -> Void = { try await reloadConfigFromUi(.menuBarButton) },
+) async throws {
+    while true {
+        try Task.checkCancellation()
+        let intent = coordinator.latestEnableIntent
+        do {
+            try await reload()
+            return
+        } catch is CancellationError {
+            try Task.checkCancellation()
+            guard !coordinator.isCurrent(intent) else { throw CancellationError() }
+            await Task.yield()
+        }
+    }
 }
 
 @MainActor

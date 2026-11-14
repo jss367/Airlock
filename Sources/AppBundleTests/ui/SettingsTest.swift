@@ -260,6 +260,201 @@ final class SettingsTest: XCTestCase {
         assertEquals(writes, [2, 2])
     }
 
+    func testAppearanceReloadRecoversFromPauseAndPauseResumeWithoutRewriting() async {
+        for resumeAgain in [false, true] {
+            let coordinator = SessionCoordinator()
+            var file = 1
+            var loaded = 1
+            var writes: [Int] = []
+            var reloads = 0
+            var failures = 0
+            var resume: CheckedContinuation<Void, Never>?
+            let edit = DebouncedConfigEdit<Int>(write: { value in
+                file = value
+                writes.append(value)
+                try await reloadSettingsConfigAfterWrite(coordinator: coordinator) {
+                    reloads += 1
+                    let intent = coordinator.latestEnableIntent
+                    if reloads == 1 { await withCheckedContinuation { resume = $0 } }
+                    if coordinator.isEnabled { try coordinator.validateEnabledSession(intent) }
+                    else if !coordinator.isCurrent(intent) { throw CancellationError() }
+                    loaded = file
+                }
+            }, onFailure: { _ in failures += 1 })
+            edit.set(2, saved: loaded)
+            let write = edit.flush()
+            while resume == nil { await Task.yield() }
+            _ = coordinator.beginEnableIntent()
+            coordinator.setEnabled(false)
+            if resumeAgain {
+                _ = coordinator.beginEnableIntent()
+                coordinator.setEnabled(true)
+            }
+            // The real light session validates its captured guard after the native query.
+            resume?.resume()
+            await write?.value
+            assertEquals(writes, [2])
+            assertEquals(reloads, 2)
+            assertEquals(loaded, 2)
+            assertEquals(coordinator.isEnabled, resumeAgain)
+            assertEquals(failures, 0)
+            edit.synchronize(saved: loaded)
+            assertNil(edit.draft)
+        }
+    }
+
+    func testRepeatedEnableChangesRetryOnlyReloadAndKeepLatestIntent() async throws {
+        let coordinator = SessionCoordinator()
+        var reloads = 0
+        var finalIntent = 0
+        try await reloadSettingsConfigAfterWrite(coordinator: coordinator) {
+            reloads += 1
+            if reloads <= 3 {
+                finalIntent = coordinator.beginEnableIntent()
+                coordinator.setEnabled(!coordinator.isEnabled)
+                throw CancellationError()
+            }
+        }
+        assertEquals(reloads, 4)
+        assertEquals(coordinator.latestEnableIntent, finalIntent)
+        XCTAssertFalse(coordinator.isEnabled)
+    }
+
+    func testCancellationWithoutANewerEnableIntentFailsOnceAndRollsBackDraft() async {
+        let coordinator = SessionCoordinator()
+        var reloads = 0
+        var failures = 0
+        let edit = DebouncedConfigEdit<Int>(write: { _ in
+            try await reloadSettingsConfigAfterWrite(coordinator: coordinator) {
+                reloads += 1
+                throw CancellationError()
+            }
+        }, onFailure: { _ in failures += 1 })
+        edit.set(2, saved: 1)
+        await edit.flush()?.value
+        assertEquals(reloads, 1)
+        assertEquals(failures, 1)
+        assertNil(edit.draft)
+    }
+
+    func testTaskCancellationStopsReloadRecoveryEvenWithANewerEnableIntent() async {
+        let coordinator = SessionCoordinator()
+        var reloads = 0
+        var resume: CheckedContinuation<Void, Never>?
+        let task = Task {
+            try await reloadSettingsConfigAfterWrite(coordinator: coordinator) {
+                reloads += 1
+                await withCheckedContinuation { resume = $0 }
+                throw CancellationError()
+            }
+        }
+        while resume == nil { await Task.yield() }
+        _ = coordinator.beginEnableIntent()
+        coordinator.setEnabled(false)
+        task.cancel()
+        resume?.resume()
+        do {
+            try await task.value
+            XCTFail("A canceled owner must not start another reload")
+        } catch { assertTrue(error is CancellationError) }
+        assertEquals(reloads, 1)
+        XCTAssertFalse(coordinator.isEnabled)
+    }
+
+    func testCanceledOlderReloadReadsNewerFileInsteadOfRewritingItsOldValue() async {
+        let coordinator = SessionCoordinator()
+        var file = 1
+        var loaded = 1
+        var writes: [Int] = []
+        var reloads = 0
+        var failures = 0
+        var resume: CheckedContinuation<Void, Never>?
+        let edit = DebouncedConfigEdit<Int>(write: { value in
+            writes.append(value)
+            file = value
+            try await reloadSettingsConfigAfterWrite(coordinator: coordinator) {
+                reloads += 1
+                let intent = coordinator.latestEnableIntent
+                if reloads == 1 { await withCheckedContinuation { resume = $0 } }
+                if !coordinator.isCurrent(intent) { throw CancellationError() }
+                loaded = file
+            }
+        }, onFailure: { _ in failures += 1 })
+        edit.set(2, saved: loaded)
+        let firstWrite = edit.flush()
+        while resume == nil { await Task.yield() }
+        _ = coordinator.beginEnableIntent()
+        coordinator.setEnabled(false)
+        edit.set(3, saved: loaded)
+        await edit.flush()?.value
+        edit.synchronize(saved: loaded)
+        assertNil(edit.draft)
+        resume?.resume()
+        await firstWrite?.value
+        assertEquals(writes, [2, 3])
+        assertEquals(reloads, 3)
+        assertEquals(file, 3)
+        assertEquals(loaded, 3)
+        assertNil(edit.draft)
+        assertEquals(failures, 0)
+        XCTAssertFalse(coordinator.isEnabled)
+    }
+
+    func testCanceledReloadStillAppliesAfterAppearanceModelIsReleased() async {
+        let coordinator = SessionCoordinator()
+        var file = 1
+        var loaded = 1
+        var writes: [Int] = []
+        var reloads = 0
+        var resume: CheckedContinuation<Void, Never>?
+        var edit: DebouncedConfigEdit<Int>? = DebouncedConfigEdit(write: { value in
+            file = value
+            writes.append(value)
+            try await reloadSettingsConfigAfterWrite(coordinator: coordinator) {
+                reloads += 1
+                let intent = coordinator.latestEnableIntent
+                if reloads == 1 { await withCheckedContinuation { resume = $0 } }
+                if !coordinator.isCurrent(intent) { throw CancellationError() }
+                loaded = file
+            }
+        }, onFailure: { _ in XCTFail("Enable supersession is recoverable") })
+        edit?.set(2, saved: loaded)
+        let write = edit?.flush()
+        while resume == nil { await Task.yield() }
+        edit = nil
+        _ = coordinator.beginEnableIntent()
+        coordinator.setEnabled(false)
+        resume?.resume()
+        await write?.value
+        assertEquals(writes, [2])
+        assertEquals(loaded, 2)
+        assertEquals(reloads, 2)
+        XCTAssertFalse(coordinator.isEnabled)
+    }
+
+    func testReloadFailureAfterEnableSupersessionStillReportsAndRollsBack() async {
+        let coordinator = SessionCoordinator()
+        var reloads = 0
+        var failures = 0
+        let edit = DebouncedConfigEdit<Int>(write: { _ in
+            try await reloadSettingsConfigAfterWrite(coordinator: coordinator) {
+                reloads += 1
+                if reloads == 1 {
+                    _ = coordinator.beginEnableIntent()
+                    coordinator.setEnabled(false)
+                    throw CancellationError()
+                }
+                throw CocoaError(.fileReadNoPermission)
+            }
+        }, onFailure: { _ in failures += 1 })
+        edit.set(2, saved: 1)
+        await edit.flush()?.value
+        assertEquals(reloads, 2)
+        assertEquals(failures, 1)
+        assertNil(edit.draft)
+        XCTAssertFalse(coordinator.isEnabled)
+    }
+
     func testCmdWClosesSettingsWithCapsLockOnOrOff() throws {
         for (modifiers, characters): (NSEvent.ModifierFlags, String) in [
             (.command, "w"), ([.command, .capsLock], "w"), ([.command, .capsLock], "W"),

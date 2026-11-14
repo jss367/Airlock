@@ -172,8 +172,6 @@ final class DebouncedConfigEdit<Value: Equatable & Sendable>: ObservableObject {
         return Task {
             do {
                 try await write(value)
-            } catch is CancellationError {
-                // A newer operation superseded this reload, as in setSettingsValue.
             } catch {
                 if submitted?.revision == attempt { submitted = nil }
                 if revision == attempt {
