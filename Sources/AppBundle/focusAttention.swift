@@ -14,7 +14,8 @@ struct FocusAttentionRequest: Equatable {
 @MainActor let focusAttention = FocusAttentionState()
 
 /// Requests are validated against the live tree on every read instead of being cleared from each
-/// place that closes or moves a window, or moves focus. A stale marker can't outlive its cause.
+/// place that closes or moves a window. Focus changes also prune immediately, so a visit can't be
+/// missed when a command sequence or interrupted session leaves before the next read.
 @MainActor
 final class FocusAttentionState {
     private struct FocusSnapshot: Equatable {
@@ -52,6 +53,8 @@ final class FocusAttentionState {
     }
 
     func clear(windowId: UInt32) { requests[windowId] = nil }
+
+    func didChangeFocus() { prune() }
 
     func reset() {
         requests = [:]

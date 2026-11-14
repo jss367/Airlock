@@ -76,6 +76,7 @@ private struct FrozenFocus: AeroAny, Equatable, Sendable {
         window.focusRecency = focusRecencyCounter
         window.markAsMostRecentChild()
     }
+    focusAttention.didChangeFocus()
     return status
 }
 
