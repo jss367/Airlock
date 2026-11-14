@@ -134,12 +134,17 @@ final class WorkspaceOverviewState: ObservableObject {
     // MARK: Titles
 
     /// Read each window's real title, handing over every title found
-    func refreshWindowTitles(onTitle: @MainActor (UInt32, String) -> Void = { _, _ in }) async {
+    func refreshWindowTitles(
+        readTitle: @MainActor (UInt32) async -> String? = { id in
+            guard let window = Window.get(byId: id) else { return nil }
+            return try? await window.title
+        },
+        onTitle: @MainActor (UInt32, String) -> Void = { _, _ in },
+    ) async {
         for windowId in windowIdsFromSelectedWorkspace {
             guard !Task.isCancelled else { return }
-            guard let window = Window.get(byId: windowId),
-                  let title = try? await window.title,
-                  !title.isEmpty
+            guard let title = await readTitle(windowId),
+                  !title.isEmpty, !Task.isCancelled
             else { continue }
             onTitle(windowId, title)
             setTitle(title, forWindow: windowId)

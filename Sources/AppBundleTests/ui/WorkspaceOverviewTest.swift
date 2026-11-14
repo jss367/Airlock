@@ -169,6 +169,26 @@ final class WorkspaceOverviewTest: XCTestCase {
 
     // MARK: Titles and layout
 
+    func testCanceledTitleReadCannotOverwriteReopenedOverviewCache() async {
+        var pending: CheckedContinuation<String?, Never>?
+        var cache: [UInt32: String] = [:]
+        let closed = WorkspaceOverviewState(workspaces: [workspace("1", windows: [10], isFocused: true)])
+        let oldRead = Task {
+            await closed.refreshWindowTitles(readTitle: { _ in
+                await withCheckedContinuation { pending = $0 }
+            }) { id, title in cache[id] = title }
+        }
+        while pending == nil { await Task.yield() }
+        oldRead.cancel()
+        let reopened = WorkspaceOverviewState(workspaces: [workspace("1", windows: [10], isFocused: true)])
+        await reopened.refreshWindowTitles(readTitle: { _ in "Current title" }) { id, title in cache[id] = title }
+        pending?.resume(returning: "Stale title")
+        await oldRead.value
+        assertEquals(cache[10], "Current title")
+        assertEquals(reopened.workspaces[0].windows[0].title, "Current title")
+        assertEquals(closed.workspaces[0].windows[0].title, "")
+    }
+
     func testWindowTitleFallsBackToTheAppName() {
         let state = WorkspaceOverviewState(workspaces: [workspace("1", windows: [10, 11], isFocused: true)])
         assertEquals(state.workspaces[0].windows.map(\.displayTitle), ["App 10", "App 11"])

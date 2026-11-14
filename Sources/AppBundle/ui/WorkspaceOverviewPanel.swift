@@ -219,7 +219,7 @@ private final class WorkspaceOverviewPanel: NSPanelHud {
     /// Fill in real window titles and fresh thumbnails after the panel is already on screen
     func loadWindowDetails(captureThumbnails: Bool) {
         detailTasks.append(Task { [state] in
-            await state.refreshWindowTitles { workspaceOverviewTitleCache[$0] = $1 }
+            await state.refreshWindowTitles(onTitle: { workspaceOverviewTitleCache[$0] = $1 })
         })
         guard captureThumbnails else { return }
         let windowIds = state.windowIdsFromSelectedWorkspace
