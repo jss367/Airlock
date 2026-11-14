@@ -14,6 +14,15 @@ final class KeyCapViewTest: XCTestCase {
         )
         assertEquals(keyCapAccessibilityLabel(key: semicolon, bindingInfo: .unbound), "semicolon, unbound")
         // Modifier keys can't be bound
-        assertEquals(keyCapAccessibilityLabel(key: PhysicalKey("_capslock", "\u{21EA}"), bindingInfo: .unbound), "capslock key")
+        assertEquals(keyCapAccessibilityLabel(key: PhysicalKey("_capslock", "\u{21EA}"), bindingInfo: .unbound), "Caps Lock key")
+    }
+
+    func testEveryModifierHasASpokenName() {
+        let names = ["_capslock": "Caps Lock", "_lshift": "left Shift", "_rshift": "right Shift", "_fn": "Function", "_ctrl": "Control", "_option": "left Option", "_roption": "right Option", "_cmd": "left Command", "_rcmd": "right Command"]
+        let modifiers = KeyboardLayout.qwerty.flatMap(\.keys).filter { $0.id.hasPrefix("_") }
+        for key in modifiers {
+            assertNotNil(names[key.id])
+            assertEquals(keyCapAccessibilityLabel(key: key, bindingInfo: .unbound), "\(names[key.id]!) key")
+        }
     }
 }

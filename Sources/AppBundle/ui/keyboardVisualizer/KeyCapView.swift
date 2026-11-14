@@ -176,7 +176,13 @@ struct KeyCapView: View {
 /// What VoiceOver reads for a key cap: the key, then what it is bound to
 func keyCapAccessibilityLabel(key: PhysicalKey, bindingInfo: KeyBindingInfo) -> String {
     // Modifier keys can't be bound. Their notation is internal and their label is a symbol
-    if key.id.hasPrefix("_") { return "\(key.id.dropFirst()) key" }
+    let modifierNames = [
+        "_capslock": "Caps Lock", "_lshift": "left Shift", "_rshift": "right Shift",
+        "_fn": "Function", "_ctrl": "Control", "_option": "left Option",
+        "_roption": "right Option", "_cmd": "left Command", "_rcmd": "right Command",
+    ]
+    if let name = modifierNames[key.id] { return "\(name) key" }
+    if key.id.hasPrefix("_") { return "\(key.displayLabel) key" }
     // Notations name the key in words ("semicolon"), which reads better than its symbol
     return switch bindingInfo {
         case .appLauncher(let appName, _): "\(key.id), opens \(appName)"

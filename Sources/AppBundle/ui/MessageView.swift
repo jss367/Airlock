@@ -44,7 +44,7 @@ struct MessageView: View {
                     .font(.headline)
                     .textSelection(.enabled)
             }
-            // Read-only: nothing here takes the keyboard, so Return goes to the default button
+            // Selectable text can take first responder. The window monitor keeps Return working then.
             ScrollView {
                 Text(model.message?.body ?? "")
                     .font(.system(size: 12, design: .monospaced))
@@ -67,6 +67,7 @@ struct MessageView: View {
         }
         .padding()
         .frame(minWidth: 480, idealWidth: 560, maxWidth: 960, minHeight: 200)
+        .background(MessageCloseKeyMonitor { model.message = nil })
         .onChange(of: model.message) { _, message in
             if message == nil {
                 self.dismiss()
@@ -76,6 +77,51 @@ struct MessageView: View {
             // If user closes the screen with the macOS native close (x) button and then the error is still the same, this window will not appear again
             model.message = nil
         }
+    }
+}
+
+/// Handle Return before a selectable text view can consume it, scoped to this window only.
+private struct MessageCloseKeyMonitor: NSViewRepresentable {
+    let close: () -> Void
+
+    func makeNSView(context: Context) -> MessageCloseKeyView { MessageCloseKeyView() }
+
+    func updateNSView(_ view: MessageCloseKeyView, context: Context) { view.onClose = close }
+
+    static func dismantleNSView(_ view: MessageCloseKeyView, coordinator: ()) { view.removeMonitor() }
+}
+
+final class MessageCloseKeyView: NSView {
+    var onClose: () -> Void = {}
+    private let keyMonitor = PanelKeyMonitor()
+    private weak var monitoredWindow: NSWindow?
+    private var closeObservation: NSObjectProtocol?
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        removeMonitor()
+        guard let window else { return }
+        monitoredWindow = window
+        keyMonitor.install { [weak self] event in self?.handle(event) ?? false }
+        closeObservation = NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.removeMonitor() }
+        }
+    }
+
+    func handle(_ event: NSEvent) -> Bool {
+        guard let monitoredWindow, event.window === monitoredWindow,
+              event.type == .keyDown, event.keyCode == 36 || event.keyCode == 76,
+              event.modifierFlags.isDisjoint(with: [.command, .control, .option, .shift])
+        else { return false }
+        onClose()
+        return true
+    }
+
+    func removeMonitor() {
+        keyMonitor.remove()
+        monitoredWindow = nil
+        if let closeObservation { NotificationCenter.default.removeObserver(closeObservation) }
+        closeObservation = nil
     }
 }
 
