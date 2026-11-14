@@ -63,12 +63,12 @@ option-2
 ----
 $ airlock config --get mode.main.binding --json
 {
-  "option-w" : "workspace W",
-  "option-y" : "workspace Y",
-  "option-n" : "workspace N",
-  "option-shift-e" : "move-node-to-workspace E",
-  "option-shift-m" : "move-node-to-workspace M",
-  "option-shift-t" : "move-node-to-workspace T",
+  "option-3" : "workspace 3",
+  "option-7" : "workspace 7",
+  "option-1" : "workspace 1",
+  "option-shift-5" : "move-node-to-workspace 5",
+  "option-shift-2" : "move-node-to-workspace 2",
+  "option-shift-8" : "move-node-to-workspace 8",
 ...
 ----
 

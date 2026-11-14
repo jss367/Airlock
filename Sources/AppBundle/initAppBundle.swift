@@ -19,6 +19,8 @@ import Foundation
         interceptTermination(SIGINT)
         interceptTermination(SIGKILL)
     }
+    // Before the config registers hotkeys. Until access is granted their commands can't work
+    try await checkAccessibilityPermissions()
     if try await !reloadConfig() {
         var out = ""
         check(
@@ -32,8 +34,7 @@ import Foundation
         )
     }
 
-    checkAccessibilityPermissions()
-    checkMacOsSettings()
+    showWelcomeWindowAtStartupIfNeeded()
     startUnixSocketServer()
     GlobalObserver.initObserver()
     registerQuickSwitcherHotkey()
