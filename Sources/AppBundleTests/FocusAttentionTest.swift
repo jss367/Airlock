@@ -114,6 +114,46 @@ final class FocusAttentionTest: XCTestCase {
         assertEquals(pendingWindowIds, [])
     }
 
+    func testRenamingPendingWorkspacePreservesOrderMarkerAndFocusCommand() async throws {
+        assertEquals(updateFocusCache(other), false)
+        assertEquals(updateFocusCache(third), false)
+        let before = focusAttention.pending
+        // Exercise the real in-memory rename while keeping the user's config untouched.
+        let renamed = try await Workspace.rename(other.nodeWorkspace!, to: "renamed", updateConfig: { _, _ in true })
+        assertTrue(renamed)
+        assertEquals(pendingWindowIds, [5, 3])
+        assertEquals(focusAttention.pending.map(\.order), before.map(\.order))
+        assertEquals(focusAttention.pending.last?.workspaceName, "renamed")
+        updateTrayText()
+        assertEquals(TrayMenuModel.shared.workspaces.first { $0.name == "renamed" }?.wantsAttention, true)
+        for expected in [third!, other!] {
+            let result = try await parseCommand("focus-attention").cmdOrDie.run(.defaultEnv, .emptyStdin)
+            assertEquals(result.exitCode, 0)
+            assertTrue(focus.windowOrNil === expected)
+        }
+        assertEquals(focus.workspace.name, "renamed")
+        assertEquals(pendingWindowIds, [])
+    }
+
+    func testRenamingFocusedWorkspaceDoesNotAnswerAlwaysModeRequest() async throws {
+        config.preventFocusStealing = .always
+        assertEquals(updateFocusCache(sameWorkspace), false)
+        let renamed = try await Workspace.rename(current.nodeWorkspace!, to: "renamed-focused", updateConfig: { _, _ in true })
+        assertTrue(renamed)
+        assertEquals(pendingWindowIds, [2])
+        assertEquals(focusAttention.pending.first?.workspaceName, "renamed-focused")
+        userFocuses(sameWorkspace)
+        assertEquals(pendingWindowIds, [])
+    }
+
+    func testFailedRenameKeepsTheOriginalRequest() async throws {
+        assertEquals(updateFocusCache(other), false)
+        let renamed = try await Workspace.rename(other.nodeWorkspace!, to: "renamed", updateConfig: { _, _ in false })
+        assertEquals(renamed, false)
+        assertEquals(pendingWindowIds, [3])
+        assertEquals(focusAttention.pending.first?.workspaceName, "other")
+    }
+
     func testPauseClearsRequests() {
         assertEquals(updateFocusCache(other), false)
         defer { sessionCoordinator.setEnabled(true) }
