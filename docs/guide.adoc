@@ -35,11 +35,13 @@ Airlock keeps app and window switching within the focused workspace. With the de
 
 Airlock also blocks attempts by apps on other workspaces to steal focus. Use an explicit workspace command or the workspace overview to move between workspaces.
 
-The menu bar provides *Mission Control*, *Show Keybindings*, and *Keyboard Visualizer*. The keyboard visualizer can edit bindings in your configuration. For app launching and summoning, see xref:commands.adoc#app-launcher[app-launcher] and xref:commands.adoc#summon-app[summon-app].
+The menu bar menu lists the workspaces in use; click one to switch to it. Workspaces with no windows are under *Empty Workspaces*. Below them are the *Quick Switcher*, the *Workspace Overview*, and *Settings…* (`cmd-comma` while the menu is open). Menu items show the shortcut your configuration binds to them, if any.
+
+The Settings window has three tabs. *General* has the feature switches. *Shortcuts* lists every key binding, with a keyboard view that can also assign apps to keys. *Appearance* has the menu bar style and the focus flash outline. Each change is written to your configuration file, except the menu bar style, which is stored in the app's preferences. For app launching and summoning, see xref:commands.adoc#app-launcher[app-launcher] and xref:commands.adoc#summon-app[summon-app].
 
 === Use shortcuts without automatic window management
 
-In *Feature Settings* (or the menu bar's *Features* menu), turn off *Window management* and leave *Keyboard shortcuts* on. Airlock stops tiling windows, hiding other workspaces, intercepting workspace app-switching keys, and enforcing workspace focus. Windows stay where you place them. Window-detection and focus callbacks are suspended while management is off.
+In *Settings → General*, turn off *Window management* and leave *Keyboard shortcuts* on. Airlock stops tiling windows, hiding other workspaces, intercepting workspace app-switching keys, and enforcing workspace focus. Windows stay where you place them. Window-detection and focus callbacks are suspended while management is off.
 
 To move the focused window between monitors, bind `move-node-to-monitor` in your config. This moves the window directly while preserving its size:
 
