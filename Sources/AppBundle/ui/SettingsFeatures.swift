@@ -1,16 +1,46 @@
 import SwiftUI
 
-/// An optional on/off feature stored as a boolean key in the config file. The Features menu
-/// and the Feature Settings window both list these, so the two always offer the same toggles.
+/// An optional on/off feature stored as a boolean key in the config file. The General tab of
+/// the Settings window lists these.
 struct BoolFeature: Identifiable {
     let title: String
     let summary: String
     var table: String? = nil
     let key: String
+    var requirement: FeatureRequirement? = nil
     let isOn: @MainActor () -> Bool
 
     var id: String { (table.map { $0 + "." } ?? "") + key }
 }
+
+/// Another setting a feature depends on. While that setting is off the feature does nothing,
+/// so Settings disables its control and shows `unmetReason` instead of leaving a dead switch.
+enum FeatureRequirement {
+    case windowManagement
+    case focusFlash
+
+    func isMet(_ config: Config) -> Bool {
+        switch self {
+            case .windowManagement: config.enableWindowManagement
+            case .focusFlash: config.focusFlash.enabled
+        }
+    }
+
+    var unmetReason: String {
+        switch self {
+            case .windowManagement: "Requires Window management, which is off."
+            case .focusFlash: "Focus flash is off in General, so these have no effect."
+        }
+    }
+}
+
+/// Why a control with this requirement can't be used right now, or nil if it can.
+func unmetReason(_ requirement: FeatureRequirement?, _ config: Config) -> String? {
+    requirement.flatMap { $0.isMet(config) ? nil : $0.unmetReason }
+}
+
+/// `shouldAllowFocusChange` allows every focus change while window management is off.
+let preventFocusStealingRequirement: FeatureRequirement = .windowManagement
 
 @MainActor let behaviorFeatures: [BoolFeature] = [
     BoolFeature(
@@ -20,8 +50,8 @@ struct BoolFeature: Identifiable {
     ),
     BoolFeature(
         title: "Workspace app switching",
-        summary: "Your app switching keys (⌘Tab and ⌘` by default) cycle only the apps and windows in the current workspace. Turn this off to give those keys back to macOS. Requires Window management.",
-        key: "enable-workspace-app-switching", isOn: { config.enableWorkspaceAppSwitching },
+        summary: "Your app switching keys (⌘Tab and ⌘` by default) cycle only the apps and windows in the current workspace. Turn this off to give those keys back to macOS.",
+        key: "enable-workspace-app-switching", requirement: .windowManagement, isOn: { config.enableWorkspaceAppSwitching },
     ),
     BoolFeature(
         title: "Keyboard shortcuts",
@@ -41,7 +71,7 @@ struct BoolFeature: Identifiable {
     BoolFeature(
         title: "Focus workspace on mouse click",
         summary: "Clicking another monitor focuses the workspace shown there. Turn this off if your first click on a control only focuses its window.",
-        key: "focus-workspace-on-mouse-click", isOn: { config.focusWorkspaceOnMouseClick },
+        key: "focus-workspace-on-mouse-click", requirement: .windowManagement, isOn: { config.focusWorkspaceOnMouseClick },
     ),
     BoolFeature(
         title: "Unhide apps hidden with ⌘H",
@@ -63,32 +93,14 @@ struct BoolFeature: Identifiable {
     ),
 ]
 
-/// Toggles for Airlock's optional features. Each change is written to the config file and
-/// the config is reloaded. The menu reads the live `config`, which the reload's light session
-/// republishes through `TrayMenuModel`, so the checkmarks follow edits made in the file too.
-@MainActor @ViewBuilder
-func featuresMenu() -> some View {
-    Menu("Features") {
-        Picker("Prevent focus stealing", selection: preventFocusStealingBinding()) {
-            ForEach(PreventFocusStealingMode.allCases, id: \.self) { mode in
-                Text(mode.menuTitle).tag(mode)
-            }
-        }
-        ForEach(behaviorFeatures) { feature in
-            Toggle(feature.title, isOn: binding(for: feature))
-        }
-        Divider()
-        ForEach(appFeatures) { feature in
-            Toggle(feature.title, isOn: binding(for: feature))
-        }
-    }
-}
-
+/// Each change is written to the config file and the config is reloaded. The getter reads the
+/// live `config`, which the reload republishes through `TrayMenuModel`, so the switches follow
+/// edits made in the file too.
 @MainActor
 func binding(for feature: BoolFeature) -> Binding<Bool> {
     Binding(
         get: { feature.isOn() },
-        set: { setFeature(table: feature.table, key: feature.key, value: $0 ? "true" : "false") },
+        set: { setSettingsValue(table: feature.table, key: feature.key, value: $0 ? "true" : "false") },
     )
 }
 
@@ -96,13 +108,13 @@ func binding(for feature: BoolFeature) -> Binding<Bool> {
 func preventFocusStealingBinding() -> Binding<PreventFocusStealingMode> {
     Binding(
         get: { config.preventFocusStealing },
-        set: { setFeature(key: "prevent-focus-stealing", value: "'\($0.rawValue)'") },
+        set: { setSettingsValue(key: "prevent-focus-stealing", value: "'\($0.rawValue)'") },
     )
 }
 
-/// Works while Airlock is paused too, see `reloadConfigFromUi`.
+/// `value` is already TOML-encoded. Works while Airlock is paused too, see `reloadConfigFromUi`.
 @MainActor
-private func setFeature(table: String? = nil, key: String, value: String) {
+func setSettingsValue(table: String? = nil, key: String, value: String) {
     Task {
         do {
             try setConfigValue(table: table, key: key, value: value)
@@ -110,7 +122,7 @@ private func setFeature(table: String? = nil, key: String, value: String) {
         } catch is CancellationError {
             // A newer operation superseded this reload.
         } catch {
-            logAppError(error, operation: "Updating feature settings")
+            logAppError(error, operation: "Updating settings")
             MessageModel.shared.message = Message(description: "Airlock Config Error", body: error.localizedDescription)
         }
     }
