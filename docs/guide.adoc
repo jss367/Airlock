@@ -35,7 +35,9 @@ Airlock keeps app and window switching within the focused workspace. With the de
 
 Airlock also blocks attempts by apps on other workspaces to steal focus. Use an explicit workspace command or the workspace overview to move between workspaces.
 
-The menu bar provides *Mission Control*, *Show Keybindings*, and *Keyboard Visualizer*. The keyboard visualizer can edit bindings in your configuration. For app launching and summoning, see xref:commands.adoc#app-launcher[app-launcher] and xref:commands.adoc#summon-app[summon-app].
+The workspace overview shows every workspace that has windows, with a thumbnail of each window. Open it from the menu bar, or bind xref:commands.adoc#workspace-overview[workspace-overview] to a key; the same key closes it. The arrow keys move across workspaces and into their windows, and `Return` opens the selection. It is Airlock's own view and is separate from the macOS Mission Control (see <<a-note-on-mission-control>>).
+
+The menu bar provides *Workspace Overview*, *Show Keybindings*, and *Keyboard Visualizer*. The keyboard visualizer can edit bindings in your configuration. For app launching and summoning, see xref:commands.adoc#app-launcher[app-launcher] and xref:commands.adoc#summon-app[summon-app].
 
 === Use shortcuts without automatic window management
 
@@ -402,10 +404,12 @@ image::./assets/monitor-arrangement-2-bad.svg[,,align="center"]
 image::./assets/monitor-arrangement-2-good.svg[,,align="center"]
 
 [#a-note-on-mission-control]
-=== A note on mission control
+=== A note on macOS Mission Control
 
-For some reason, mission control doesn't like that Airlock puts a lot of windows in the bottom right corner of the screen.
-Mission control shows windows too small even when there is enough space to show them bigger.
+This is about the Mission Control built into macOS, not Airlock's own xref:commands.adoc#workspace-overview[workspace overview].
+
+For some reason, Mission Control doesn't like that Airlock puts a lot of windows in the bottom right corner of the screen.
+Mission Control shows windows too small even when there is enough space to show them bigger.
 
 There is a workaround. You can enable `Group windows by application` setting:
 [source,bash]
