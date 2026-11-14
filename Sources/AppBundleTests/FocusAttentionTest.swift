@@ -73,6 +73,35 @@ final class FocusAttentionTest: XCTestCase {
         assertEquals(pendingWindowIds, [3])
     }
 
+    func testVisitingWorkspaceAndLeavingBeforeReadingClearsItsRequests() {
+        assertEquals(updateFocusCache(other), false)
+        // A command sequence can visit and leave before the tray reads attention state.
+        check(other.focusWindow())
+        check(current.focusWindow())
+        assertEquals(pendingWindowIds, [])
+    }
+
+    func testAlwaysModeFocusChangeCannotBeUndoneByReturningBeforeReading() {
+        config.preventFocusStealing = .always
+        assertEquals(updateFocusCache(sameWorkspace), false)
+        check(sameWorkspace.focusWindow())
+        check(current.focusWindow())
+        assertEquals(pendingWindowIds, [])
+    }
+
+    func testInterruptedSessionDoesNotRetainAnAnsweredRequest() async throws {
+        assertEquals(updateFocusCache(other), false)
+        do {
+            try await runLightSession(.menuBarButton, .enabled, syncFocusBeforeBody: false) {
+                check(self.other.focusWindow())
+                throw CancellationError()
+            }
+            XCTFail("The interrupted session must throw")
+        } catch is CancellationError {}
+        check(current.focusWindow())
+        assertEquals(pendingWindowIds, [])
+    }
+
     func testClosingTheWindowClearsItsRequest() {
         assertEquals(updateFocusCache(other), false)
         other.closeAxWindow()
