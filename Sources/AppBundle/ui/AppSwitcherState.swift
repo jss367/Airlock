@@ -16,6 +16,11 @@ struct AppGroup: Identifiable {
     let name: String
     let icon: NSImage
     var windows: [AppGroupWindow]
+
+    /// What VoiceOver reads for the app's icon
+    var accessibilityLabel: String {
+        "\(name), \(windows.count) \(windows.count == 1 ? "window" : "windows")"
+    }
 }
 
 // MARK: - Observable State

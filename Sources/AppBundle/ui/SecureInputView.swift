@@ -3,7 +3,9 @@ import Carbon
 import SwiftUI
 
 private let iconSize = CGSize(width: 50, height: 50)
-private let textSize = CGSize(width: 440, height: 110)
+private let textSize = CGSize(width: 440, height: 170)
+
+private let secureInputSummary = "Secure Input is on, so Airlock's keyboard shortcuts are paused"
 
 public final class SecureInputPanel: NSPanelHud {
     @MainActor public static var shared: SecureInputPanel = SecureInputPanel()
@@ -11,6 +13,8 @@ public final class SecureInputPanel: NSPanelHud {
 
     override private init() {
         super.init()
+        // Airlock is rarely the active app, and the collapsed tile explains itself only through its tooltip
+        allowsToolTipsWhenApplicationIsInactive = true
     }
 
     @MainActor
@@ -60,23 +64,43 @@ struct SecureInputView: View {
                     .aspectRatio(contentMode: .fit)
                     .padding(6)
             } else {
-                Text("Airlock cannot respond to keyboard shortcuts while **Secure Input** is active. **Secure Input** is a macOS security feature that prevents applications from reading keyboard events.")
-                    .font(.title3)
-                    .padding(10)
+                explanation
+                    .font(.system(size: 13))
+                    .padding(12)
             }
         }
         .foregroundStyle(fontColor)
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .onTapGesture {
-            if !isMinimized {
-                SecureInputPanel.shared.refresh()
-            }
-            isMinimized.toggle()
-            SecureInputPanel.shared.updateFrame(isMinimized: isMinimized)
-        }
+        .contentShape(Rectangle())
+        .onTapGesture { toggle() }
         .frame(
             width: isMinimized ? iconSize.width : textSize.width,
             height: isMinimized ? iconSize.height : textSize.height,
         )
+        .help(isMinimized ? "\(secureInputSummary). Click for what to do." : "Click to collapse")
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(isMinimized ? Text(secureInputSummary) : explanation)
+        .accessibilityHint(isMinimized ? "Shows what to do about it" : "Collapses this message")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction { toggle() }
+    }
+
+    private var explanation: Text {
+        Text("""
+            **Secure Input is on**, so Airlock can't see your keyboard shortcuts. macOS turns it on while a \
+            password field has the keyboard, and some apps leave it on.
+
+            To get shortcuts back, find the app holding it: finish or leave its password prompt, unlock it, \
+            or turn off its secure keyboard entry setting (Terminal and iTerm2 have one). Quitting that app \
+            releases it too.
+            """)
+    }
+
+    private func toggle() {
+        if !isMinimized {
+            SecureInputPanel.shared.refresh()
+        }
+        isMinimized.toggle()
+        SecureInputPanel.shared.updateFrame(isMinimized: isMinimized)
     }
 }
