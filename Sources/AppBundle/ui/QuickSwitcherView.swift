@@ -213,7 +213,7 @@ private final class QuickSwitcherPanel: NSPanelHud, AppLauncherPresentation {
                 }
                 Task {
                     do {
-                        try await runLightSession(.menuBarButton, token) {
+                        try await runLightSession(.quickSwitcher, token) {
                             switch item.kind {
                                 case .workspace(let name):
                                     focusWorkspaceFromUi(Workspace.get(byName: name))

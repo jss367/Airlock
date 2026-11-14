@@ -150,7 +150,7 @@ private func activateOverviewTarget(_ target: WorkspaceOverviewTarget, from stat
     guard let token: RunSessionGuard = .isServerEnabled else { return dismissMissionControl(restoreFocus: false) }
     Task {
         do {
-            try await runLightSession(.menuBarButton, token) {
+            try await runLightSession(.missionControl, token) {
                 switch target {
                     case .workspace(let name):
                         focusWorkspaceFromUi(Workspace.get(byName: name))

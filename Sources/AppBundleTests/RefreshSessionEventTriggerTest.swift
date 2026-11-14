@@ -30,6 +30,7 @@ final class RefreshSessionEventTriggerTest: XCTestCase {
     func testArgumentlessTriggersAreKebabCase() {
         let triggers: [RefreshSessionEvent] = [
             .configAutoReload, .globalObserverLeftMouseUp, .menuBarButton, .hotkeyBinding, .startup,
+            .appSwitcher, .quickSwitcher, .appLauncher, .missionControl,
             .resetManipulatedWithMouse, .onFocusedMonitorChanged, .onFocusChanged, .onModeChanged,
             .onWindowDetected,
         ]
