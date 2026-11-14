@@ -6,6 +6,7 @@ func normalizeLayoutReason() async throws {
     }
     try await _normalizeLayoutReason(workspace: focus.workspace, windows: macosMinimizedWindowsContainer.children.filterIsInstance(of: Window.self))
     try await validateStillPopups()
+    if focusAttention.resolveDeferredRequests() { updateTrayText() }
 }
 
 @MainActor

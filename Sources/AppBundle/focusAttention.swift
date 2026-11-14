@@ -24,6 +24,17 @@ final class FocusAttentionState {
     }
 
     private var requests: [UInt32: FocusAttentionRequest] = [:]
+    private final class DeferredRequest {
+        weak var window: Window?
+        let order: UInt64
+
+        init(_ window: Window, order: UInt64) {
+            self.window = window
+            self.order = order
+        }
+    }
+
+    private var deferredRequests: [UInt32: DeferredRequest] = [:]
     private var counter: UInt64 = 0
     /// Focus as of the last look. A request ends when focus arrives on its workspace, and in
     /// `always` mode the blocked window can already be on the focused workspace, so "is focused"
@@ -40,21 +51,47 @@ final class FocusAttentionState {
 
     /// `window` was just denied focus
     func record(_ window: Window) {
-        prune()
-        guard isDeferringFocus, let workspace = window.nodeWorkspace else { return }
+        _ = resolveDeferredRequests()
+        let workspace = window.nodeWorkspace
+        guard isDeferringFocus, workspace != nil || window.parent === macosMinimizedWindowsContainer else { return }
         counter += 1
-        requests[window.windowId] = FocusAttentionRequest(windowId: window.windowId, workspaceName: workspace.name, order: counter)
+        requests[window.windowId] = workspace.map { FocusAttentionRequest(windowId: window.windowId, workspaceName: $0.name, order: counter) }
+        deferredRequests[window.windowId] = workspace == nil ? DeferredRequest(window, order: counter) : nil
     }
 
     /// Live requests, most recent first
     var pending: [FocusAttentionRequest] {
-        prune()
+        _ = resolveDeferredRequests()
         return requests.values.sorted { $0.order > $1.order }
     }
 
-    func clear(windowId: UInt32) { requests[windowId] = nil }
+    func clear(windowId: UInt32) {
+        requests[windowId] = nil
+        deferredRequests[windowId] = nil
+    }
 
-    func didChangeFocus() { prune() }
+    /// Focus sync precedes layout normalization. A restored window can still be in the global
+    /// minimized container when its focus is denied, so keep the request until its workspace exists.
+    func resolveDeferredRequests() -> Bool {
+        // Observe focus before adding recovered requests: normalization changing the focus fallback
+        // must not count as the user answering a request that has only just become resolvable.
+        prune()
+        guard isDeferringFocus else { return false }
+        var resolved = false
+        for (id, request) in deferredRequests {
+            guard let window = request.window, window.isBound else {
+                deferredRequests[id] = nil
+                continue
+            }
+            guard let workspace = window.nodeWorkspace else { continue }
+            requests[id] = FocusAttentionRequest(windowId: id, workspaceName: workspace.name, order: request.order)
+            deferredRequests[id] = nil
+            resolved = true
+        }
+        return resolved
+    }
+
+    func didChangeFocus() { _ = resolveDeferredRequests() }
 
     /// Renaming keeps the same workspace and does not answer its requests.
     func renameWorkspace(from oldName: String, to newName: String) {
@@ -70,6 +107,7 @@ final class FocusAttentionState {
 
     func reset() {
         requests = [:]
+        deferredRequests = [:]
         seenFocus = nil
     }
 

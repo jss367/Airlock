@@ -114,6 +114,68 @@ final class FocusAttentionTest: XCTestCase {
         assertEquals(pendingWindowIds, [])
     }
 
+    func testDeniedRestoredWindowWaitsForWorkspaceNormalization() async throws {
+        config.preventFocusStealing = .always
+        let workspace = sameWorkspace.nodeWorkspace!
+        sameWorkspace.bind(to: macosMinimizedWindowsContainer, adaptiveWeight: 1, index: INDEX_BIND_LAST)
+        assertEquals(updateFocusCache(sameWorkspace), false)
+        assertEquals(pendingWindowIds, []) // The model has not normalized the restored window yet.
+        sameWorkspace.bind(to: workspace.rootTilingContainer, adaptiveWeight: 1, index: INDEX_BIND_LAST)
+        assertTrue(focusAttention.resolveDeferredRequests())
+        updateTrayText()
+        assertEquals(pendingWindowIds, [2])
+        assertEquals(TrayMenuModel.shared.workspaces.first { $0.name == workspace.name }?.wantsAttention, true)
+        let result = try await parseCommand("focus-attention").cmdOrDie.run(.defaultEnv, .emptyStdin)
+        assertEquals(result.exitCode, 0)
+        assertTrue(focus.windowOrNil === sameWorkspace)
+        assertEquals(pendingWindowIds, [])
+    }
+
+    func testRepeatedMinimizedDenialsKeepTheirOriginalRecencyWhenResolved() {
+        config.preventFocusStealing = .always
+        let workspace = sameWorkspace.nodeWorkspace!
+        assertEquals(updateFocusCache(other), false)
+        sameWorkspace.bind(to: macosMinimizedWindowsContainer, adaptiveWeight: 1, index: INDEX_BIND_LAST)
+        assertEquals(updateFocusCache(sameWorkspace), false)
+        assertEquals(updateFocusCache(sameWorkspace), false)
+        assertEquals(updateFocusCache(third), false)
+        sameWorkspace.bind(to: workspace.rootTilingContainer, adaptiveWeight: 1, index: INDEX_BIND_LAST)
+        assertEquals(pendingWindowIds, [5, 2, 3])
+    }
+
+    func testNormalizationChangingTheFocusFallbackDoesNotAnswerTheNewRequest() {
+        config.preventFocusStealing = .always
+        let workspace = current.nodeWorkspace!
+        current.bind(to: macosMinimizedWindowsContainer, adaptiveWeight: 1, index: INDEX_BIND_LAST)
+        assertTrue(focus.windowOrNil === sameWorkspace)
+        _ = updateFocusCache(nil) // macOS lost native window focus while the window was minimized.
+        assertEquals(updateFocusCache(current), false)
+        current.bind(to: workspace.rootTilingContainer, adaptiveWeight: 1, index: INDEX_BIND_LAST)
+        assertTrue(focusAttention.resolveDeferredRequests())
+        assertEquals(pendingWindowIds, [1])
+    }
+
+    func testClosingAnUnresolvedWindowDoesNotCreateAttentionForAReusedId() {
+        config.preventFocusStealing = .always
+        let workspace = sameWorkspace.nodeWorkspace!
+        sameWorkspace.bind(to: macosMinimizedWindowsContainer, adaptiveWeight: 1, index: INDEX_BIND_LAST)
+        assertEquals(updateFocusCache(sameWorkspace), false)
+        sameWorkspace.closeAxWindow()
+        TestWindow.new(id: 2, parent: workspace.rootTilingContainer)
+        assertEquals(pendingWindowIds, [])
+    }
+
+    func testPauseClearsAnUnresolvedMinimizedRequest() {
+        config.preventFocusStealing = .always
+        let workspace = sameWorkspace.nodeWorkspace!
+        sameWorkspace.bind(to: macosMinimizedWindowsContainer, adaptiveWeight: 1, index: INDEX_BIND_LAST)
+        assertEquals(updateFocusCache(sameWorkspace), false)
+        sessionCoordinator.setEnabled(false)
+        sessionCoordinator.setEnabled(true)
+        sameWorkspace.bind(to: workspace.rootTilingContainer, adaptiveWeight: 1, index: INDEX_BIND_LAST)
+        assertEquals(pendingWindowIds, [])
+    }
+
     func testRenamingPendingWorkspacePreservesOrderMarkerAndFocusCommand() async throws {
         assertEquals(updateFocusCache(other), false)
         assertEquals(updateFocusCache(third), false)
