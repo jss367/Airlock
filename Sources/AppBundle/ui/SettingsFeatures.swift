@@ -117,15 +117,26 @@ func preventFocusStealingBinding() -> Binding<PreventFocusStealingMode> {
 func setSettingsValue(table: String? = nil, key: String, value: String) {
     Task {
         do {
-            try setConfigValue(table: table, key: key, value: value)
-            try await reloadConfigFromUi(.menuBarButton)
+            try await writeSettingsValue(table: table, key: key, value: value)
         } catch is CancellationError {
             // A newer operation superseded this reload.
         } catch {
-            logAppError(error, operation: "Updating settings")
-            MessageModel.shared.message = Message(description: "Airlock Config Error", body: error.localizedDescription)
+            reportSettingsWriteFailure(error)
         }
     }
+}
+
+/// An awaitable writer lets appearance edits stop overriding config after a failed submission.
+@MainActor
+func writeSettingsValue(table: String? = nil, key: String, value: String) async throws {
+    try setConfigValue(table: table, key: key, value: value)
+    try await reloadConfigFromUi(.menuBarButton)
+}
+
+@MainActor
+func reportSettingsWriteFailure(_ error: Error) {
+    logAppError(error, operation: "Updating settings")
+    MessageModel.shared.message = Message(description: "Airlock Config Error", body: error.localizedDescription)
 }
 
 extension PreventFocusStealingMode {

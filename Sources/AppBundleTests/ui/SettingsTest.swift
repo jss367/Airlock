@@ -77,8 +77,8 @@ final class SettingsTest: XCTestCase {
         let edit = DebouncedConfigEdit<Int>(wait: { try await Task.sleep(for: .seconds(30)) }, write: { writes.append($0) })
         edit.set(2, saved: 1)
         edit.set(3, saved: 1)
-        edit.flush() // The view's onDisappear, before the debounce elapsed.
-        edit.flush() // Closing the window after changing tabs must not write twice.
+        await edit.flush()?.value // The view's onDisappear, before the debounce elapsed.
+        await edit.flush()?.value // Closing the window after changing tabs must not write twice.
         for _ in 0 ..< 10 { await Task.yield() }
         assertEquals(writes, [3])
         edit.synchronize(saved: 3)
@@ -91,7 +91,7 @@ final class SettingsTest: XCTestCase {
         let edit = DebouncedConfigEdit<Int>(wait: { await withCheckedContinuation { resume = $0 } }, write: { writes.append($0) })
         edit.set(2, saved: 1)
         while resume == nil { await Task.yield() }
-        edit.flush()
+        await edit.flush()?.value
         resume?.resume()
         for _ in 0 ..< 10 { await Task.yield() }
         assertEquals(writes, [2])
@@ -105,40 +105,40 @@ final class SettingsTest: XCTestCase {
         while resume == nil { await Task.yield() }
         resume?.resume()
         while writes.isEmpty { await Task.yield() }
-        edit.flush()
+        await edit.flush()?.value
         assertEquals(writes, [2])
     }
 
-    func testReturningToSavedValueCancelsThePendingEdit() {
+    func testReturningToSavedValueCancelsThePendingEdit() async {
         var writes: [Int] = []
         let edit = DebouncedConfigEdit<Int>(write: { writes.append($0) })
         edit.set(2, saved: 1)
         edit.set(1, saved: 1)
-        edit.flush()
+        await edit.flush()?.value
         assertEquals(writes, [])
     }
 
-    func testRevertingBeforeReloadPreservesTheLatestEdit() {
+    func testRevertingBeforeReloadPreservesTheLatestEdit() async {
         var writes: [Int] = []
         let edit = DebouncedConfigEdit<Int>(write: { writes.append($0) })
         edit.set(2, saved: 1)
-        edit.flush() // Disk write started, but the UI still sees saved == 1.
+        await edit.flush()?.value // Disk write started, but the UI still sees saved == 1.
         edit.set(1, saved: 1)
         edit.synchronize(saved: 2) // Delayed reload of the first write.
         assertEquals(edit.draft, 1)
-        edit.flush()
+        await edit.flush()?.value
         assertEquals(writes, [2, 1])
         edit.synchronize(saved: 1)
         assertNil(edit.draft)
     }
 
-    func testClosingBeforeReloadStillWritesTheRevertedValue() {
+    func testClosingBeforeReloadStillWritesTheRevertedValue() async {
         var writes: [Int] = []
         let edit = DebouncedConfigEdit<Int>(write: { writes.append($0) })
         edit.set(2, saved: 1)
-        edit.flush()
+        await edit.flush()?.value
         edit.set(1, saved: 1)
-        edit.flush() // Window/tab teardown before either reload has acknowledged a write.
+        await edit.flush()?.value // Window/tab teardown before either reload has acknowledged a write.
         assertEquals(writes, [2, 1])
         edit.synchronize(saved: 2)
         assertEquals(edit.draft, 1)
@@ -146,16 +146,118 @@ final class SettingsTest: XCTestCase {
         assertNil(edit.draft)
     }
 
-    func testStaleMatchingReloadCannotCancelARevertBehindAnOutstandingWrite() {
+    func testStaleMatchingReloadCannotCancelARevertBehindAnOutstandingWrite() async {
         var writes: [Int] = []
         let edit = DebouncedConfigEdit<Int>(write: { writes.append($0) })
         edit.set(2, saved: 1)
-        edit.flush()
+        await edit.flush()?.value
         edit.set(1, saved: 1)
         edit.synchronize(saved: 1) // This value predates the outstanding write of 2.
         assertEquals(edit.draft, 1)
-        edit.flush()
+        await edit.flush()?.value
         assertEquals(writes, [2, 1])
+    }
+
+    func testFailedAppearanceWriteRollsBackAndAllowsRetry() async {
+        struct WriteFailure: Error {}
+        var attempts: [Int] = []
+        var failures = 0
+        let edit = DebouncedConfigEdit<Int>(write: {
+            attempts.append($0)
+            throw WriteFailure()
+        }, onFailure: { _ in failures += 1 })
+        edit.set(2, saved: 1)
+        await edit.flush()?.value
+        assertNil(edit.draft) // The control follows the loaded value again.
+        edit.set(2, saved: 1)
+        await edit.flush()?.value
+        assertEquals(attempts, [2, 2])
+        assertEquals(failures, 2)
+        assertNil(edit.draft)
+    }
+
+    func testFailedOlderWritePreservesTheNewerPendingEdit() async {
+        var resume: CheckedContinuation<Void, Error>?
+        var writes: [Int] = []
+        var failures = 0
+        let edit = DebouncedConfigEdit<Int>(write: { value in
+            writes.append(value)
+            if writes.count == 1 { try await withCheckedThrowingContinuation { resume = $0 } }
+        }, onFailure: { _ in failures += 1 })
+        edit.set(2, saved: 1)
+        let firstWrite = edit.flush()
+        while resume == nil { await Task.yield() }
+        edit.set(3, saved: 1)
+        resume?.resume(throwing: CocoaError(.fileWriteNoPermission))
+        await firstWrite?.value
+        assertEquals(edit.draft, 3)
+        await edit.flush()?.value
+        assertEquals(writes, [2, 3])
+        assertEquals(failures, 1)
+        edit.synchronize(saved: 3)
+        assertNil(edit.draft)
+    }
+
+    func testFailedOlderWriteRequeuesANewerMatchingDraft() async {
+        var resume: CheckedContinuation<Void, Error>?
+        var writes: [Int] = []
+        let edit = DebouncedConfigEdit<Int>(write: { value in
+            writes.append(value)
+            if writes.count == 1 { try await withCheckedThrowingContinuation { resume = $0 } }
+        }, onFailure: { _ in })
+        edit.set(2, saved: 1)
+        let firstWrite = edit.flush()
+        while resume == nil { await Task.yield() }
+        edit.set(3, saved: 1)
+        edit.set(2, saved: 1) // Matches the outstanding submission, so no write is queued yet.
+        resume?.resume(throwing: CocoaError(.fileWriteNoPermission))
+        await firstWrite?.value
+        assertEquals(edit.draft, 2)
+        await edit.flush()?.value
+        assertEquals(writes, [2, 2])
+        edit.synchronize(saved: 2)
+        assertNil(edit.draft)
+    }
+
+    func testFailedOlderWriteDoesNotForgetANewerSubmission() async {
+        var resume: CheckedContinuation<Void, Error>?
+        var writes: [Int] = []
+        let edit = DebouncedConfigEdit<Int>(write: { value in
+            writes.append(value)
+            if writes.count == 1 { try await withCheckedThrowingContinuation { resume = $0 } }
+        }, onFailure: { _ in })
+        edit.set(2, saved: 1)
+        let firstWrite = edit.flush()
+        while resume == nil { await Task.yield() }
+        edit.set(3, saved: 1)
+        await edit.flush()?.value
+        resume?.resume(throwing: CocoaError(.fileWriteNoPermission))
+        await firstWrite?.value
+        assertEquals(edit.draft, 3)
+        edit.set(1, saved: 1) // A revert must still be written behind the newer submission.
+        await edit.flush()?.value
+        assertEquals(writes, [2, 3, 1])
+        edit.synchronize(saved: 1)
+        assertNil(edit.draft)
+    }
+
+    func testFailureAfterTeardownKeepsANewerMatchingEditAliveUntilWritten() async {
+        var resume: CheckedContinuation<Void, Error>?
+        var writes: [Int] = []
+        var edit: DebouncedConfigEdit<Int>? = DebouncedConfigEdit(write: { value in
+            writes.append(value)
+            if writes.count == 1 { try await withCheckedThrowingContinuation { resume = $0 } }
+        }, onFailure: { _ in })
+        edit?.set(2, saved: 1)
+        let firstWrite = edit?.flush()
+        while resume == nil { await Task.yield() }
+        edit?.set(3, saved: 1)
+        edit?.set(2, saved: 1)
+        edit?.flush() // No pending write: the draft matches the outstanding submission.
+        edit = nil // The window/tab released its model.
+        resume?.resume(throwing: CocoaError(.fileWriteNoPermission))
+        await firstWrite?.value
+        assertEquals(writes, [2, 2])
     }
 
     func testCmdWClosesSettingsWithCapsLockOnOrOff() throws {

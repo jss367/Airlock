@@ -52,7 +52,7 @@ struct AppearanceSettingsPane: View {
             Group {
                 SettingsRow(title: "Color", summary: "The color of the outline drawn around the focused window.") {
                     DebouncedConfigValue(saved: normalizedAARRGGBB(flash.color)) {
-                        setSettingsValue(table: "focus-flash", key: "color", value: "'\($0)'")
+                        try await writeSettingsValue(table: "focus-flash", key: "color", value: "'\($0)'")
                     } control: { hex in
                         ColorPicker("Color", selection: colorBinding(hex), supportsOpacity: true)
                             .labelsHidden()
@@ -61,7 +61,7 @@ struct AppearanceSettingsPane: View {
                 Divider()
                 SettingsRow(title: "Width", summary: "How thick the outline is, in points.") {
                     DebouncedConfigValue(saved: flash.width) {
-                        setSettingsValue(table: "focus-flash", key: "width", value: String($0))
+                        try await writeSettingsValue(table: "focus-flash", key: "width", value: String($0))
                     } control: { width in
                         Stepper(value: width, in: 1 ... 40, step: 1) {
                             Text("\(width.wrappedValue.formatted()) pt").monospacedDigit()
@@ -71,7 +71,7 @@ struct AppearanceSettingsPane: View {
                 Divider()
                 SettingsRow(title: "Duration", summary: "How long the outline stays on screen, in milliseconds.") {
                     DebouncedConfigValue(saved: flash.durationMs) {
-                        setSettingsValue(table: "focus-flash", key: "duration-ms", value: String($0))
+                        try await writeSettingsValue(table: "focus-flash", key: "duration-ms", value: String($0))
                     } control: { duration in
                         Stepper(value: duration, in: 100 ... 5000, step: 50) {
                             Text("\(duration.wrappedValue) ms").monospacedDigit()
@@ -101,7 +101,7 @@ private struct DebouncedConfigValue<Value: Equatable & Sendable, Control: View>:
     let control: (Binding<Value>) -> Control
     @StateObject private var edit: DebouncedConfigEdit<Value>
 
-    init(saved: Value, write: @MainActor @escaping (Value) -> Void, @ViewBuilder control: @escaping (Binding<Value>) -> Control) {
+    init(saved: Value, write: @MainActor @escaping (Value) async throws -> Void, @ViewBuilder control: @escaping (Binding<Value>) -> Control) {
         self.saved = saved
         self.control = control
         self._edit = StateObject(wrappedValue: DebouncedConfigEdit(write: write))
@@ -122,46 +122,78 @@ final class DebouncedConfigEdit<Value: Equatable & Sendable>: ObservableObject {
     @Published private(set) var draft: Value?
     private var pending: Value?
     /// The latest value handed to the writer, until the loaded config acknowledges it.
-    private var submitted: Value?
+    private var submitted: (revision: UInt64, value: Value)?
+    private var revision: UInt64 = 0
     private var pendingWait: Task<Void, Never>?
     private let wait: @MainActor () async throws -> Void
-    private let write: @MainActor (Value) -> Void
+    private let write: @MainActor (Value) async throws -> Void
+    private let onFailure: @MainActor (Error) -> Void
 
     init(
         wait: @MainActor @escaping () async throws -> Void = { try await Task.sleep(for: .milliseconds(300)) },
-        write: @MainActor @escaping (Value) -> Void,
+        write: @MainActor @escaping (Value) async throws -> Void,
+        onFailure: @MainActor @escaping (Error) -> Void = { reportSettingsWriteFailure($0) },
     ) {
         self.wait = wait
         self.write = write
+        self.onFailure = onFailure
     }
 
     func set(_ value: Value, saved: Value) {
+        revision += 1
         draft = value
-        pendingWait?.cancel()
-        pendingWait = nil
         // The UI's saved value can lag behind a write. Reverting to it still needs a write
         // when a different value has already been submitted.
-        pending = value == (submitted ?? saved) ? nil : value
+        pending = value == (submitted?.value ?? saved) ? nil : value
+        schedulePendingWrite()
+    }
+
+    private func schedulePendingWrite() {
+        pendingWait?.cancel()
+        pendingWait = nil
         guard pending != nil else { return }
         let wait = wait
         pendingWait = Task { [weak self] in
             guard !Task.isCancelled else { return }
             do { try await wait() } catch { return }
-            if !Task.isCancelled { self?.flush() }
+            if !Task.isCancelled { _ = self?.flush() }
         }
     }
 
-    func flush() {
+    @discardableResult
+    func flush() -> Task<Void, Never>? {
         pendingWait?.cancel()
         pendingWait = nil
-        guard let value = pending else { return }
+        guard let value = pending else { return nil }
         pending = nil
-        submitted = value
-        write(value)
+        let attempt = revision
+        submitted = (attempt, value)
+        // Keep this edit alive through teardown until its write/reload reports the outcome.
+        return Task {
+            do {
+                try await write(value)
+            } catch is CancellationError {
+                // A newer operation superseded this reload, as in setSettingsValue.
+            } catch {
+                if submitted?.revision == attempt { submitted = nil }
+                if revision == attempt {
+                    draft = nil
+                    pending = nil
+                    pendingWait?.cancel()
+                    pendingWait = nil
+                } else if submitted == nil, let draft {
+                    // A newer edit may have matched the failed submission and skipped a write.
+                    // Commit that intent even if the view closed while this write was running.
+                    pending = draft
+                    await flush()?.value
+                }
+                onFailure(error)
+            }
+        }
     }
 
     func synchronize(saved: Value) {
-        if submitted == saved { submitted = nil }
+        if submitted?.value == saved { submitted = nil }
         guard draft == saved, submitted == nil else { return }
         draft = nil
         pending = nil
