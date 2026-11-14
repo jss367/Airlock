@@ -30,10 +30,10 @@ Airlock keeps app and window switching within the focused workspace. With the de
 
 * `cmd-tab` and `shift-cmd-tab` cycle applications in the current workspace.
 * `cmd-backtick` and `shift-cmd-backtick` cycle windows of the same app in that workspace.
-* `option-space` opens the quick switcher for the current workspace.
+* `option-space` opens the quick switcher. It searches the windows of every workspace by title and app, most recently used first, along with workspaces and installed apps, and offers a web search when nothing matches.
 * `option-1` through `option-9` switch to the corresponding workspace.
 
-Airlock also blocks attempts by apps on other workspaces to steal focus. Use an explicit workspace command or the workspace overview to move between workspaces.
+Airlock also blocks attempts by apps on other workspaces to steal focus. Use an explicit workspace command, the quick switcher, or the workspace overview to move between workspaces.
 
 The menu bar provides *Mission Control*, *Show Keybindings*, and *Keyboard Visualizer*. The keyboard visualizer can edit bindings in your configuration. For app launching and summoning, see xref:commands.adoc#app-launcher[app-launcher] and xref:commands.adoc#summon-app[summon-app].
 

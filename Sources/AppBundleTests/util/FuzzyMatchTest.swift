@@ -36,7 +36,7 @@ final class FuzzyMatchTest: XCTestCase {
     func testCaseInsensitive() {
         let score1 = fuzzyMatch(query: "abc", target: "ABC")
         let score2 = fuzzyMatch(query: "ABC", target: "abc")
-        let score3 = fuzzyMatch(query: "aBc", target: "AbC")
+        let score3 = fuzzyMatch(query: "aBc", target: "ABC")
         assertNotNil(score1)
         assertNotNil(score2)
         assertNotNil(score3)
@@ -184,6 +184,68 @@ final class FuzzyMatchTest: XCTestCase {
         let target = String(repeating: "x", count: 1000) + "abc"
         let score = fuzzyMatch(query: "abc", target: target)
         assertNotNil(score)
+    }
+
+    // MARK: - Best placement
+
+    func testBestPlacementWinsOverFirstPlacement() {
+        // Taking the first "a" would strand "b" in the middle of another word. The last word matches whole
+        assertEquals(fuzzyMatch(query: "ab", target: "a xyz ab"), 11 + 6)
+    }
+
+    func testAcronymMatchesWordStarts() {
+        let acronym = fuzzyMatch(query: "vsc", target: "Visual Studio Code")
+        assertNotNil(acronym)
+        // 15 for the start of the string, then 11 for each word start
+        assertEquals(acronym, 26 + 11 + 11)
+    }
+
+    func testCamelCaseAndDigitsStartWords() {
+        assertEquals(fuzzyMatch(query: "gh", target: "GitHub"), 26 + 11)
+        assertEquals(fuzzyMatch(query: "w2", target: "Workspace2"), 26 + 11)
+    }
+
+    func testPunctuationStartsWord() {
+        assertEquals(fuzzyMatch(query: "b", target: "a/b"), 11)
+        assertEquals(fuzzyMatch(query: "b", target: "a (b)"), 11)
+    }
+
+    // MARK: - Loose matches
+
+    func testAnchoredAbbreviationsMatch() {
+        assertNotNil(fuzzyMatch(query: "sfr", target: "Safari"))
+        assertNotNil(fuzzyMatch(query: "chrm", target: "Google Chrome"))
+        assertNotNil(fuzzyMatch(query: "fox", target: "Firefox"))
+    }
+
+    func testSkippingIntoWordCostsTheGap() {
+        // "c" at the start, then "e" five characters later in the same word
+        assertEquals(fuzzyMatch(query: "ce", target: "Chrome"), 26 + 1 - 4)
+    }
+
+    func testLettersScatteredAcrossLongTextDontMatch() {
+        assertNil(fuzzyMatch(query: "weather", target: "New Text Document - whatever else is here"))
+        assertNil(fuzzyMatch(query: "abc", target: "xaxxbxxc"))
+        // "b" could only be reached by landing in the middle of the second word
+        assertNil(fuzzyMatch(query: "ab", target: "a xb"))
+    }
+
+    func testCapitalInsideWordStartsWord() {
+        // Unlike the query's case, the target's can matter: "bC" is a word start, "bc" isn't
+        assertEquals(fuzzyMatch(query: "c", target: "abC"), 11)
+        assertEquals(fuzzyMatch(query: "c", target: "abc"), 1)
+    }
+
+    // MARK: - Folding
+
+    func testDiacriticsAreIgnored() {
+        assertEquals(fuzzyMatch(query: "cafe", target: "Café"), fuzzyMatch(query: "cafe", target: "Cafe"))
+        assertEquals(fuzzyMatch(query: "café", target: "Cafe"), fuzzyMatch(query: "cafe", target: "Cafe"))
+    }
+
+    func testQueryTokensSplitOnWhitespace() {
+        assertEquals(fuzzyQueryTokens("  Git  HUB "), [Array("git"), Array("hub")])
+        assertEquals(fuzzyQueryTokens("   "), [])
     }
 
     // MARK: - Single character
