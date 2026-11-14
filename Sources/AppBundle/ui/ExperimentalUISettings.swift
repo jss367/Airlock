@@ -1,18 +1,21 @@
 import SwiftUI
 
+/// The menu bar style lives in UserDefaults rather than the config file. Settings → Appearance edits it.
 struct ExperimentalUISettings {
+    /// Shows the occupied workspaces, so the menu bar says where your windows are
+    static let defaultDisplayStyle: MenuBarStyle = .i3Ordered
+
     var displayStyle: MenuBarStyle {
-        get {
-            if let value = UserDefaults.standard.string(forKey: ExperimentalUISettingsItems.displayStyle.rawValue) {
-                return MenuBarStyle(rawValue: value) ?? .monospacedText
-            } else {
-                return .monospacedText
-            }
-        }
+        get { Self.displayStyle(storedValue: UserDefaults.standard.string(forKey: ExperimentalUISettingsItems.displayStyle.rawValue)) }
         set {
             UserDefaults.standard.setValue(newValue.rawValue, forKey: ExperimentalUISettingsItems.displayStyle.rawValue)
             UserDefaults.standard.synchronize()
         }
+    }
+
+    /// A stored choice wins. The default applies only when nothing valid is stored.
+    static func displayStyle(storedValue: String?) -> MenuBarStyle {
+        storedValue.flatMap(MenuBarStyle.init(rawValue:)) ?? defaultDisplayStyle
     }
 }
 
@@ -25,47 +28,23 @@ enum MenuBarStyle: String, CaseIterable, Identifiable, Equatable, Hashable {
     var id: String { rawValue }
     var title: String {
         switch self {
-            case .monospacedText: "Monospaced font"
-            case .systemText: "System font"
-            case .squares: "Square images"
-            case .i3: "i3 style grouped"
-            case .i3Ordered: "i3 style ordered"
+            case .monospacedText: "Monospaced text"
+            case .systemText: "System font text"
+            case .squares: "Squares"
+            case .i3: "Squares, others grouped"
+            case .i3Ordered: "Squares, in workspace order"
+        }
+    }
+    var summary: String {
+        switch self {
+            case .monospacedText, .systemText: "The workspace shown on each monitor, as text."
+            case .squares: "The workspace shown on each monitor."
+            case .i3: "The workspace shown on each monitor, then the other workspaces that have windows."
+            case .i3Ordered: "Every workspace that has windows or is shown on a monitor, in workspace order."
         }
     }
 }
 
 enum ExperimentalUISettingsItems: String {
     case displayStyle
-}
-
-@MainActor
-func getExperimentalUISettingsMenu(viewModel: TrayMenuModel) -> some View {
-    let color = AppearanceTheme.current == .dark ? Color.white : Color.black
-    return Menu {
-        Text("Menu bar style (macOS 14 or later):")
-        ForEach(MenuBarStyle.allCases, id: \.id) { style in
-            MenuBarStyleButton(style: style, color: color).environmentObject(viewModel)
-        }
-    } label: {
-        Text("Experimental UI Settings (No stability guarantees)")
-    }
-}
-
-@MainActor
-struct MenuBarStyleButton: View {
-    @EnvironmentObject var viewModel: TrayMenuModel
-    let style: MenuBarStyle
-    let color: Color
-
-    var body: some View {
-        Button {
-            viewModel.experimentalUISettings.displayStyle = style
-        } label: {
-            Toggle(isOn: .constant(viewModel.experimentalUISettings.displayStyle == style)) {
-                MenuBarLabel(style: style, color: color)
-                    .environmentObject(viewModel)
-                Text(" -  " + style.title)
-            }
-        }
-    }
 }

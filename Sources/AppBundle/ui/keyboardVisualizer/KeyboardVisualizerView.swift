@@ -4,54 +4,19 @@ import Common
 import HotKey
 import SwiftUI
 
-@MainActor
-func showKeyboardVisualizer() {
-    let window = KeyboardVisualizerWindowController.shared
-    // Rebuild on every open so the modifier options reflect the current config
-    if window.window?.isVisible != true { window.updateContent() }
-    window.showWindow(nil)
-    NSApp.activate(ignoringOtherApps: true)
-    window.window?.makeKeyAndOrderFront(nil)
-}
-
-private final class KeyboardVisualizerWindowController: NSWindowController, NSWindowDelegate {
-    @MainActor static let shared: KeyboardVisualizerWindowController = {
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 960, height: 450),
-            styleMask: [.titled, .closable, .resizable],
-            backing: .buffered,
-            defer: false,
-        )
-        window.title = "Keyboard Visualizer"
-        window.center()
-        window.isReleasedWhenClosed = false
-        let controller = KeyboardVisualizerWindowController(window: window)
-        window.delegate = controller
-        return controller
-    }()
-
-    @MainActor func updateContent() {
-        window?.contentView = NSHostingView(rootView: KeyboardVisualizerContent())
-    }
-
-    func windowWillClose(_ notification: Notification) {
-        // Dropping the hosting view tears down the view, which stops its refresh timer
-        window?.contentView = nil
-    }
-}
-
-private struct ModifierOption: Identifiable {
+private struct ModifierOption: Identifiable, Equatable {
     let label: String
     let subtitle: String?
     let rawValue: UInt
 
     var id: UInt { rawValue }
-    // periphery:ignore
-    var flags: NSEvent.ModifierFlags { NSEvent.ModifierFlags(rawValue: rawValue) }
 }
 
-private struct KeyboardVisualizerContent: View {
-    @State private var modifierOptions: [ModifierOption] = []
+/// The keyboard view of the Shortcuts tab. It exists only while shown: the Settings window drops
+/// its content on close, which stops the refresh timer.
+struct KeyboardVisualizerView: View {
+    // Read up front, not in onAppear: a segmented control that gains its segments after its first layout keeps the wrong size
+    @State private var modifierOptions: [ModifierOption] = currentModifierOptions()
     @State private var selectedRawModifier: UInt = hyperModifiers.rawValue
     @State private var bindings: [String: KeyBindingInfo] = [:]
     @State private var selectedKey: PhysicalKey? = nil
@@ -80,7 +45,10 @@ private struct KeyboardVisualizerContent: View {
                         }
                     }
                     .pickerStyle(.segmented)
+                    .labelsHidden()
                     .fixedSize()
+                    // A new control for a new set of segments, for the same reason
+                    .id(modifierOptions.map(\.rawValue))
                     Spacer()
                 }
 
@@ -93,7 +61,7 @@ private struct KeyboardVisualizerContent: View {
                     }
                 }
             }
-            .padding(.horizontal)
+            .padding(.horizontal, 20)
 
             // Keyboard layout
             VStack(spacing: 4) {
@@ -109,9 +77,7 @@ private struct KeyboardVisualizerContent: View {
                     }
                 }
             }
-            .padding(.horizontal)
-
-            Spacer(minLength: 0)
+            .padding(.horizontal, 20)
 
             // Color-coded legend
             HStack(spacing: 20) {
@@ -121,13 +87,15 @@ private struct KeyboardVisualizerContent: View {
             }
             .font(.caption)
             .foregroundStyle(.secondary)
-            .padding(.bottom, 8)
+            .padding(.top, 4)
+
+            Spacer(minLength: 0)
         }
-        .padding(.top, 12)
-        .frame(minWidth: 960, minHeight: 380)
-        .onAppear { refreshModifierOptions(); refreshBindings() }
+        .padding(.top, 4)
+        .padding(.bottom, 12)
+        .onAppear { refreshBindings() }
         .onChange(of: selectedRawModifier) { refreshBindings() }
-        .onReceive(refreshTimer) { _ in refreshBindings() }
+        .onReceive(refreshTimer) { _ in refresh() }
         .sheet(item: $selectedKey) { key in
             AppPickerView(
                 keyNotation: key.id,
@@ -170,40 +138,37 @@ private struct KeyboardVisualizerContent: View {
 
     // MARK: - Data
 
+    /// The config can change while the keyboard is shown: a reload, or a binding added here
     @MainActor
-    private func refreshModifierOptions() {
-        var seen = Set<UInt>()
-        var options: [ModifierOption] = []
-
-        // Always include hyper as the first option
-        let hyperRaw = hyperModifiers.rawValue
-        options.append(ModifierOption(
-            label: "Hyper",
-            subtitle: "\u{2325} + \u{2303} + \u{2318} + \u{21E7}",
-            rawValue: hyperRaw,
-        ))
-        seen.insert(hyperRaw)
-
-        // Collect distinct modifier prefixes from config bindings
-        if let mainMode = config.modes[mainModeId] {
-            for (_, binding) in mainMode.bindings {
-                let raw = binding.modifiers.rawValue
-                if !seen.contains(raw) {
-                    seen.insert(raw)
-                    options.append(ModifierOption(
-                        label: binding.modifiers.toString(),
-                        subtitle: nil,
-                        rawValue: raw,
-                    ))
-                }
-            }
+    private func refresh() {
+        let options = currentModifierOptions()
+        if options != modifierOptions {
+            modifierOptions = options
+            if !options.contains(where: { $0.rawValue == selectedRawModifier }) { selectedRawModifier = hyperModifiers.rawValue }
         }
-
-        modifierOptions = options
+        refreshBindings()
     }
 
     @MainActor
     private func refreshBindings() {
         bindings = analyzeBindings(modifierPrefix: selectedModifier)
     }
+}
+
+/// Hyper, then every modifier combination the main mode's bindings use, fewest modifiers first.
+@MainActor
+private func currentModifierOptions() -> [ModifierOption] {
+    let hyper = ModifierOption(label: "Hyper", subtitle: "\u{2325} + \u{2303} + \u{2318} + \u{21E7}", rawValue: hyperModifiers.rawValue)
+    let used = Set((config.modes[mainModeId]?.bindings ?? [:]).values.map(\.modifiers.rawValue)).subtracting([hyper.rawValue])
+    let others = used
+        .sorted { ($0.nonzeroBitCount, $0) < ($1.nonzeroBitCount, $1) }
+        .map { ModifierOption(label: modifierSymbols(NSEvent.ModifierFlags(rawValue: $0)), subtitle: nil, rawValue: $0) }
+    return [hyper] + others
+}
+
+/// "⌥⇧" for option-shift, in the order macOS writes modifiers
+private func modifierSymbols(_ modifiers: NSEvent.ModifierFlags) -> String {
+    let symbols: [(NSEvent.ModifierFlags, String)] = [(.control, "\u{2303}"), (.option, "\u{2325}"), (.shift, "\u{21E7}"), (.command, "\u{2318}")]
+    let result = symbols.filter { modifiers.contains($0.0) }.map(\.1).joined()
+    return result.isEmpty ? "None" : result
 }
