@@ -35,8 +35,8 @@ func runAppLauncherWindowAction(_ window: Window, action: () -> Void) {
 /// Shared by current-workspace focus and cross-workspace summon. Admission is captured by the
 /// selection caller before Task starts, and rechecked after the session's awaited initial query.
 @MainActor
-func runAppLauncherWindowSession(_ window: Window, admission: RunSessionGuard, action: @MainActor () -> Void) async throws {
-    try await runLightSession(.menuBarButton, admission) {
+func runAppLauncherWindowSession(_ window: Window, admission: RunSessionGuard, event: RefreshSessionEvent = .appLauncher, action: @MainActor () -> Void) async throws {
+    try await runLightSession(event, admission) {
         runAppLauncherWindowAction(window, action: action)
     }
 }
@@ -65,7 +65,7 @@ func appLauncherAction(runningPids: Set<pid_t>, workspace: Workspace) -> AppLaun
 /// Open the app the user picked in the panel. `dismiss` closes the panel, restoring focus to
 /// Airlock's focused window if its argument is true
 @MainActor
-func openAppFromLauncher(url: URL, bundleIdentifier: String?, dismiss: (_ restoreFocus: Bool) -> Void) {
+func openAppFromLauncher(url: URL, bundleIdentifier: String?, event: RefreshSessionEvent, dismiss: (_ restoreFocus: Bool) -> Void) {
     let runningPids = bundleIdentifier.map { bundleId in
         MacApp.allAppsMap.values.filter { $0.rawAppBundleId == bundleId }.map(\.pid).toSet()
     } ?? []
@@ -82,7 +82,7 @@ func openAppFromLauncher(url: URL, bundleIdentifier: String?, dismiss: (_ restor
             guard let admission: RunSessionGuard = .isServerEnabled else { return }
             Task {
                 await withErrorReporting("Focusing an app window", userMessage: "Airlock could not focus the app window.") {
-                    try await runAppLauncherWindowSession(window, admission: admission) { _ = window.focusWindow() }
+                    try await runAppLauncherWindowSession(window, admission: admission, event: event) { _ = window.focusWindow() }
                 }
             }
         case .summon(let window):
@@ -90,7 +90,7 @@ func openAppFromLauncher(url: URL, bundleIdentifier: String?, dismiss: (_ restor
             guard let admission: RunSessionGuard = .isServerEnabled else { return }
             Task {
                 await withErrorReporting("Summoning an app window", userMessage: "Airlock could not bring the app window to this workspace.") {
-                    try await runAppLauncherWindowSession(window, admission: admission) {
+                    try await runAppLauncherWindowSession(window, admission: admission, event: event) {
                         _ = window.bindAsFloatingWindow(to: workspace)
                         _ = window.focusWindow()
                     }
