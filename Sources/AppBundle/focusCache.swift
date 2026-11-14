@@ -50,6 +50,8 @@ func focusChangeTrigger(sessionTrigger: String?, syncedFromMacOs: Bool) -> Strin
                 // while Airlock believes an empty workspace is focused
                 NSApp.activate(ignoringOtherApps: true)
             }
+            // Blocked, not dropped: the window keeps asking until the user goes to it
+            if let nativeFocused { focusAttention.record(nativeFocused) }
             return false
         }
     }

@@ -13,6 +13,9 @@ struct MenuBarLabel: View {
     let itemSize = CGFloat(40)
     let itemBorderSize = CGFloat(3)
     let itemCornerRadius = CGFloat(6)
+    let attentionDotSize = CGFloat(13)
+    let attentionDotGap = CGFloat(3)
+    let attentionDotOverhang = CGFloat(5)
 
     private var finalColor: Color {
         return color ?? (menuColorScheme == .dark ? Color.white : Color.black)
@@ -44,7 +47,13 @@ struct MenuBarLabel: View {
             switch style {
                 case .monospacedText: getText(for: .monospaced)
                 case .systemText: getText(for: .default)
-                case .squares: squares
+                case .squares:
+                    squares
+                    // Only the visible workspaces are drawn. One that wants the user joins them
+                    let workspaces = viewModel.workspaces.filter { $0.wantsAttention && !$0.isVisible }
+                    if !workspaces.isEmpty {
+                        otherWorkspaces(with: workspaces)
+                    }
                 case .i3:
                     squares
                     let workspaces = viewModel.workspaces.filter { !$0.isEffectivelyEmpty && !$0.isVisible }
@@ -64,9 +73,10 @@ struct MenuBarLabel: View {
                             name: item.name,
                             isActive: item.isFocused,
                             hasFullscreenWindows: item.hasFullscreenWindows,
+                            wantsAttention: item.wantsAttention,
                         )
                         itemView(for: trayItem)
-                            .opacity(item.isVisible ? 1 : 0.5)
+                            .opacity(item.isVisible || item.wantsAttention ? 1 : 0.5)
                     }
             }
         }
@@ -94,11 +104,19 @@ struct MenuBarLabel: View {
                 .foregroundStyle(finalColor)
                 .bold()
                 .padding(.bottom, 6)
+                .opacity(0.6)
             ForEach(otherWorkspaces, id: \.name) { item in
-                itemView(for: TrayItem(type: .workspace, name: item.name, isActive: false, hasFullscreenWindows: item.hasFullscreenWindows))
+                itemView(for: TrayItem(
+                    type: .workspace,
+                    name: item.name,
+                    isActive: false,
+                    hasFullscreenWindows: item.hasFullscreenWindows,
+                    wantsAttention: item.wantsAttention,
+                ))
+                // Dimmed because it isn't on screen. Not when it is asking to be
+                .opacity(item.wantsAttention ? 1 : 0.6)
             }
         }
-        .opacity(0.6)
     }
 
     private func modeSeparator(with design: Font.Design) -> some View {
@@ -110,6 +128,30 @@ struct MenuBarLabel: View {
 
     @ViewBuilder
     fileprivate func itemView(for item: TrayItem) -> some View {
+        if item.wantsAttention {
+            // A dot on the corner, with a ring cut out of the item around it so it reads on filled and
+            // outlined squares alike. It hangs over the side to stay clear of the name
+            framedItemView(for: item)
+                .padding(.trailing, attentionDotOverhang)
+                .overlay(alignment: .topTrailing) {
+                    Circle()
+                        .frame(width: attentionDotSize + 2 * attentionDotGap, height: attentionDotSize + 2 * attentionDotGap)
+                        .offset(x: attentionDotGap, y: -attentionDotGap)
+                        .blendMode(.destinationOut)
+                }
+                .compositingGroup()
+                .overlay(alignment: .topTrailing) {
+                    Circle()
+                        .fill(finalColor)
+                        .frame(width: attentionDotSize, height: attentionDotSize)
+                }
+        } else {
+            framedItemView(for: item)
+        }
+    }
+
+    @ViewBuilder
+    private func framedItemView(for item: TrayItem) -> some View {
         let view = itemSubView(for: item)
         if item.hasFullscreenWindows {
             let strokeStyle = StrokeStyle(lineWidth: 2, lineCap: .square, lineJoin: .miter, miterLimit: 10, dash: [10, 5], dashPhase: 3)

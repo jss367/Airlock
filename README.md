@@ -4,7 +4,7 @@ Airlock is a workspace and tiling window manager for macOS, built around keeping
 
 ## Features
 
-- **Workspace isolation.** With the default bindings, `Cmd+Tab` cycles apps in the current workspace and `Cmd+backtick` cycles windows of the same app in that workspace. Airlock blocks focus stealing from other workspaces.
+- **Workspace isolation.** With the default bindings, `Cmd+Tab` cycles apps in the current workspace and `Cmd+backtick` cycles windows of the same app in that workspace. Airlock blocks focus stealing from other workspaces, marks the workspace that asked in the menu bar, and takes you there with `Option+backtick`.
 - **Keyboard-driven tiling.** Arrange windows in tile, accordion, or floating layouts, with workspaces across multiple monitors.
 - **Workspace-aware app launching.** Launch or summon apps through keybindings and the built-in app launcher.
 - **Visual controls.** A quick switcher, workspace overview, keyboard visualizer with binding editing, and configurable focus flash help you navigate.

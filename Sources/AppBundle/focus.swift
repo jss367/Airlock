@@ -76,6 +76,7 @@ private struct FrozenFocus: AeroAny, Equatable, Sendable {
         window.focusRecency = focusRecencyCounter
         window.markAsMostRecentChild()
     }
+    focusAttention.didChangeFocus()
     return status
 }
 
@@ -119,6 +120,7 @@ extension Workspace {
     if _prevFocusedWorkspaceName == oldName {
         _prevFocusedWorkspaceName = newName
     }
+    focusAttention.renameWorkspace(from: oldName, to: newName)
 }
 
 @MainActor private var _lastKnownFocus: FrozenFocus = _focus

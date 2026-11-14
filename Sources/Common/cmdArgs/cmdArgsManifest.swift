@@ -13,6 +13,7 @@ public enum CmdKind: String, CaseIterable, Equatable, Sendable {
     case flashFocus = "flash-focus"
     case flattenWorkspaceTree = "flatten-workspace-tree"
     case focus
+    case focusAttention = "focus-attention"
     case focusBackAndForth = "focus-back-and-forth"
     case focusMonitor = "focus-monitor"
     case fullscreen
@@ -73,6 +74,8 @@ func initSubcommands() -> [String: any SubCommandParserProtocol] {
                 result[kind.rawValue] = SubCommandParser(FlattenWorkspaceTreeCmdArgs.init)
             case .focus:
                 result[kind.rawValue] = SubCommandParser(parseFocusCmdArgs)
+            case .focusAttention:
+                result[kind.rawValue] = SubCommandParser(FocusAttentionCmdArgs.init)
             case .focusBackAndForth:
                 result[kind.rawValue] = SubCommandParser(FocusBackAndForthCmdArgs.init)
             case .focusMonitor:
@@ -174,6 +177,7 @@ extension CmdKind {
                  .flashFocus,
                  .flattenWorkspaceTree,
                  .focus,
+                 .focusAttention,
                  .focusBackAndForth,
                  .focusMonitor,
                  .fullscreen,

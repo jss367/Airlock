@@ -81,7 +81,11 @@ final class Workspace: TreeNode, NonLeafTreeNodeObject, Hashable, Comparable {
     }
 
     @MainActor
-    static func rename(_ workspace: Workspace, to newName: String) async throws -> Bool {
+    static func rename(
+        _ workspace: Workspace,
+        to newName: String,
+        updateConfig: @MainActor (String, String) async throws -> Bool = updateConfigFile,
+    ) async throws -> Bool {
         guard case .success = WorkspaceName.parse(newName) else { return false }
         guard workspaceNameToWorkspace[newName] == nil else { return false }
         let oldName = workspace.name
@@ -93,7 +97,7 @@ final class Workspace: TreeNode, NonLeafTreeNodeObject, Hashable, Comparable {
 
         // Update the config file on disk first, and reload it so keybindings and persistent
         // workspaces pick up the new name. Keep the old name if either step fails
-        guard try await updateConfigFile(oldWorkspaceName: oldName, newWorkspaceName: newName) else { return false }
+        guard try await updateConfig(oldName, newName) else { return false }
 
         // Now update the in-memory workspace object.
         // After config reload, a new workspace with newName may have been created by
