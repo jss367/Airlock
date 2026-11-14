@@ -19,6 +19,15 @@ airlock app-launcher [-h|--help]
 // tag::body[]
 {manpurpose}
 
+The launcher is the quick switcher panel, limited to installed apps.
+Type to filter the list, and press Return or click to open an app:
+
+* If the app has a window on the current workspace, that window is focused.
+* If the app only has windows on other workspaces, one of them is brought to the current workspace.
+* Otherwise the app is launched.
+
+The command does nothing and exits with a non-zero code while Airlock is paused.
+
 // =========================================================== Options
 include::./util/conditional-options-header.adoc[]
 
