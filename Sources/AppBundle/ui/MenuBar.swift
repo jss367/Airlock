@@ -72,7 +72,7 @@ public func menuBar(viewModel: TrayMenuModel) -> some Scene {
             toggleQuickSwitcher()
         }.keyboardShortcut("P", modifiers: .command)
             .disabled(!viewModel.isEnabled)
-        Button("Mission Control") {
+        Button("Workspace Overview") {
             toggleMissionControl()
         }.keyboardShortcut("M", modifiers: .command)
             .disabled(!viewModel.isEnabled)

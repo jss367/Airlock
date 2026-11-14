@@ -119,13 +119,6 @@ include::airlock-macos-native-minimize.adoc[tags=synopsis]
 include::airlock-macos-native-minimize.adoc[tags=purpose]
 include::airlock-macos-native-minimize.adoc[tags=body]
 
-== mission-control
-----
-include::airlock-mission-control.adoc[tags=synopsis]
-----
-include::airlock-mission-control.adoc[tags=purpose]
-include::airlock-mission-control.adoc[tags=body]
-
 == mode
 ----
 include::airlock-mode.adoc[tags=synopsis]
@@ -245,6 +238,13 @@ include::airlock-workspace-back-and-forth.adoc[tags=synopsis]
 ----
 include::airlock-workspace-back-and-forth.adoc[tags=purpose]
 include::airlock-workspace-back-and-forth.adoc[tags=body]
+
+== workspace-overview
+----
+include::airlock-workspace-overview.adoc[tags=synopsis]
+----
+include::airlock-workspace-overview.adoc[tags=purpose]
+include::airlock-workspace-overview.adoc[tags=body]
 
 == Query commands
 

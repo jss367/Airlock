@@ -26,6 +26,10 @@ func captureWindowImages(windowIds: Set<CGWindowID>) async -> [CGWindowID: CGIma
 
 /// Capture windows in the given order, handing over each image as soon as it's ready.
 /// Stops early when the task is cancelled.
+///
+/// A desktop-independent window filter captures only that window's own content, not the screen
+/// region it occupies. Windows parked off screen in a corner come out whole, and a panel shown
+/// above the windows (the app switcher, the workspace overview) is not part of the image.
 @MainActor
 func captureWindowImages(
     orderedWindowIds: [CGWindowID],

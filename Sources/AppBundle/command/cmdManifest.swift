@@ -52,8 +52,6 @@ extension CmdArgs {
                 command = MacosNativeFullscreenCommand(args: self as! MacosNativeFullscreenCmdArgs)
             case .macosNativeMinimize:
                 command = MacosNativeMinimizeCommand(args: self as! MacosNativeMinimizeCmdArgs)
-            case .missionControl:
-                command = MissionControlCommand(args: self as! MissionControlCmdArgs)
             case .mode:
                 command = ModeCommand(args: self as! ModeCmdArgs)
             case .move:
@@ -90,6 +88,8 @@ extension CmdArgs {
                 command = WorkspaceCommand(args: self as! WorkspaceCmdArgs)
             case .workspaceBackAndForth:
                 command = WorkspaceBackAndForthCommand(args: self as! WorkspaceBackAndForthCmdArgs)
+            case .workspaceOverview:
+                command = WorkspaceOverviewCommand(args: self as! WorkspaceOverviewCmdArgs)
         }
         check(command.info == Self.info)
         return command

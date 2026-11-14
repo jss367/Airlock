@@ -1,0 +1,45 @@
+= airlock-workspace-overview(1)
+include::util/man-attributes.adoc[]
+// tag::purpose[]
+:manpurpose: Toggle the Airlock workspace overview
+// end::purpose[]
+:manname: airlock-workspace-overview
+
+// =========================================================== Synopsis
+== Synopsis
+[verse]
+// tag::synopsis[]
+airlock workspace-overview [-h|--help]
+
+// end::synopsis[]
+
+// =========================================================== Description
+== Description
+
+// tag::body[]
+{manpurpose}
+
+The workspace overview is a full-screen view of your workspaces and their windows.
+It lists every workspace that has windows, plus the focused workspace.
+
+[[mission-control]]Deprecated name: `mission-control`. It still works, but the overview is Airlock's own and is unrelated to the macOS Mission Control.
+
+The overview opens right away. Window thumbnails need the Screen Recording permission (`System Settings -> Privacy & Security -> Screen & System Audio Recording`).
+Without it the overview shows app icons instead, and never asks for the permission by itself.
+
+While the overview is open:
+
+* `Left` and `Right` select a workspace. The window list scrolls to its windows.
+* `Down` or `Tab` moves into the selected workspace's windows. The arrow keys, `Tab`, and `Shift+Tab` move among them, and `Up` from the top row goes back to the workspaces.
+* `Return` switches to the selected workspace or focuses the selected window. Clicking a workspace or a window does the same.
+* `Escape` closes the overview. So does any key bound to `workspace-overview` in your config.
+
+// =========================================================== Options
+include::./util/conditional-options-header.adoc[]
+
+-h, --help:: Print help
+
+// end::body[]
+
+// =========================================================== Footer
+include::util/man-footer.adoc[]
