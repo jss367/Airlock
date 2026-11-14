@@ -79,11 +79,11 @@ private final class SettingsWindowController: NSWindowController, NSWindowDelega
 }
 
 /// Airlock is an agent app with no main menu, so nothing else gives the window ⌘W
-private final class SettingsWindow: NSWindow {
+final class SettingsWindow: NSWindow {
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         if event.type == .keyDown,
-           event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command,
-           event.charactersIgnoringModifiers == "w"
+           event.modifierFlags.intersection(.deviceIndependentFlagsMask).subtracting(.capsLock) == .command,
+           event.charactersIgnoringModifiers?.lowercased() == "w"
         {
             performClose(nil)
             return true
