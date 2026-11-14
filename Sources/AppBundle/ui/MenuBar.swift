@@ -14,6 +14,7 @@ public func menuBar(viewModel: TrayMenuModel) -> some Scene {
                 .version: gitShortHash,
             ])
         }
+        CheckForUpdatesButton()
         let shortIdentification = "\(airlockAppName) v\(airlockAppVersion) \(gitShortHash)"
         let identification      = "\(airlockAppName) v\(airlockAppVersion) \(gitHash)"
         Text(shortIdentification)
