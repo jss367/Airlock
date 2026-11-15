@@ -92,8 +92,8 @@ final class KeybindingsListTest: XCTestCase {
         let rows = shortcuts.map(describe)
 
         assertEquals(rows.filter { $0.contains("workspace <n>") }, [
-            "⌥ 1–9 A–G I M–Z → workspace <n>",
-            "⌥ ⇧ 1–9 A–G I M–Z → move-node-to-workspace <n>",
+            "⌥ 1–9 → workspace <n>",
+            "⌥ ⇧ 1–9 → move-node-to-workspace <n>",
         ])
     }
 

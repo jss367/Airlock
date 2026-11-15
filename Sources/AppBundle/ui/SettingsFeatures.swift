@@ -60,7 +60,7 @@ let preventFocusStealingRequirement: FeatureRequirement = .windowManagement
     ),
     BoolFeature(
         title: "Quick switcher",
-        summary: "A searchable panel of every workspace and window, opened with ⌥Space unless you rebind it. Picking a window on another workspace switches you there.",
+        summary: "A searchable panel of every window, workspace, and installed app, opened with ⌥Space unless you rebind it. Picking a window on another workspace switches you there, picking an app opens it, and a search with no match can go to the web.",
         table: "quick-switcher", key: "enabled", isOn: { config.quickSwitcher.enabled },
     ),
     BoolFeature(

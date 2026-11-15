@@ -3,8 +3,7 @@ import SwiftUI
 
 private let welcomeShownKey = "airlock-welcome-shown"
 
-/// Opens the welcome window with every step that applies now, the basics included
-// periphery:ignore - Entry point for a menu item
+/// Opens the welcome window with every step that applies now, the basics included. The menu bar menu calls this
 @MainActor
 func showWelcomeWindow() {
     let model = WelcomeModel.shared
