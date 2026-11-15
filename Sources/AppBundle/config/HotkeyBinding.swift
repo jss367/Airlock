@@ -61,6 +61,7 @@ extension HotKey {
             HotKeySuppressor.shared.register(key: k, modifiers: key.keyCombo.modifiers)
         }
     }
+    syncNativeAppSwitcherKeys()
     let oldMode = activeMode
     activeMode = targetMode
     if oldMode != targetMode {
@@ -77,6 +78,19 @@ extension HotKey {
             }
         }
     }
+}
+
+/// The native app switcher hotkeys that Airlock's registered hotkeys sit on. See `NativeAppSwitcherKeys`
+@MainActor
+func claimedNativeAppSwitcherKeys(_ combos: [KeyCombo]) -> Set<NativeAppSwitcherKey> {
+    Set(combos.compactMap { combo in combo.key.flatMap { NativeAppSwitcherKey(key: $0, modifiers: combo.modifiers) } })
+}
+
+/// Call after every change to the registered hotkeys
+@MainActor
+func syncNativeAppSwitcherKeys() {
+    let combos = hotkeys.values.filter { !$0.isPaused }.map(\.keyCombo) + [quickSwitcherKeyCombo].compactMap(\.self)
+    NativeAppSwitcherKeys.shared.sync(claimed: claimedNativeAppSwitcherKeys(combos))
 }
 
 /// Registration and dispatch follow running state even if a command changes mode after Pause.
