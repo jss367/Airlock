@@ -40,21 +40,25 @@ final class NativeAppSwitcherKeys {
 
     struct Store {
         var load: @MainActor () -> Set<NativeAppSwitcherKey>
-        var save: @MainActor (Set<NativeAppSwitcherKey>) -> Void
+        var save: @MainActor (Set<NativeAppSwitcherKey>) -> Bool
 
-        static let userDefaults = Store(
+        static let preferences = Store(
             load: {
-                let raw = UserDefaults.standard.array(forKey: storeKey) as? [Int] ?? []
-                return Set(raw.compactMap { NativeAppSwitcherKey(rawValue: Int32($0)) })
+                let raw = CFPreferencesCopyAppValue(storeKey as CFString, kCFPreferencesCurrentApplication) as? [Int] ?? []
+                return Set(raw.compactMap { Int32(exactly: $0).flatMap(NativeAppSwitcherKey.init(rawValue:)) })
             },
-            save: { UserDefaults.standard.set($0.map { Int($0.rawValue) }.sorted(), forKey: storeKey) },
+            save: {
+                CFPreferencesSetAppValue(storeKey as CFString, $0.map { Int($0.rawValue) }.sorted() as CFArray, kCFPreferencesCurrentApplication)
+                // Recovery must reach disk before disabling a key, not await an asynchronous defaults write.
+                return CFPreferencesAppSynchronize(kCFPreferencesCurrentApplication)
+            },
         )
         private static let storeKey = "nativeAppSwitcherKeysSwitchedOff"
     }
 
     static let shared: NativeAppSwitcherKeys = isUnitTest
         ? NativeAppSwitcherKeys(system: .inert, store: .inMemory())
-        : NativeAppSwitcherKeys(system: .real, store: .userDefaults)
+        : NativeAppSwitcherKeys(system: .real, store: .preferences)
 
     private let system: System
     private let store: Store
@@ -71,15 +75,28 @@ final class NativeAppSwitcherKeys {
         for key in NativeAppSwitcherKey.allCases {
             if claimed.contains(key) {
                 if system.isEnabled(key) {
-                    system.setEnabled(key, false)
+                    // Write ahead: a crash immediately after the WindowServer call must still be recoverable.
                     switchedOff.insert(key)
+                    guard store.save(switchedOff) else {
+                        switchedOff.remove(key)
+                        continue
+                    }
+                    system.setEnabled(key, false)
+                    if system.isEnabled(key) {
+                        // The disable failed. Do not claim a key we never switched off.
+                        switchedOff.remove(key)
+                        _ = store.save(switchedOff)
+                    }
                 }
-            } else if switchedOff.remove(key) != nil {
+            } else if switchedOff.contains(key) {
                 system.setEnabled(key, true)
+                if system.isEnabled(key) {
+                    // Keep ownership until restoration succeeds, so a later sync/launch can retry.
+                    switchedOff.remove(key)
+                    _ = store.save(switchedOff)
+                }
             }
         }
-        store.save(switchedOff)
-        keysToRestoreOnSignal = switchedOff.reduce(0) { $0 | 1 << $1.rawValue }
     }
 
     /// Gives back every native hotkey Airlock switched off. For termination
@@ -91,29 +108,54 @@ final class NativeAppSwitcherKeys {
 extension NativeAppSwitcherKeys.Store {
     @MainActor static func inMemory() -> Self {
         var keys: Set<NativeAppSwitcherKey> = []
-        return Self(load: { keys }, save: { keys = $0 })
+        return Self(load: { keys }, save: { keys = $0; return true })
     }
 }
 
-/// Bit `rawValue` is set for each key Airlock has switched off. Written on the main thread, read by the signal
-/// handler, which can't touch main-actor state
-nonisolated(unsafe) private var keysToRestoreOnSignal: Int32 = 0
+/// Dispatch sources keep all Swift, preferences and WindowServer work out of POSIX signal context.
+/// Fatal signals retain their default disposition; their recovery record is applied at the next launch.
+@MainActor private var nativeAppSwitcherSignalSources: [DispatchSourceSignal] = []
 
-/// Gives the native app switcher back when Airlock stops without running its termination handler:
-/// `NSApplication.terminate` from outside Airlock's own Quit, a kill, or a crash
 @MainActor
 func restoreNativeAppSwitcherKeysOnExit() {
-    NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification, object: nil, queue: .main) { _ in
-        MainActor.assumeIsolated { NativeAppSwitcherKeys.shared.restoreAll() }
-    }
-    for fatalSignal in [SIGTERM, SIGHUP, SIGTRAP, SIGABRT, SIGSEGV, SIGBUS, SIGILL, SIGFPE] {
-        signal(fatalSignal, { received in
-            for key in NativeAppSwitcherKey.allCases where keysToRestoreOnSignal & (1 << key.rawValue) != 0 {
-                _ = CGSSetSymbolicHotKeyEnabled(key.rawValue, true)
+    guard !isUnitTest else { return }
+    configureNativeAppSwitcherExitHandling(
+        restore: { NativeAppSwitcherKeys.shared.restoreAll() },
+        onTermination: { action in
+            NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification, object: nil, queue: .main) { _ in
+                MainActor.assumeIsolated { action() }
             }
-            // Die the way the signal would have without this handler, so crash reports stay intact
+        },
+        onSignal: { received, action in
+            signal(received, SIG_IGN)
+            let source = DispatchSource.makeSignalSource(signal: received, queue: .main)
+            source.setEventHandler { MainActor.assumeIsolated { action() } }
+            nativeAppSwitcherSignalSources.append(source)
+            source.resume()
+        },
+        terminateBySignal: { received in
             signal(received, SIG_DFL)
             raise(received)
-        } as sig_t)
+        },
+    )
+}
+
+/// Recovery precedes the Accessibility wait: a previous crash must not leave Cmd+Tab disabled
+/// while this launch waits for permission. Injected hooks let tests exercise the lifecycle without
+/// installing process signal handlers, changing preferences, or calling WindowServer.
+@MainActor
+func configureNativeAppSwitcherExitHandling(
+    restore: @MainActor @escaping () -> Void,
+    onTermination: (@MainActor @escaping () -> Void) -> Void,
+    onSignal: (Int32, @MainActor @escaping () -> Void) -> Void,
+    terminateBySignal: @MainActor @escaping (Int32) -> Void,
+) {
+    restore()
+    onTermination(restore)
+    for received in [SIGTERM, SIGHUP] {
+        onSignal(received) {
+            restore()
+            terminateBySignal(received)
+        }
     }
 }

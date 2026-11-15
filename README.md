@@ -2,6 +2,8 @@
 
 Airlock is a workspace and tiling window manager for macOS, built around keeping each workspace focused on its own apps and windows.
 
+When Airlock claims Cmd+Tab, it temporarily disables the matching native app-switcher hotkey. It restores keys it owns on pause, normal quit, and SIGTERM/SIGHUP while its event loop is responsive. After a fatal crash or force kill, relaunch Airlock to restore those keys; recovery runs before the Accessibility permission wait. Logging out also resets the native hotkeys.
+
 ## Features
 
 - **Workspace isolation.** With the default bindings, `Cmd+Tab` cycles apps in the current workspace and `Cmd+backtick` cycles windows of the same app in that workspace. Airlock blocks focus stealing from other workspaces, marks the workspace that asked in the menu bar, and takes you there with `Option+backtick`.

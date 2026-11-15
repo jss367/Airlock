@@ -10,12 +10,16 @@ final class NativeAppSwitcherKeysTest: XCTestCase {
     @MainActor private final class FakeSystem {
         var enabled: Set<NativeAppSwitcherKey> = Set(NativeAppSwitcherKey.allCases)
         var calls: [String] = []
+        var refusesEnable = false
+        var refusesDisable = false
 
         var system: NativeAppSwitcherKeys.System {
             NativeAppSwitcherKeys.System(
                 isEnabled: { self.enabled.contains($0) },
                 setEnabled: { key, isEnabled in
                     self.calls.append("\(key) \(isEnabled ? "on" : "off")")
+                    if isEnabled, self.refusesEnable { return }
+                    if !isEnabled, self.refusesDisable { return }
                     if isEnabled { self.enabled.insert(key) } else { self.enabled.remove(key) }
                 },
             )
@@ -96,6 +100,82 @@ final class NativeAppSwitcherKeysTest: XCTestCase {
         // App switching was turned off in the config before a third launch
         NativeAppSwitcherKeys(system: fake.system, store: store).sync(claimed: [])
         assertEquals(fake.enabled, Set(NativeAppSwitcherKey.allCases))
+    }
+
+    func testOwnershipIsSavedBeforeDisablingTheNativeKey() {
+        let store = NativeAppSwitcherKeys.Store.inMemory()
+        var recordedAtDisable: Set<NativeAppSwitcherKey> = []
+        var enabled = true
+        let system = NativeAppSwitcherKeys.System(isEnabled: { _ in enabled }, setEnabled: { _, value in
+            if !value { recordedAtDisable = store.load() }
+            enabled = value
+        })
+        NativeAppSwitcherKeys(system: system, store: store).sync(claimed: [.commandTab])
+        assertEquals(recordedAtDisable, [.commandTab])
+    }
+
+    func testFailedRestorationKeepsOwnershipForALaterRetry() {
+        let fake = FakeSystem()
+        let store = NativeAppSwitcherKeys.Store.inMemory()
+        let keys = NativeAppSwitcherKeys(system: fake.system, store: store)
+        keys.sync(claimed: [.commandTab])
+        fake.refusesEnable = true
+        keys.restoreAll()
+        assertEquals(store.load(), [.commandTab])
+        assertEquals(fake.enabled, [.commandShiftTab])
+        fake.refusesEnable = false
+        keys.restoreAll()
+        assertEquals(store.load(), [])
+        assertEquals(fake.enabled, Set(NativeAppSwitcherKey.allCases))
+    }
+
+    func testFailedDisableDoesNotClaimAnEnabledNativeKey() {
+        let fake = FakeSystem()
+        fake.refusesDisable = true
+        let store = NativeAppSwitcherKeys.Store.inMemory()
+        NativeAppSwitcherKeys(system: fake.system, store: store).sync(claimed: [.commandTab])
+        assertEquals(store.load(), [])
+        assertEquals(fake.enabled, Set(NativeAppSwitcherKey.allCases))
+    }
+
+    func testFailedOwnershipSaveNeverDisablesTheNativeKey() {
+        let fake = FakeSystem()
+        let store = NativeAppSwitcherKeys.Store(load: { [] }, save: { _ in false })
+        NativeAppSwitcherKeys(system: fake.system, store: store).sync(claimed: [.commandTab])
+        assertEquals(fake.calls, [])
+        assertEquals(fake.enabled, Set(NativeAppSwitcherKey.allCases))
+    }
+
+    func testStartupRecoveryPrecedesHandlerInstallationAndAnyPermissionWait() {
+        let fake = FakeSystem()
+        let store = NativeAppSwitcherKeys.Store.inMemory()
+        NativeAppSwitcherKeys(system: fake.system, store: store).sync(claimed: [.commandTab])
+        let relaunched = NativeAppSwitcherKeys(system: fake.system, store: store)
+        configureNativeAppSwitcherExitHandling(restore: { relaunched.restoreAll() }, onTermination: { _ in
+            assertEquals(fake.enabled, Set(NativeAppSwitcherKey.allCases))
+            assertEquals(store.load(), [])
+        }, onSignal: { _, _ in
+            assertEquals(fake.enabled, Set(NativeAppSwitcherKey.allCases))
+        }, terminateBySignal: { _ in XCTFail("Installing handlers must not terminate") })
+        assertEquals(fake.enabled, Set(NativeAppSwitcherKey.allCases))
+    }
+
+    func testTerminationAndGracefulSignalsRestoreOutsideSignalContextBeforeExiting() {
+        var events: [String] = []
+        var termination: (@MainActor () -> Void)?
+        var handlers: [Int32: @MainActor () -> Void] = [:]
+        configureNativeAppSwitcherExitHandling(restore: { events.append("restore") }, onTermination: { termination = $0 }, onSignal: { handlers[$0] = $1 }, terminateBySignal: { events.append("exit \($0)") })
+        assertEquals(events, ["restore"])
+        // In particular, never replace the handlers for synchronous faults/crashes.
+        assertEquals(Set(handlers.keys), [SIGTERM, SIGHUP])
+        events = []
+        termination?()
+        assertEquals(events, ["restore"])
+        for received in [SIGTERM, SIGHUP] {
+            events = []
+            handlers[received]?() // A fake dispatch-source delivery, not a real signal.
+            assertEquals(events, ["restore", "exit \(received)"])
+        }
     }
 
     func testUnitTestsNeverReachTheWindowServer() {
