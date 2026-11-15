@@ -53,20 +53,23 @@ public func menuBar(viewModel: TrayMenuModel) -> some Scene {
         openConfigButton()
         reloadConfigButton(menuShortcut: hints.reloadConfig)
         Divider()
-        CheckForUpdatesButton()
-        Button("Welcome to \(airlockAppName)…") {
-            showWelcomeWindow()
-        }
-        Button("About \(airlockAppName)") {
-            NSApp.activate(ignoringOtherApps: true)
-            NSApp.orderFrontStandardAboutPanel(options: [
-                .applicationName: airlockAppName,
-                .applicationVersion: airlockAppVersion,
-                .version: gitShortHash,
-            ])
-        }
-        Button("Copy Version (\(airlockAppVersion) \(gitShortHash))") {
-            "\(airlockAppName) v\(airlockAppVersion) \(gitHash)".copyToClipboard()
+        Menu("About \(airlockAppName)") {
+            Button("About \(airlockAppName)") {
+                NSApp.activate(ignoringOtherApps: true)
+                NSApp.orderFrontStandardAboutPanel(options: [
+                    .applicationName: airlockAppName,
+                    .applicationVersion: airlockAppVersion,
+                    .version: gitShortHash,
+                ])
+            }
+            Button("Copy Version (\(airlockAppVersion) \(gitShortHash))") {
+                "\(airlockAppName) v\(airlockAppVersion) \(gitHash)".copyToClipboard()
+            }
+            Divider()
+            CheckForUpdatesButton()
+            Button("Welcome to \(airlockAppName)…") {
+                showWelcomeWindow()
+            }
         }
         Button("Quit \(airlockAppName)") {
             Task {
