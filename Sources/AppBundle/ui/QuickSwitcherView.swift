@@ -16,6 +16,7 @@ import SwiftUI
 func registerQuickSwitcherHotkey() {
     quickSwitcherHotkey?.isEnabled = false
     quickSwitcherHotkey = nil
+    defer { syncNativeAppSwitcherKeys() }
 
     // Paused Airlock owns no hotkeys. EnableCommand calls this again on resume
     guard config.quickSwitcher.enabled && sessionCoordinator.isEnabled else { return }
@@ -31,6 +32,7 @@ func registerQuickSwitcherHotkey() {
 }
 
 @MainActor var isQuickSwitcherHotkeyRegistered: Bool { quickSwitcherHotkey != nil }
+@MainActor var quickSwitcherKeyCombo: KeyCombo? { quickSwitcherHotkey?.keyCombo }
 @MainActor var isQuickSwitcherOpen: Bool { quickSwitcherPanel?.isVisible == true }
 
 @MainActor

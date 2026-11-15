@@ -25,4 +25,9 @@
 // func _AXUIElementGetWindow(_ axUiElement: AXUIElement, _ id: inout CGWindowID) -> AXError
 AXError _AXUIElementGetWindow(AXUIElementRef element, uint32_t *identifier);
 
+// The window server's built-in hotkeys, such as the Cmd+Tab app switcher (1) and its Shift twin (2).
+// The switch lasts for the login session, not for the life of the process that flipped it
+CGError CGSSetSymbolicHotKeyEnabled(int hotKey, bool isEnabled);
+bool CGSIsSymbolicHotKeyEnabled(int hotKey);
+
 #endif

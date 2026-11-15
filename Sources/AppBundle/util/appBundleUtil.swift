@@ -27,13 +27,16 @@ func initTerminationHandler() {
 
 private struct AppServerTerminationHandler: TerminationHandler {
     func beforeTermination() async throws {
+        // First, and not awaited: restoring windows can throw or hang, and Cmd+Tab must come back regardless
+        NativeAppSwitcherKeys.shared.restoreAll()
         try await makeAllWindowsVisibleAndRestoreSize()
         await toggleReleaseServerIfDebug(.on)
     }
 
     func beforeTerminationBlocking(deadline: DispatchTime) -> Bool {
+        NativeAppSwitcherKeys.shared.restoreAll()
         // toggleReleaseServerIfDebug is skipped: it only matters for debug builds, and it needs to be awaited
-        makeAllWindowsVisibleAndRestoreSizeBlocking(deadline: deadline)
+        return makeAllWindowsVisibleAndRestoreSizeBlocking(deadline: deadline)
     }
 }
 
