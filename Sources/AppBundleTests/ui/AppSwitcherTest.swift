@@ -492,6 +492,59 @@ final class AppSwitcherTest: XCTestCase {
         assertEquals(state.groups.map { $0.windows.map(\.title) }, [["TestWindow(1)"]])
     }
 
+    func testQuickTapOfACmdShortcutKeepsRecencyOrder() {
+        assertEquals(appSwitcherOrder(isCmdHeld: true, hotkeyModifiers: [.command]), .recency)
+        // Cmd went up before the command ran. It is still a Cmd+Tab, so it flips to the previous app
+        assertEquals(appSwitcherOrder(isCmdHeld: false, hotkeyModifiers: [.command]), .recency)
+        assertEquals(appSwitcherOrder(isCmdHeld: false, hotkeyModifiers: [.command, .shift]), .recency)
+
+        // Nothing is held between repeated calls, so only a fixed order reaches every app
+        assertEquals(appSwitcherOrder(isCmdHeld: false, hotkeyModifiers: nil), .tree)
+        assertEquals(appSwitcherOrder(isCmdHeld: false, hotkeyModifiers: [.option]), .tree)
+        // A CLI call made while Cmd happens to be down opens the panel, which lists by recency
+        assertEquals(appSwitcherOrder(isCmdHeld: true, hotkeyModifiers: nil), .recency)
+    }
+
+    func testReleasePollCommitsWhenNoEventReportsTheRelease() {
+        var isCommandDown = true
+        var releases = 0
+        let poll = AppSwitcherReleasePoll(isCommandDown: { isCommandDown }, onRelease: { releases += 1 })
+
+        poll.tick()
+        poll.tick()
+        assertEquals(releases, 0)
+
+        // The first tick after a release leaves it to the event monitors
+        isCommandDown = false
+        poll.tick()
+        assertEquals(releases, 0)
+        poll.tick()
+        assertEquals(releases, 1)
+    }
+
+    func testReleasePollStartsOverWhenCmdGoesBackDown() {
+        var isCommandDown = false
+        var releases = 0
+        let poll = AppSwitcherReleasePoll(isCommandDown: { isCommandDown }, onRelease: { releases += 1 })
+
+        poll.tick()
+        isCommandDown = true
+        poll.tick()
+        isCommandDown = false
+        poll.tick()
+        assertEquals(releases, 0)
+        poll.tick()
+        assertEquals(releases, 1)
+    }
+
+    func testOnlyTheFallbacksCountAsMissedReleases() {
+        assertEquals(AppSwitcherCommitTrigger.cmdUpDuringOpen.isMissedRelease, true)
+        assertEquals(AppSwitcherCommitTrigger.releasePoll.isMissedRelease, true)
+        assertEquals(AppSwitcherCommitTrigger.cmdUpBeforeOpen.isMissedRelease, false)
+        assertEquals(AppSwitcherCommitTrigger.releaseEvent.isMissedRelease, false)
+        assertEquals(AppSwitcherCommitTrigger.click.isMissedRelease, false)
+    }
+
     func testKeyActions() {
         func action(_ keyCode: UInt16, shift: Bool = false, isRepeat: Bool = false) -> AppSwitcherKeyAction? {
             appSwitcherKeyAction(keyCode: keyCode, hasShift: shift, isRepeat: isRepeat)

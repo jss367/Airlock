@@ -229,12 +229,12 @@ struct AppSwitcherContent: View {
 
     private func switchToApp(at index: Int) {
         state.selectApp(at: index)
-        dismissAppSwitcher(commit: true)
+        commitAppSwitcher(.click)
     }
 
     private func switchToWindow(at index: Int) {
         state.selectWindow(at: index)
-        dismissAppSwitcher(commit: true)
+        commitAppSwitcher(.click)
     }
 }
 

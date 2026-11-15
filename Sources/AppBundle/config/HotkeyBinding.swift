@@ -42,7 +42,10 @@ extension HotKey {
                         binding: binding.descriptionWithKeyNotation,
                     ))
                     await withErrorReporting("Running a keyboard shortcut", userMessage: "Airlock could not complete the keyboard shortcut.") {
-                        try await runHotkeyCommandSession(config.modes[activeMode]?.bindings[binding.descriptionWithKeyCode]?.commands ?? [])
+                        try await runHotkeyCommandSession(
+                            config.modes[activeMode]?.bindings[binding.descriptionWithKeyCode]?.commands ?? [],
+                            modifiers: binding.modifiers,
+                        )
                     }
                 }
             }
@@ -209,17 +212,24 @@ func runsOnlyEnable(_ commands: [any Command]) -> Bool {
     !commands.isEmpty && commands.allSatisfy { $0 is EnableCommand }
 }
 
+/// The modifiers of the hotkey whose commands are running. Nil for commands that came from
+/// anywhere else, such as the CLI. By the time a command runs the keys may already be up, so
+/// this is how it learns what was held to start it
+@TaskLocal var runningHotkeyModifiers: NSEvent.ModifierFlags? = nil
+
 /// The same command-session path used by registered hotkeys, without key registration in tests.
 @MainActor
-func runHotkeyCommandSession(_ commands: [any Command]) async throws {
-    // Like `airlock enable` over the socket, an enable-only binding remains admissible while paused.
-    guard sessionCoordinator.isEnabled || runsOnlyEnable(commands) else { return }
-    if !sessionCoordinator.isEnabled {
-        try await runEnableCommandsWithFocusAdoption(commands.compactMap { $0 as? EnableCommand }, event: .hotkeyBinding, syncFocusBeforeBody: false)
-        return
-    }
-    let prepared = PreparedCommandSession(commands)
-    try await runLightSession(.hotkeyBinding, prepared.admission) {
-        _ = try await prepared.run(.defaultEnv, .emptyStdin)
+func runHotkeyCommandSession(_ commands: [any Command], modifiers: NSEvent.ModifierFlags? = nil) async throws {
+    try await $runningHotkeyModifiers.withValue(modifiers) {
+        // Like `airlock enable` over the socket, an enable-only binding remains admissible while paused.
+        guard sessionCoordinator.isEnabled || runsOnlyEnable(commands) else { return }
+        if !sessionCoordinator.isEnabled {
+            try await runEnableCommandsWithFocusAdoption(commands.compactMap { $0 as? EnableCommand }, event: .hotkeyBinding, syncFocusBeforeBody: false)
+            return
+        }
+        let prepared = PreparedCommandSession(commands)
+        try await runLightSession(.hotkeyBinding, prepared.admission) {
+            _ = try await prepared.run(.defaultEnv, .emptyStdin)
+        }
     }
 }

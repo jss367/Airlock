@@ -11,6 +11,7 @@ import XCTest
         sessionCoordinator.setEnabled(true)
         activeMode = mainModeId
         BindingTargetFixtureCommand.calls = []
+        HotkeyModifiersFixtureCommand.seen = []
     }
     override func tearDown() async throws {
         config.modes = [mainModeId: Mode(bindings: [:])]
@@ -22,6 +23,12 @@ import XCTest
         installFixtureBinding("old")
         try await runHotkeyCommandSession([FakeReloadBindingFixtureCommand(label: nil), parseCommand("trigger-binding option-x --mode main").cmdOrDie])
         XCTAssertEqual(BindingTargetFixtureCommand.calls, [])
+    }
+    func testCommandsSeeTheModifiersOfTheHotkeyThatRanThem() async throws {
+        try await runHotkeyCommandSession([HotkeyModifiersFixtureCommand()], modifiers: [.command, .shift])
+        try await runHotkeyCommandSession([HotkeyModifiersFixtureCommand()])
+        XCTAssertEqual(HotkeyModifiersFixtureCommand.seen, [[.command, .shift], nil])
+        XCTAssertNil(runningHotkeyModifiers)
     }
     func testParsedTriggerCanBeReusedAgainstLiveBindings() async throws {
         let trigger = parseCommand("trigger-binding option-x --mode main").cmdOrDie
@@ -81,6 +88,12 @@ private struct FakeReloadBindingFixtureCommand: Command {
         // In-memory replacement only: no config file, reload, activation or key registration.
         return true
     }
+}
+private struct HotkeyModifiersFixtureCommand: Command {
+    @MainActor static var seen: [NSEvent.ModifierFlags?] = []
+    let args = EnableCmdArgs(rawArgs: [], targetState: .on)
+    let shouldResetClosedWindowsCache = false
+    func run(_ env: CmdEnv, _ io: CmdIo) -> Bool { Self.seen.append(runningHotkeyModifiers); return true }
 }
 private struct BindingTargetFixtureCommand: Command {
     @MainActor static var calls: [String] = []
