@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-/// The Appearance tab of the Settings window: the menu bar style and the focus flash outline.
+/// The Appearance tab of the Settings window: the menu bar style, the app switcher size, and the focus flash outline.
 struct AppearanceSettingsPane: View {
     @ObservedObject var model: TrayMenuModel
 
@@ -11,6 +11,16 @@ struct AppearanceSettingsPane: View {
                 ForEach(Array(MenuBarStyle.allCases.enumerated()), id: \.element) { index, style in
                     if index > 0 { Divider() }
                     styleRow(style)
+                }
+            }
+            SettingsSection(title: "App switcher") {
+                SettingsRow(title: "Size", summary: "How large the app icons and window previews are in the ⌘Tab switcher.") {
+                    Picker("Size", selection: $model.experimentalUISettings.appSwitcherSize) {
+                        ForEach(AppSwitcherSize.allCases) { Text($0.title).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .fixedSize()
                 }
             }
             focusFlashSection

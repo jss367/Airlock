@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// The menu bar style lives in UserDefaults rather than the config file. Settings → Appearance edits it.
+/// The menu bar style and the app switcher size live in UserDefaults rather than the config file.
+/// Settings → Appearance edits them.
 struct ExperimentalUISettings {
     /// Shows the occupied workspaces, so the menu bar says where your windows are
     static let defaultDisplayStyle: MenuBarStyle = .i3Ordered
@@ -11,6 +12,15 @@ struct ExperimentalUISettings {
             UserDefaults.standard.setValue(newValue.rawValue, forKey: ExperimentalUISettingsItems.displayStyle.rawValue)
             UserDefaults.standard.synchronize()
         }
+    }
+
+    var appSwitcherSize: AppSwitcherSize {
+        get { Self.appSwitcherSize(storedValue: UserDefaults.standard.string(forKey: ExperimentalUISettingsItems.appSwitcherSize.rawValue)) }
+        set { UserDefaults.standard.setValue(newValue.rawValue, forKey: ExperimentalUISettingsItems.appSwitcherSize.rawValue) }
+    }
+
+    static func appSwitcherSize(storedValue: String?) -> AppSwitcherSize {
+        storedValue.flatMap(AppSwitcherSize.init(rawValue:)) ?? .medium
     }
 
     /// A stored choice wins. The default applies only when nothing valid is stored.
@@ -47,4 +57,5 @@ enum MenuBarStyle: String, CaseIterable, Identifiable, Equatable, Hashable {
 
 enum ExperimentalUISettingsItems: String {
     case displayStyle
+    case appSwitcherSize
 }

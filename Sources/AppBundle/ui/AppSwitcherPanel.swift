@@ -266,6 +266,8 @@ private final class AppSwitcherPanel: NSPanelHud {
     private var globalMonitor: Any?
     private var detailTasks: [Task<Void, Never>] = []
     private let actionQueue = appSwitcherActionQueue
+    /// Read once, so a size changed in Settings applies the next time the switcher opens
+    private let layout = AppSwitcherLayout(size: TrayMenuModel.shared.experimentalUISettings.appSwitcherSize)
 
     override var canBecomeKey: Bool { true }
 
@@ -275,12 +277,12 @@ private final class AppSwitcherPanel: NSPanelHud {
 
         let screen = NSScreen.main
         let margin = AppSwitcherLayout.shadowMargin
-        let contentWidth = AppSwitcherLayout.contentWidth(
+        let contentWidth = layout.contentWidth(
             appCount: groups.count,
             maxWindowCount: groups.map(\.windows.count).max() ?? 0,
             availableWidth: (screen?.visibleFrame.width ?? 1200) - 2 * margin,
         )
-        let hosting = NSHostingView(rootView: AppSwitcherContent(state: contentState, width: contentWidth))
+        let hosting = NSHostingView(rootView: AppSwitcherContent(state: contentState, width: contentWidth, layout: layout))
         self.contentView = hosting
 
         if let screen {
@@ -319,7 +321,7 @@ private final class AppSwitcherPanel: NSPanelHud {
         detailTasks.append(Task { [contentState] in
             await captureWindowImages(
                 orderedWindowIds: windowIds,
-                maxPixelDimension: AppSwitcherLayout.thumbnailMaxPixelDimension,
+                maxPixelDimension: layout.thumbnailMaxPixelDimension,
             ) { windowId, image in
                 contentState.thumbnails[windowId] = image
                 appSwitcherThumbnailCache[windowId] = image

@@ -51,17 +51,41 @@ final class AppSwitcherTest: XCTestCase {
 
     func testContentWidthFitsIconsAndTilesWithinTheScreen() {
         // One app with one window is narrower than the minimum, which keeps the key hints to two lines
-        assertEquals(AppSwitcherLayout.contentWidth(appCount: 1, maxWindowCount: 1, availableWidth: 2000), 400)
+        assertEquals(AppSwitcherLayout().contentWidth(appCount: 1, maxWindowCount: 1, availableWidth: 2000), 400)
         // Three windows are wider than three icons
-        assertEquals(AppSwitcherLayout.contentWidth(appCount: 3, maxWindowCount: 3, availableWidth: 2000), 912)
+        assertEquals(AppSwitcherLayout().contentWidth(appCount: 3, maxWindowCount: 3, availableWidth: 2000), 912)
         // Beyond four windows the strip scrolls instead of growing
         assertEquals(
-            AppSwitcherLayout.contentWidth(appCount: 3, maxWindowCount: 9, availableWidth: 2000),
-            AppSwitcherLayout.contentWidth(appCount: 3, maxWindowCount: 4, availableWidth: 2000),
+            AppSwitcherLayout().contentWidth(appCount: 3, maxWindowCount: 9, availableWidth: 2000),
+            AppSwitcherLayout().contentWidth(appCount: 3, maxWindowCount: 4, availableWidth: 2000),
         )
         // Many apps widen the panel, but never past the screen
-        assertEquals(AppSwitcherLayout.contentWidth(appCount: 12, maxWindowCount: 1, availableWidth: 2000), 1542)
-        assertEquals(AppSwitcherLayout.contentWidth(appCount: 12, maxWindowCount: 1, availableWidth: 900), 900)
+        assertEquals(AppSwitcherLayout().contentWidth(appCount: 12, maxWindowCount: 1, availableWidth: 2000), 1542)
+        assertEquals(AppSwitcherLayout().contentWidth(appCount: 12, maxWindowCount: 1, availableWidth: 900), 900)
+    }
+
+    func testSizesScaleThePicturesAndKeepTextReadable() {
+        let small = AppSwitcherLayout(size: .small)
+        let medium = AppSwitcherLayout(size: .medium)
+        let large = AppSwitcherLayout(size: .large)
+        assertEquals([small, medium, large].map(\.iconSize), [64, 80, 100])
+        assertEquals([small, medium, large].map(\.thumbnailSize.width), [211, 264, 330])
+        // Captures follow the tile, so a larger switcher isn't drawn from a smaller picture
+        assertEquals(large.thumbnailMaxPixelDimension, 660)
+        // Text moves half as far as the pictures
+        assertEquals([small, medium, large].map { $0.fontSize(12) }, [10.8, 12, 13.5])
+        // Every size still fits the screen
+        for layout in [small, medium, large] {
+            assertEquals(layout.contentWidth(appCount: 30, maxWindowCount: 9, availableWidth: 1000), 1000)
+        }
+    }
+
+    func testStoredSwitcherSizeFallsBackToMedium() {
+        assertEquals(ExperimentalUISettings.appSwitcherSize(storedValue: nil), .medium)
+        assertEquals(ExperimentalUISettings.appSwitcherSize(storedValue: "huge"), .medium)
+        for size in AppSwitcherSize.allCases {
+            assertEquals(ExperimentalUISettings.appSwitcherSize(storedValue: size.rawValue), size)
+        }
     }
 
     func testHoverWaitsForThePointerToMove() {

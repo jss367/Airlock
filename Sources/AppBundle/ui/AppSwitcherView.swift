@@ -3,37 +3,83 @@ import SwiftUI
 
 // MARK: - Layout
 
-enum AppSwitcherLayout {
-    static let iconSize: CGFloat = 80
-    /// App names get a little more room than the icon above them
-    static let iconLabelWidth: CGFloat = 96
-    static let itemPadding: CGFloat = 8
-    static let iconSpacing: CGFloat = 14
-    static let thumbnailSize = CGSize(width: 264, height: 165)
-    static let tileSpacing: CGFloat = 14
-    static let rowPadding = CGSize(width: 22, height: 16)
-    static let cornerRadius: CGFloat = 16
+/// How large the switcher draws. Chosen in Settings → Appearance
+enum AppSwitcherSize: String, CaseIterable, Identifiable {
+    case small
+    case medium
+    case large
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+            case .small: "Small"
+            case .medium: "Medium"
+            case .large: "Large"
+        }
+    }
+
+    var scale: CGFloat {
+        switch self {
+            case .small: 0.8
+            case .medium: 1
+            case .large: 1.25
+        }
+    }
+}
+
+struct AppSwitcherLayout {
+    /// Multiplies icons, thumbnails, and the space around them
+    let scale: CGFloat
+
+    init(size: AppSwitcherSize = .medium) {
+        self.scale = size.scale
+    }
+
     /// Room around the content for its drop shadow
     static let shadowMargin: CGFloat = 30
-    /// Thumbnails are drawn at most `thumbnailSize` points large, so 2x pixels is all they need
-    static let thumbnailMaxPixelDimension: CGFloat = 2 * max(thumbnailSize.width, thumbnailSize.height)
-    /// Fits the key hints on two lines when a single window would make the panel narrower
-    private static let minWidth: CGFloat = 400
     private static let maxTilesWithoutScrolling = 4
+
+    var iconSize: CGFloat { length(80) }
+    /// App names get a little more room than the icon above them. They follow the text size,
+    /// so a name that fits at one size fits at all of them
+    var iconLabelWidth: CGFloat { fontSize(96).rounded() }
+    var itemPadding: CGFloat { length(8) }
+    var iconSpacing: CGFloat { length(14) }
+    var thumbnailSize: CGSize { CGSize(width: length(264), height: length(165)) }
+    var tileSpacing: CGFloat { length(14) }
+    var rowPadding: CGSize { CGSize(width: length(22), height: length(16)) }
+    var cornerRadius: CGFloat { length(16) }
+    /// Thumbnails are drawn at most `thumbnailSize` points large, so 2x pixels is all they need
+    var thumbnailMaxPixelDimension: CGFloat { 2 * max(thumbnailSize.width, thumbnailSize.height) }
+    /// Fits the key hints on two lines when a single window would make the panel narrower
+    private var minWidth: CGFloat { (400 * textScale).rounded() }
+
+    /// A length in whole points at this size
+    func length(_ points: CGFloat) -> CGFloat {
+        (points * scale).rounded()
+    }
+
+    /// Text changes half as much as the pictures do, so it stays readable when small and quiet when large
+    private var textScale: CGFloat { 1 + (scale - 1) / 2 }
+
+    func fontSize(_ points: CGFloat) -> CGFloat {
+        points * textScale
+    }
 
     /// Wide enough for every app icon and for the busiest app's windows, within what the screen allows.
     /// The width stays fixed while the switcher is open so the panel doesn't resize under the user.
-    static func contentWidth(appCount: Int, maxWindowCount: Int, availableWidth: CGFloat) -> CGFloat {
+    func contentWidth(appCount: Int, maxWindowCount: Int, availableWidth: CGFloat) -> CGFloat {
         let iconsWidth = rowWidth(itemCount: appCount, itemWidth: iconLabelWidth + 2 * itemPadding, spacing: iconSpacing)
         let tilesWidth = rowWidth(
-            itemCount: min(maxWindowCount, maxTilesWithoutScrolling),
+            itemCount: min(maxWindowCount, Self.maxTilesWithoutScrolling),
             itemWidth: thumbnailSize.width + 2 * itemPadding,
             spacing: tileSpacing,
         )
         return max(minWidth, min(max(iconsWidth, tilesWidth), availableWidth))
     }
 
-    private static func rowWidth(itemCount: Int, itemWidth: CGFloat, spacing: CGFloat) -> CGFloat {
+    private func rowWidth(itemCount: Int, itemWidth: CGFloat, spacing: CGFloat) -> CGFloat {
         CGFloat(itemCount) * itemWidth + CGFloat(max(0, itemCount - 1)) * spacing + 2 * rowPadding.width
     }
 
@@ -79,17 +125,19 @@ enum AppSwitcherLayout {
 struct AppSwitcherContent: View {
     @ObservedObject var state: AppSwitcherState
     let width: CGFloat
+    var layout = AppSwitcherLayout()
 
     var body: some View {
         VStack(spacing: 0) {
             // App icons row
             ScrollViewReader { proxy in
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: AppSwitcherLayout.iconSpacing) {
+                    HStack(spacing: layout.iconSpacing) {
                         ForEach(Array(state.groups.enumerated()), id: \.element.id) { index, group in
                             AppIconView(
                                 group: group,
                                 isSelected: index == state.selectedAppIndex,
+                                layout: layout,
                             )
                             .id(group.id)
                             .contentShape(Rectangle())
@@ -103,8 +151,8 @@ struct AppSwitcherContent: View {
                             .accessibilityAction { switchToApp(at: index) }
                         }
                     }
-                    .padding(.horizontal, AppSwitcherLayout.rowPadding.width)
-                    .padding(.vertical, AppSwitcherLayout.rowPadding.height)
+                    .padding(.horizontal, layout.rowPadding.width)
+                    .padding(.vertical, layout.rowPadding.height)
                     .frame(minWidth: width) // center the row when it's narrower than the panel
                 }
                 .onAppear {
@@ -129,13 +177,14 @@ struct AppSwitcherContent: View {
             if let group = state.selectedGroup {
                 ScrollViewReader { proxy in
                     ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: AppSwitcherLayout.tileSpacing) {
+                        HStack(spacing: layout.tileSpacing) {
                             ForEach(Array(group.windows.enumerated()), id: \.element.id) { index, window in
                                 WindowTile(
                                     window: window,
                                     appIcon: group.icon,
                                     thumbnail: state.thumbnails[window.windowId],
                                     isSelected: index == state.selectedWindowIndex,
+                                    layout: layout,
                                 )
                                 .id(window.id)
                                 .contentShape(Rectangle())
@@ -149,8 +198,8 @@ struct AppSwitcherContent: View {
                                 .accessibilityAction { switchToWindow(at: index) }
                             }
                         }
-                        .padding(.horizontal, AppSwitcherLayout.rowPadding.width)
-                        .padding(.vertical, AppSwitcherLayout.rowPadding.height)
+                        .padding(.horizontal, layout.rowPadding.width)
+                        .padding(.vertical, layout.rowPadding.height)
                         .frame(minWidth: width)
                     }
                     .onChange(of: state.selectedWindowIndex) {
@@ -166,13 +215,13 @@ struct AppSwitcherContent: View {
 
             Divider()
 
-            KeyHintFooter()
+            KeyHintFooter(layout: layout)
         }
         .frame(width: width)
         .background(.ultraThickMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: AppSwitcherLayout.cornerRadius, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: layout.cornerRadius, style: .continuous))
         // A hairline edge keeps the panel distinct from a window of the same tone behind it
-        .overlay(RoundedRectangle(cornerRadius: AppSwitcherLayout.cornerRadius, style: .continuous).strokeBorder(.primary.opacity(0.12), lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: layout.cornerRadius, style: .continuous).strokeBorder(.primary.opacity(0.12), lineWidth: 1))
         .shadow(color: .black.opacity(0.4), radius: 24, y: 8)
         .padding(AppSwitcherLayout.shadowMargin)
     }
@@ -192,9 +241,10 @@ struct AppSwitcherContent: View {
 /// panel's material washes out in light mode
 private struct SelectionBackground: View {
     let isSelected: Bool
+    let layout: AppSwitcherLayout
 
     var body: some View {
-        RoundedRectangle(cornerRadius: 10, style: .continuous)
+        RoundedRectangle(cornerRadius: layout.length(10), style: .continuous)
             .fill(isSelected ? Color.accentColor : Color.clear)
     }
 }
@@ -202,18 +252,19 @@ private struct SelectionBackground: View {
 private struct AppIconView: View {
     let group: AppGroup
     let isSelected: Bool
+    let layout: AppSwitcherLayout
 
     var body: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: layout.length(6)) {
             ZStack(alignment: .topTrailing) {
                 Image(nsImage: group.icon)
                     .resizable()
-                    .frame(width: AppSwitcherLayout.iconSize, height: AppSwitcherLayout.iconSize)
+                    .frame(width: layout.iconSize, height: layout.iconSize)
 
                 if group.windows.count > 1 {
                     // Gray would fade into the accent behind a selected app, so its badge inverts
                     Text("\(group.windows.count)")
-                        .font(.system(size: 11, weight: .bold))
+                        .font(.system(size: layout.fontSize(11), weight: .bold))
                         .foregroundStyle(isSelected ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.white))
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
@@ -223,13 +274,13 @@ private struct AppIconView: View {
             }
 
             Text(group.name)
-                .font(.system(size: 12))
+                .font(.system(size: layout.fontSize(12)))
                 .foregroundStyle(isSelected ? .white : .primary)
                 .lineLimit(1)
-                .frame(width: AppSwitcherLayout.iconLabelWidth)
+                .frame(width: layout.iconLabelWidth)
         }
-        .padding(AppSwitcherLayout.itemPadding)
-        .background(SelectionBackground(isSelected: isSelected))
+        .padding(layout.itemPadding)
+        .background(SelectionBackground(isSelected: isSelected, layout: layout))
     }
 }
 
@@ -238,9 +289,10 @@ private struct WindowTile: View {
     let appIcon: NSImage
     let thumbnail: CGImage?
     let isSelected: Bool
+    let layout: AppSwitcherLayout
 
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: layout.length(8)) {
             ZStack {
                 if let thumbnail {
                     Image(decorative: thumbnail, scale: 2)
@@ -254,19 +306,19 @@ private struct WindowTile: View {
                         .fill(.quaternary)
                     Image(nsImage: appIcon)
                         .resizable()
-                        .frame(width: 64, height: 64)
+                        .frame(width: layout.length(64), height: layout.length(64))
                 }
             }
-            .frame(width: AppSwitcherLayout.thumbnailSize.width, height: AppSwitcherLayout.thumbnailSize.height)
+            .frame(width: layout.thumbnailSize.width, height: layout.thumbnailSize.height)
 
             Text(window.title)
-                .font(.system(size: 13))
+                .font(.system(size: layout.fontSize(13)))
                 .foregroundStyle(isSelected ? .white : .primary)
                 .lineLimit(1)
-                .frame(maxWidth: AppSwitcherLayout.thumbnailSize.width)
+                .frame(maxWidth: layout.thumbnailSize.width)
         }
-        .padding(AppSwitcherLayout.itemPadding)
-        .background(SelectionBackground(isSelected: isSelected))
+        .padding(layout.itemPadding)
+        .background(SelectionBackground(isSelected: isSelected, layout: layout))
     }
 }
 
@@ -275,6 +327,8 @@ private struct WindowTile: View {
 /// The keys the switcher answers to, as a quiet footer. Its content never changes, so the panel
 /// keeps the size it measured when it opened
 private struct KeyHintFooter: View {
+    let layout: AppSwitcherLayout
+
     var body: some View {
         WrappingRow(spacing: 16, lineSpacing: 6) {
             ForEach(appSwitcherKeyHints, id: \.title) { hint in
@@ -282,14 +336,14 @@ private struct KeyHintFooter: View {
                     HStack(spacing: 3) {
                         ForEach(hint.symbols, id: \.self) { symbol in
                             Text(symbol)
-                                .font(.system(size: 11, weight: .medium))
+                                .font(.system(size: layout.fontSize(11), weight: .medium))
                                 .padding(.horizontal, 5)
-                                .frame(minWidth: 18, minHeight: 18)
+                                .frame(minWidth: layout.fontSize(18), minHeight: layout.fontSize(18))
                                 .background(RoundedRectangle(cornerRadius: 4, style: .continuous).fill(.quaternary))
                         }
                     }
                     Text(hint.title)
-                        .font(.system(size: 12))
+                        .font(.system(size: layout.fontSize(12)))
                 }
                 .fixedSize()
                 .accessibilityElement(children: .ignore)
@@ -297,7 +351,7 @@ private struct KeyHintFooter: View {
             }
         }
         .foregroundStyle(.secondary)
-        .padding(.horizontal, AppSwitcherLayout.rowPadding.width)
+        .padding(.horizontal, layout.rowPadding.width)
         .padding(.vertical, 10)
         .frame(maxWidth: .infinity)
     }
