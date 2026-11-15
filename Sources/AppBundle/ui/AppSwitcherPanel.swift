@@ -259,6 +259,51 @@ let appSwitcherKeyHints: [AppSwitcherKeyHint] = groupedPreservingOrder(appSwitch
 
 // MARK: - Panel
 
+/// Keep the chosen tile size, but make a tall panel scroll instead of placing its footer offscreen.
+/// This also provides an offscreen-testable boundary without opening the panel or registering input monitors.
+@MainActor
+func appSwitcherContentView(state: AppSwitcherState, layout: AppSwitcherLayout, availableSize: CGSize) -> NSView {
+    let width = layout.contentWidth(
+        appCount: state.groups.count,
+        maxWindowCount: state.groups.map(\.windows.count).max() ?? 0,
+        availableWidth: availableSize.width - 2 * AppSwitcherLayout.shadowMargin,
+    )
+    let hosting = NSHostingView(rootView: AppSwitcherContent(state: state, width: width, layout: layout))
+    let naturalSize = hosting.fittingSize
+    hosting.setFrameSize(naturalSize)
+    let boundedSize = CGSize(
+        width: min(naturalSize.width, max(0, availableSize.width)),
+        height: min(naturalSize.height, max(0, availableSize.height)),
+    )
+    guard boundedSize != naturalSize else { return hosting }
+    let scrolling = NSScrollView(frame: NSRect(origin: .zero, size: boundedSize))
+    scrolling.drawsBackground = false
+    scrolling.hasVerticalScroller = boundedSize.height < naturalSize.height
+    scrolling.hasHorizontalScroller = boundedSize.width < naturalSize.width
+    scrolling.autohidesScrollers = true
+    scrolling.scrollerStyle = .overlay
+    scrolling.documentView = hosting
+    // NSHostingView's coordinate orientation can differ from an ordinary AppKit document view.
+    let top = hosting.isFlipped ? 0 : max(0, naturalSize.height - scrolling.contentSize.height)
+    scrolling.contentView.scroll(to: NSPoint(x: 0, y: top))
+    scrolling.reflectScrolledClipView(scrolling.contentView)
+    return scrolling
+}
+
+func appSwitcherPanelFrame(contentSize: CGSize, visibleFrame: NSRect) -> NSRect {
+    let size = CGSize(
+        width: min(max(0, contentSize.width), visibleFrame.width),
+        height: min(max(0, contentSize.height), visibleFrame.height),
+    )
+    let centerY = visibleFrame.midY + visibleFrame.height * 0.1
+    return NSRect(
+        x: visibleFrame.midX - size.width / 2,
+        y: max(visibleFrame.minY, min(centerY - size.height / 2, visibleFrame.maxY - size.height)),
+        width: size.width,
+        height: size.height,
+    )
+}
+
 @MainActor
 private final class AppSwitcherPanel: NSPanelHud {
     let contentState: AppSwitcherState
@@ -275,24 +320,11 @@ private final class AppSwitcherPanel: NSPanelHud {
         self.contentState = AppSwitcherState(groups: groups, selectedAppIndex: selectedAppIndex, thumbnails: thumbnails, actionQueue: appSwitcherActionQueue)
         super.init()
 
-        let screen = NSScreen.main
-        let margin = AppSwitcherLayout.shadowMargin
-        let contentWidth = layout.contentWidth(
-            appCount: groups.count,
-            maxWindowCount: groups.map(\.windows.count).max() ?? 0,
-            availableWidth: (screen?.visibleFrame.width ?? 1200) - 2 * margin,
-        )
-        let hosting = NSHostingView(rootView: AppSwitcherContent(state: contentState, width: contentWidth, layout: layout))
-        self.contentView = hosting
-
-        if let screen {
-            let size = hosting.fittingSize
-            let x = screen.frame.midX - size.width / 2
-            // Centered a little above the middle of the screen, without running off the top
-            let centerY = screen.frame.midY + screen.frame.height * 0.1
-            let y = min(centerY - size.height / 2, screen.visibleFrame.maxY - size.height)
-            self.setFrame(NSRect(x: x, y: y, width: size.width, height: size.height), display: true)
-        }
+        let visibleFrame = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1200, height: 800)
+        let content = appSwitcherContentView(state: contentState, layout: layout, availableSize: visibleFrame.size)
+        let frame = appSwitcherPanelFrame(contentSize: content.frame.size, visibleFrame: visibleFrame)
+        self.contentView = content
+        self.setFrame(frame, display: true)
 
         self.level = .floating
         self.backgroundColor = .clear

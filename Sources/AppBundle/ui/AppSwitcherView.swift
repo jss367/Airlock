@@ -76,7 +76,8 @@ struct AppSwitcherLayout {
             itemWidth: thumbnailSize.width + 2 * itemPadding,
             spacing: tileSpacing,
         )
-        return max(minWidth, min(max(iconsWidth, tilesWidth), availableWidth))
+        // The minimum is preferred; the available screen width is a hard limit at every size.
+        return min(max(0, availableWidth), max(minWidth, max(iconsWidth, tilesWidth)))
     }
 
     private func rowWidth(itemCount: Int, itemWidth: CGFloat, spacing: CGFloat) -> CGFloat {

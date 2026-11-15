@@ -64,6 +64,72 @@ final class AppSwitcherTest: XCTestCase {
         assertEquals(AppSwitcherLayout().contentWidth(appCount: 12, maxWindowCount: 1, availableWidth: 900), 900)
     }
 
+    func testPreferredMinimumWidthYieldsToNarrowScreensAtEverySize() {
+        for size in AppSwitcherSize.allCases {
+            let layout = AppSwitcherLayout(size: size)
+            for available: CGFloat in [0, 240, 320, 360] {
+                assertEquals(layout.contentWidth(appCount: 1, maxWindowCount: 1, availableWidth: available), available)
+                assertEquals(layout.contentWidth(appCount: 30, maxWindowCount: 9, availableWidth: available), available)
+            }
+        }
+    }
+
+    func testTallSwitcherScrollsWithinTheScreenWithoutShrinkingTiles() throws {
+        _ = NSApplication.shared
+        let state = AppSwitcherState(groups: [group(pid: 1, windows: [10])], selectedAppIndex: 0, pointerLocation: { .zero })
+        for size in AppSwitcherSize.allCases {
+            let layout = AppSwitcherLayout(size: size)
+            let content = appSwitcherContentView(state: state, layout: layout, availableSize: CGSize(width: 800, height: 400))
+            let scrolling = try XCTUnwrap(content as? NSScrollView)
+            let document = try XCTUnwrap(scrolling.documentView)
+            assertEquals(content.frame.height, 400)
+            XCTAssertLessThanOrEqual(content.frame.width, 800)
+            XCTAssertTrue(scrolling.hasVerticalScroller)
+            XCTAssertGreaterThan(document.frame.height, content.frame.height)
+            let top = scrolling.contentView.bounds.origin
+            let bottom = document.isFlipped ? document.frame.height - scrolling.contentSize.height : 0
+            scrolling.contentView.scroll(to: NSPoint(x: 0, y: bottom))
+            XCTAssertNotEqual(scrolling.contentView.bounds.origin, top) // The footer is reachable.
+        }
+    }
+
+    func testBoundedViewportSurvivesInstallationInAHiddenWindow() throws {
+        _ = NSApplication.shared
+        let state = AppSwitcherState(groups: [group(pid: 1, windows: [10])], selectedAppIndex: 0, pointerLocation: { .zero })
+        let content = appSwitcherContentView(state: state, layout: AppSwitcherLayout(size: .large), availableSize: CGSize(width: 800, height: 400))
+        let window = NSWindow(contentRect: .zero, styleMask: .borderless, backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        defer { window.close() }
+        let frame = appSwitcherPanelFrame(contentSize: content.frame.size, visibleFrame: NSRect(x: -1000, y: 40, width: 800, height: 400))
+        window.contentView = content
+        window.setFrame(frame, display: false) // Never order the test window on screen.
+        content.layoutSubtreeIfNeeded()
+        let scrolling = try XCTUnwrap(content as? NSScrollView)
+        let document = try XCTUnwrap(scrolling.documentView)
+        assertEquals(content.frame.size, frame.size)
+        let top = document.isFlipped ? 0 : max(0, document.frame.height - scrolling.contentSize.height)
+        assertEquals(scrolling.contentView.bounds.minY, top)
+    }
+
+    func testSwitcherThatFitsKeepsItsNaturalContentView() {
+        _ = NSApplication.shared
+        let state = AppSwitcherState(groups: [group(pid: 1, windows: [10])], selectedAppIndex: 0, pointerLocation: { .zero })
+        let content = appSwitcherContentView(state: state, layout: AppSwitcherLayout(), availableSize: CGSize(width: 1400, height: 900))
+        XCTAssertFalse(content is NSScrollView)
+        assertEquals(content.frame.width, 460)
+        XCTAssertLessThanOrEqual(content.frame.height, 900)
+    }
+
+    func testPanelFrameFitsShortAndOffsetVisibleScreens() {
+        for visible in [NSRect(x: -1200, y: 40, width: 1100, height: 535), NSRect(x: 70, y: 25, width: 600, height: 400)] {
+            for size in [CGSize(width: 2000, height: 1000), CGSize(width: 400, height: 200)] {
+                let frame = appSwitcherPanelFrame(contentSize: size, visibleFrame: visible)
+                assertEquals(frame.intersection(visible), frame)
+                assertEquals(frame.midX, visible.midX)
+            }
+        }
+    }
+
     func testSizesScaleThePicturesAndKeepTextReadable() {
         let small = AppSwitcherLayout(size: .small)
         let medium = AppSwitcherLayout(size: .medium)
