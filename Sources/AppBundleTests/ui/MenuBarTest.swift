@@ -79,7 +79,9 @@ final class MenuBarTest: XCTestCase {
         let hints = menuShortcutHints(bindings: Array(defaultConfig.modes[mainModeId]!.bindings.values), quickSwitcherBinding: nil, isEnabled: true)
 
         assertEquals(hints.workspaces["1"], KeyboardShortcut("1", modifiers: .option))
-        assertEquals(hints.workspaces["A"], KeyboardShortcut("a", modifiers: .option))
+        assertEquals(hints.workspaces["9"], KeyboardShortcut("9", modifiers: .option))
+        // The default config binds no lettered workspaces
+        assertEquals(hints.workspaces["A"], nil)
         assertEquals(hints.quickSwitcher, nil)
     }
 

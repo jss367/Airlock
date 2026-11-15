@@ -2,7 +2,7 @@
 import Common
 import XCTest
 
-/// The menu bar, Mission Control, and Quick Switcher follow the same rule as the `workspace` command:
+/// The menu bar, Workspace Overview, and Quick Switcher follow the same rule as the `workspace` command:
 /// without window management, showing a hidden workspace would pull every window on the monitor into it.
 @MainActor
 final class FocusWorkspaceFromUiTest: XCTestCase {
@@ -29,6 +29,8 @@ final class FocusWorkspaceFromUiTest: XCTestCase {
         assertTrue(focus.workspace === shown)
         assertEquals(Workspace.get(byName: "hidden").isVisible, false)
         assertTrue(MessageModel.shared.message?.body.contains("requires window management") == true)
+        // A refusal, not a config problem
+        assertEquals(MessageModel.shared.message?.type, .notice)
     }
 
     func testFocusesShownWorkspaceWithoutWindowManagement() {
@@ -56,6 +58,8 @@ final class FocusWorkspaceFromUiTest: XCTestCase {
         assertTrue(focus.workspace === shown)
         assertEquals(hidden.isVisible, false)
         assertTrue(MessageModel.shared.message?.body.contains("requires window management") == true)
+        // A refusal, not a config problem
+        assertEquals(MessageModel.shared.message?.type, .notice)
     }
 
     func testWindowSelectionFocusesShownWorkspaceWithoutWindowManagement() {
@@ -97,5 +101,7 @@ final class FocusWorkspaceFromUiTest: XCTestCase {
         assertTrue(focus.workspace === shown)
         assertTrue(focus.windowOrNil === old)
         assertTrue(MessageModel.shared.message?.body.contains("requires window management") == true)
+        // A refusal, not a config problem
+        assertEquals(MessageModel.shared.message?.type, .notice)
     }
 }

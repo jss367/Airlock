@@ -32,7 +32,7 @@ A welcome window opens on the first launch. It has up to three steps:
 . *A macOS setting.* If *When switching to an application, switch to a Space that has open windows for the application* is on, Airlock offers to turn it off. See <<a-note-on-displays-have-separate-spaces>>.
 . *The basics.* What a workspace is, and your shortcuts for switching workspaces, moving a window to a workspace, and opening the quick switcher.
 
-The basics are shown once. The other two steps come back on a later launch for as long as they apply.
+The basics are shown once. The other two steps come back on a later launch for as long as they apply. *Welcome to Airlock…* in the menu bar menu opens the window again at any time.
 
 [#workspace-isolation]
 == Workspace isolation and navigation

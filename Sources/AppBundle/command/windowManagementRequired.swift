@@ -32,19 +32,19 @@ func checkWorkspaceCanBeFocused(_ workspace: Workspace, _ io: CmdIo) -> Bool {
 @MainActor
 func focusWorkspaceFromUi(_ workspace: Workspace) {
     if let refusal = workspaceFocusRefusal(workspace) {
-        MessageModel.shared.message = Message(description: "Can't Switch Workspace", body: refusal)
+        MessageModel.shared.message = Message(type: .notice, description: "Can't Switch Workspace", body: refusal)
     } else {
         _ = workspace.focusWorkspace()
     }
 }
 
 
-/// Window selection from Quick Switcher and Mission Control shares the workspace visibility rule.
+/// Window selection from Quick Switcher and Workspace Overview shares the workspace visibility rule.
 @MainActor
 func focusWindowFromUi(_ window: Window) {
     guard let workspace = window.visualWorkspace else { return }
     if let refusal = workspaceFocusRefusal(workspace) {
-        MessageModel.shared.message = Message(description: "Can't Switch Workspace", body: refusal)
+        MessageModel.shared.message = Message(type: .notice, description: "Can't Switch Workspace", body: refusal)
     } else {
         _ = window.focusWindow()
     }

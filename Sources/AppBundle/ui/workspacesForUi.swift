@@ -1,4 +1,4 @@
-/// The workspaces the menu bar, Mission Control, and Quick Switcher list, in `persistent-workspaces` order with the
+/// The workspaces the menu bar, Workspace Overview, and Quick Switcher list, in `persistent-workspaces` order with the
 /// rest sorted after them. While window management is off, only workspaces shown on a monitor can be focused (see
 /// windowManagementRequired.swift), so the others are left out rather than listed as dead entries.
 @MainActor

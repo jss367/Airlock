@@ -54,6 +54,9 @@ public func menuBar(viewModel: TrayMenuModel) -> some Scene {
         reloadConfigButton(menuShortcut: hints.reloadConfig)
         Divider()
         CheckForUpdatesButton()
+        Button("Welcome to \(airlockAppName)…") {
+            showWelcomeWindow()
+        }
         Button("About \(airlockAppName)") {
             NSApp.activate(ignoringOtherApps: true)
             NSApp.orderFrontStandardAboutPanel(options: [
