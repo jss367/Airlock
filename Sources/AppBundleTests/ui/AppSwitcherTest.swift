@@ -50,17 +50,17 @@ final class AppSwitcherTest: XCTestCase {
     }
 
     func testContentWidthFitsIconsAndTilesWithinTheScreen() {
-        // One app with one window: the single thumbnail tile sets the width
-        assertEquals(AppSwitcherLayout.contentWidth(appCount: 1, maxWindowCount: 1, availableWidth: 2000), 320)
+        // One app with one window is narrower than the minimum, which keeps the key hints to two lines
+        assertEquals(AppSwitcherLayout.contentWidth(appCount: 1, maxWindowCount: 1, availableWidth: 2000), 400)
         // Three windows are wider than three icons
-        assertEquals(AppSwitcherLayout.contentWidth(appCount: 3, maxWindowCount: 3, availableWidth: 2000), 688)
+        assertEquals(AppSwitcherLayout.contentWidth(appCount: 3, maxWindowCount: 3, availableWidth: 2000), 912)
         // Beyond four windows the strip scrolls instead of growing
         assertEquals(
             AppSwitcherLayout.contentWidth(appCount: 3, maxWindowCount: 9, availableWidth: 2000),
             AppSwitcherLayout.contentWidth(appCount: 3, maxWindowCount: 4, availableWidth: 2000),
         )
         // Many apps widen the panel, but never past the screen
-        assertEquals(AppSwitcherLayout.contentWidth(appCount: 12, maxWindowCount: 1, availableWidth: 2000), 1172)
+        assertEquals(AppSwitcherLayout.contentWidth(appCount: 12, maxWindowCount: 1, availableWidth: 2000), 1542)
         assertEquals(AppSwitcherLayout.contentWidth(appCount: 12, maxWindowCount: 1, availableWidth: 900), 900)
     }
 

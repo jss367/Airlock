@@ -4,19 +4,21 @@ import SwiftUI
 // MARK: - Layout
 
 enum AppSwitcherLayout {
-    static let iconSize: CGFloat = 64
+    static let iconSize: CGFloat = 80
     /// App names get a little more room than the icon above them
-    static let iconLabelWidth: CGFloat = 72
-    static let itemPadding: CGFloat = 6
-    static let iconSpacing: CGFloat = 12
-    static let thumbnailSize = CGSize(width: 200, height: 125)
-    static let tileSpacing: CGFloat = 10
-    static let rowPadding = CGSize(width: 16, height: 12)
+    static let iconLabelWidth: CGFloat = 96
+    static let itemPadding: CGFloat = 8
+    static let iconSpacing: CGFloat = 14
+    static let thumbnailSize = CGSize(width: 264, height: 165)
+    static let tileSpacing: CGFloat = 14
+    static let rowPadding = CGSize(width: 22, height: 16)
+    static let cornerRadius: CGFloat = 16
     /// Room around the content for its drop shadow
     static let shadowMargin: CGFloat = 30
     /// Thumbnails are drawn at most `thumbnailSize` points large, so 2x pixels is all they need
     static let thumbnailMaxPixelDimension: CGFloat = 2 * max(thumbnailSize.width, thumbnailSize.height)
-    private static let minWidth: CGFloat = 320
+    /// Fits the key hints on two lines when a single window would make the panel narrower
+    private static let minWidth: CGFloat = 400
     private static let maxTilesWithoutScrolling = 4
 
     /// Wide enough for every app icon and for the busiest app's windows, within what the screen allows.
@@ -168,8 +170,10 @@ struct AppSwitcherContent: View {
         }
         .frame(width: width)
         .background(.ultraThickMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .shadow(color: .black.opacity(0.4), radius: 20, y: 5)
+        .clipShape(RoundedRectangle(cornerRadius: AppSwitcherLayout.cornerRadius, style: .continuous))
+        // A hairline edge keeps the panel distinct from a window of the same tone behind it
+        .overlay(RoundedRectangle(cornerRadius: AppSwitcherLayout.cornerRadius, style: .continuous).strokeBorder(.primary.opacity(0.12), lineWidth: 1))
+        .shadow(color: .black.opacity(0.4), radius: 24, y: 8)
         .padding(AppSwitcherLayout.shadowMargin)
     }
 
@@ -190,7 +194,7 @@ private struct SelectionBackground: View {
     let isSelected: Bool
 
     var body: some View {
-        RoundedRectangle(cornerRadius: 8)
+        RoundedRectangle(cornerRadius: 10, style: .continuous)
             .fill(isSelected ? Color.accentColor : Color.clear)
     }
 }
@@ -200,7 +204,7 @@ private struct AppIconView: View {
     let isSelected: Bool
 
     var body: some View {
-        VStack(spacing: 4) {
+        VStack(spacing: 6) {
             ZStack(alignment: .topTrailing) {
                 Image(nsImage: group.icon)
                     .resizable()
@@ -209,17 +213,17 @@ private struct AppIconView: View {
                 if group.windows.count > 1 {
                     // Gray would fade into the accent behind a selected app, so its badge inverts
                     Text("\(group.windows.count)")
-                        .font(.system(size: 10, weight: .bold))
+                        .font(.system(size: 11, weight: .bold))
                         .foregroundStyle(isSelected ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.white))
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 1)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
                         .background(Capsule().fill(isSelected ? AnyShapeStyle(.white) : AnyShapeStyle(.secondary)))
                         .offset(x: 4, y: -4)
                 }
             }
 
             Text(group.name)
-                .font(.system(size: 11))
+                .font(.system(size: 12))
                 .foregroundStyle(isSelected ? .white : .primary)
                 .lineLimit(1)
                 .frame(width: AppSwitcherLayout.iconLabelWidth)
@@ -236,27 +240,27 @@ private struct WindowTile: View {
     let isSelected: Bool
 
     var body: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: 8) {
             ZStack {
                 if let thumbnail {
                     Image(decorative: thumbnail, scale: 2)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
-                        .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
-                        .shadow(color: .black.opacity(0.25), radius: 3, y: 1)
+                        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                        .shadow(color: .black.opacity(0.25), radius: 4, y: 2)
                 } else {
                     // Not captured yet, or screen recording isn't allowed
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
                         .fill(.quaternary)
                     Image(nsImage: appIcon)
                         .resizable()
-                        .frame(width: 48, height: 48)
+                        .frame(width: 64, height: 64)
                 }
             }
             .frame(width: AppSwitcherLayout.thumbnailSize.width, height: AppSwitcherLayout.thumbnailSize.height)
 
             Text(window.title)
-                .font(.system(size: 12))
+                .font(.system(size: 13))
                 .foregroundStyle(isSelected ? .white : .primary)
                 .lineLimit(1)
                 .frame(maxWidth: AppSwitcherLayout.thumbnailSize.width)
@@ -272,20 +276,20 @@ private struct WindowTile: View {
 /// keeps the size it measured when it opened
 private struct KeyHintFooter: View {
     var body: some View {
-        WrappingRow(spacing: 14, lineSpacing: 6) {
+        WrappingRow(spacing: 16, lineSpacing: 6) {
             ForEach(appSwitcherKeyHints, id: \.title) { hint in
                 HStack(spacing: 5) {
                     HStack(spacing: 3) {
                         ForEach(hint.symbols, id: \.self) { symbol in
                             Text(symbol)
-                                .font(.system(size: 10, weight: .medium))
-                                .padding(.horizontal, 4)
-                                .frame(minWidth: 16, minHeight: 16)
+                                .font(.system(size: 11, weight: .medium))
+                                .padding(.horizontal, 5)
+                                .frame(minWidth: 18, minHeight: 18)
                                 .background(RoundedRectangle(cornerRadius: 4, style: .continuous).fill(.quaternary))
                         }
                     }
                     Text(hint.title)
-                        .font(.system(size: 11))
+                        .font(.system(size: 12))
                 }
                 .fixedSize()
                 .accessibilityElement(children: .ignore)
@@ -294,7 +298,7 @@ private struct KeyHintFooter: View {
         }
         .foregroundStyle(.secondary)
         .padding(.horizontal, AppSwitcherLayout.rowPadding.width)
-        .padding(.vertical, 8)
+        .padding(.vertical, 10)
         .frame(maxWidth: .infinity)
     }
 }
