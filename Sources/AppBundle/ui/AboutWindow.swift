@@ -7,9 +7,11 @@ func showAboutWindow() {
     AboutWindowController.shared.present()
 }
 
-private final class AboutWindowController: NSWindowController {
-    @MainActor static let shared: AboutWindowController = {
-        let window = NSWindow(
+final class AboutWindowController: NSWindowController {
+    @MainActor static let shared = AboutWindowController(window: makeWindow())
+
+    @MainActor static func makeWindow() -> NSWindow {
+        let window = AgentWindow(
             contentRect: NSRect(x: 0, y: 0, width: 340, height: 340),
             styleMask: [.titled, .closable],
             backing: .buffered,
@@ -19,8 +21,8 @@ private final class AboutWindowController: NSWindowController {
         window.isReleasedWhenClosed = false
         window.contentView = NSHostingView(rootView: AboutContent())
         window.center()
-        return AboutWindowController(window: window)
-    }()
+        return window
+    }
 
     @MainActor func present() {
         showWindow(nil)

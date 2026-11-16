@@ -617,7 +617,7 @@ final class SettingsTest: XCTestCase {
     private func settingsCloseShortcut(modifiers: NSEvent.ModifierFlags, characters: String) throws -> (handled: Bool, closes: Int) {
         _ = NSApplication.shared
         // This test window is never shown or activated. Only the synthetic event has Caps Lock set.
-        let window = SettingsWindow(contentRect: NSRect(x: 0, y: 0, width: 200, height: 100), styleMask: [.titled, .closable], backing: .buffered, defer: false)
+        let window = AgentWindow(contentRect: NSRect(x: 0, y: 0, width: 200, height: 100), styleMask: [.titled, .closable], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
         defer { window.close() }
         var closes = 0
