@@ -130,46 +130,29 @@ struct AppSwitcherContent: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // App icons row
-            ScrollViewReader { proxy in
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: layout.iconSpacing) {
-                        ForEach(Array(state.groups.enumerated()), id: \.element.id) { index, group in
-                            AppIconView(
-                                group: group,
-                                isSelected: index == state.selectedAppIndex,
-                                layout: layout,
-                            )
-                            .id(group.id)
-                            .contentShape(Rectangle())
-                            .onContinuousHover { phase in
-                                if case .active = phase { state.hoverApp(at: index) }
-                            }
-                            .onTapGesture { switchToApp(at: index) }
-                            .accessibilityElement(children: .ignore)
-                            .accessibilityLabel(group.accessibilityLabel)
-                            .accessibilityAddTraits(index == state.selectedAppIndex ? [.isButton, .isSelected] : .isButton)
-                            .accessibilityAction { switchToApp(at: index) }
-                        }
+            // Keep every app visible, wrapping into centered rows in keyboard cycling order.
+            WrappingRow(spacing: layout.iconSpacing, lineSpacing: layout.iconSpacing) {
+                ForEach(Array(state.groups.enumerated()), id: \.element.id) { index, group in
+                    AppIconView(
+                        group: group,
+                        isSelected: index == state.selectedAppIndex,
+                        layout: layout,
+                    )
+                    .id(group.id)
+                    .contentShape(Rectangle())
+                    .onContinuousHover { phase in
+                        if case .active = phase { state.hoverApp(at: index) }
                     }
-                    .padding(.horizontal, layout.rowPadding.width)
-                    .padding(.vertical, layout.rowPadding.height)
-                    .frame(minWidth: width) // center the row when it's narrower than the panel
-                }
-                .onAppear {
-                    // Cmd+Shift+Tab opens on the last app, which a long row would leave off screen
-                    if let group = state.selectedGroup {
-                        proxy.scrollTo(group.id, anchor: .center)
-                    }
-                }
-                .onChange(of: state.selectedAppIndex) {
-                    if state.selectionCameFromKeyboard, let group = state.selectedGroup {
-                        withAnimation(.easeInOut(duration: 0.15)) {
-                            proxy.scrollTo(group.id, anchor: .center)
-                        }
-                    }
+                    .onTapGesture { switchToApp(at: index) }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(group.accessibilityLabel)
+                    .accessibilityAddTraits(index == state.selectedAppIndex ? [.isButton, .isSelected] : .isButton)
+                    .accessibilityAction { switchToApp(at: index) }
                 }
             }
+            .padding(.horizontal, layout.rowPadding.width)
+            .padding(.vertical, layout.rowPadding.height)
+            .frame(width: width)
 
             Divider()
 

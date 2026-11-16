@@ -1,6 +1,7 @@
 @testable import AppBundle
 import AppKit
 import Common
+import class SwiftUI.NSHostingView
 import XCTest
 
 @MainActor
@@ -118,6 +119,33 @@ final class AppSwitcherTest: XCTestCase {
         XCTAssertFalse(content is NSScrollView)
         assertEquals(content.frame.width, 460)
         XCTAssertLessThanOrEqual(content.frame.height, 900)
+    }
+
+    func testAppIconsWrapAndKeepTheirHeightWhileCycling() {
+        _ = NSApplication.shared
+        for size in AppSwitcherSize.allCases {
+            let layout = AppSwitcherLayout(size: size)
+            // Room for exactly five app icons, including the row's outer padding.
+            let width = 5 * (layout.iconLabelWidth + 2 * layout.itemPadding)
+                + 4 * layout.iconSpacing + 2 * layout.rowPadding.width
+            func hosting(appCount: Int) -> (AppSwitcherState, NSHostingView<AppSwitcherContent>) {
+                let groups = (1 ... appCount).map { group(pid: Int32($0), windows: [UInt32($0)]) }
+                let state = AppSwitcherState(groups: groups, selectedAppIndex: appCount - 1, pointerLocation: { .zero })
+                return (state, NSHostingView(rootView: AppSwitcherContent(state: state, width: width, layout: layout)))
+            }
+            let (_, singleRow) = hosting(appCount: 5)
+            let (state, multipleRows) = hosting(appCount: 10)
+            let singleSize = singleRow.fittingSize
+            let wrappedSize = multipleRows.fittingSize
+            assertEquals(wrappedSize.width, singleSize.width)
+            XCTAssertGreaterThan(wrappedSize.height, singleSize.height + layout.iconSize)
+            // Reverse opening selects the last app; forward/reverse cycling keeps the same rows.
+            for offset in [1, 1, -1, -1] {
+                state.cycleApp(offset: offset)
+                multipleRows.layoutSubtreeIfNeeded()
+                assertEquals(multipleRows.fittingSize, wrappedSize)
+            }
+        }
     }
 
     func testPanelFrameFitsShortAndOffsetVisibleScreens() {
