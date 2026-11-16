@@ -130,46 +130,32 @@ struct AppSwitcherContent: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // App icons row
-            ScrollViewReader { proxy in
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: layout.iconSpacing) {
-                        ForEach(Array(state.groups.enumerated()), id: \.element.id) { index, group in
-                            AppIconView(
-                                group: group,
-                                isSelected: index == state.selectedAppIndex,
-                                layout: layout,
-                            )
-                            .id(group.id)
-                            .contentShape(Rectangle())
-                            .onContinuousHover { phase in
-                                if case .active = phase { state.hoverApp(at: index) }
-                            }
-                            .onTapGesture { switchToApp(at: index) }
-                            .accessibilityElement(children: .ignore)
-                            .accessibilityLabel(group.accessibilityLabel)
-                            .accessibilityAddTraits(index == state.selectedAppIndex ? [.isButton, .isSelected] : .isButton)
-                            .accessibilityAction { switchToApp(at: index) }
-                        }
+            // Keep every app visible, wrapping into centered rows in keyboard cycling order.
+            WrappingRow(spacing: layout.iconSpacing, lineSpacing: layout.iconSpacing) {
+                ForEach(Array(state.groups.enumerated()), id: \.element.id) { index, group in
+                    AppIconView(
+                        group: group,
+                        isSelected: index == state.selectedAppIndex,
+                        layout: layout,
+                    )
+                    .background(AppSwitcherIconVisibility(
+                        revealSelection: index == state.selectedAppIndex && state.selectionCameFromKeyboard,
+                    ))
+                    .id(group.id)
+                    .contentShape(Rectangle())
+                    .onContinuousHover { phase in
+                        if case .active = phase { state.hoverApp(at: index) }
                     }
-                    .padding(.horizontal, layout.rowPadding.width)
-                    .padding(.vertical, layout.rowPadding.height)
-                    .frame(minWidth: width) // center the row when it's narrower than the panel
-                }
-                .onAppear {
-                    // Cmd+Shift+Tab opens on the last app, which a long row would leave off screen
-                    if let group = state.selectedGroup {
-                        proxy.scrollTo(group.id, anchor: .center)
-                    }
-                }
-                .onChange(of: state.selectedAppIndex) {
-                    if state.selectionCameFromKeyboard, let group = state.selectedGroup {
-                        withAnimation(.easeInOut(duration: 0.15)) {
-                            proxy.scrollTo(group.id, anchor: .center)
-                        }
-                    }
+                    .onTapGesture { switchToApp(at: index) }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(group.accessibilityLabel)
+                    .accessibilityAddTraits(index == state.selectedAppIndex ? [.isButton, .isSelected] : .isButton)
+                    .accessibilityAction { switchToApp(at: index) }
                 }
             }
+            .padding(.horizontal, layout.rowPadding.width)
+            .padding(.vertical, layout.rowPadding.height)
+            .frame(width: width)
 
             Divider()
 
@@ -235,6 +221,62 @@ struct AppSwitcherContent: View {
     private func switchToWindow(at index: Int) {
         state.selectWindow(at: index)
         commitAppSwitcher(.click)
+    }
+}
+
+/// Use the icon's actual laid-out bounds, including its label and padding, in the outer AppKit
+/// scroll view. A SwiftUI reader inside the icon row cannot control that enclosing NSScrollView.
+private struct AppSwitcherIconVisibility: NSViewRepresentable {
+    let revealSelection: Bool
+
+    func makeNSView(context: Context) -> AppSwitcherIconVisibilityView {
+        AppSwitcherIconVisibilityView()
+    }
+
+    func updateNSView(_ view: AppSwitcherIconVisibilityView, context: Context) {
+        view.revealSelection = revealSelection
+    }
+}
+
+final class AppSwitcherIconVisibilityView: NSView {
+    var revealSelection = false {
+        didSet {
+            guard revealSelection != oldValue else { return }
+            needsReveal = revealSelection
+            scheduleReveal()
+        }
+    }
+
+    private var needsReveal = false
+    private var revealScheduled = false
+
+    override func viewDidMoveToSuperview() {
+        super.viewDidMoveToSuperview()
+        scheduleReveal()
+    }
+
+    override func layout() {
+        super.layout()
+        scheduleReveal()
+    }
+
+    // This background only measures visibility; SwiftUI owns hover and click handling.
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    private func scheduleReveal() {
+        guard needsReveal, !revealScheduled else { return }
+        revealScheduled = true
+        // SwiftUI updates selection before placing the row. Wait until the document has its
+        // final frame and has been installed in the scroll view, including on reverse opening.
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            defer { self.revealScheduled = false }
+            guard self.needsReveal, let scrolling = self.enclosingScrollView else { return }
+            scrolling.documentView?.layoutSubtreeIfNeeded()
+            guard !self.bounds.isEmpty else { return }
+            self.needsReveal = false
+            self.scrollToVisible(self.bounds)
+        }
     }
 }
 

@@ -13,7 +13,7 @@ When Airlock claims Cmd+Tab, it temporarily disables the matching native app-swi
 - **Plain-text configuration and scripting.** Configure Airlock with TOML and control it with the `airlock` command-line tool.
 - **No need to disable System Integrity Protection.** Airlock manages windows through macOS Accessibility permissions.
 
-The app switcher size can be changed in Settings → Appearance. Its preferred width yields to narrow screens. When the chosen size is taller than the usable screen, scroll vertically to reach all content and the key hints; app and window rows continue to scroll horizontally.
+The app switcher size can be changed in Settings → Appearance. App icons wrap into centered rows when they exceed the available width. Cmd+Tab follows the apps from left to right, then continues on the next row; Shift+Cmd+Tab reverses that order. The window preview strip scrolls horizontally. When the panel is taller than the usable screen, scroll vertically to reach all content and the key hints.
 
 ## Status and installation
 
