@@ -148,6 +148,103 @@ final class AppSwitcherTest: XCTestCase {
         }
     }
 
+    func testOverflowRevealsReverseOpeningAndForwardAndReverseAppSelections() async throws {
+        _ = NSApplication.shared
+        for size in AppSwitcherSize.allCases {
+            let groups = (1 ... 20).map { group(pid: Int32($0), windows: [UInt32($0)]) }
+            // Shift+Cmd+Tab from the most recent app opens on the last app.
+            let state = AppSwitcherState(groups: groups, selectedAppIndex: groups.count - 1, pointerLocation: { .zero })
+            let content = appSwitcherContentView(state: state, layout: AppSwitcherLayout(size: size), availableSize: CGSize(width: 600, height: 400))
+            let scrolling = try XCTUnwrap(content as? NSScrollView)
+            let document = try XCTUnwrap(scrolling.documentView)
+            let window = NSWindow(contentRect: content.frame, styleMask: .borderless, backing: .buffered, defer: false)
+            window.isReleasedWhenClosed = false
+            defer { window.close() }
+            window.contentView = content // Exercise layout in a window without showing it or installing monitors.
+            await settleSwitcherLayout(content)
+            let documentSize = document.frame.size
+            let viewportSize = content.frame.size
+            let icons = switcherIconViews(in: document)
+            assertEquals(icons.count, groups.count)
+            let iconFrames = icons.map { $0.convert($0.bounds, to: document) }
+            XCTAssertGreaterThan(documentSize.height, viewportSize.height)
+            assertSelectedIconVisible(in: scrolling)
+
+            // Cross every row in both directions, including last-to-first and first-to-last wrap.
+            for offset in Array(repeating: 1, count: groups.count) + Array(repeating: -1, count: groups.count) {
+                state.cycleApp(offset: offset)
+                await settleSwitcherLayout(content)
+                assertSelectedIconVisible(in: scrolling)
+                assertEquals(content.frame.size, viewportSize)
+                assertEquals(document.frame.size, documentSize)
+                assertEquals(icons.map { $0.convert($0.bounds, to: document) }, iconFrames)
+            }
+        }
+    }
+
+    func testOverflowDoesNotUndoMouseScrollingOrRevealHoveredApps() async throws {
+        _ = NSApplication.shared
+        var pointer = CGPoint.zero
+        let groups = (1 ... 20).map { group(pid: Int32($0), windows: [UInt32($0)]) }
+        let state = AppSwitcherState(groups: groups, selectedAppIndex: 19, pointerLocation: { pointer })
+        let content = appSwitcherContentView(state: state, layout: AppSwitcherLayout(), availableSize: CGSize(width: 600, height: 400))
+        let scrolling = try XCTUnwrap(content as? NSScrollView)
+        let document = try XCTUnwrap(scrolling.documentView)
+        let window = NSWindow(contentRect: content.frame, styleMask: .borderless, backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        defer { window.close() }
+        window.contentView = content
+        await settleSwitcherLayout(content)
+        assertSelectedIconVisible(in: scrolling)
+
+        let top = document.isFlipped ? 0 : max(0, document.frame.height - scrolling.contentSize.height)
+        scrolling.contentView.scroll(to: NSPoint(x: 0, y: top))
+        scrolling.reflectScrolledClipView(scrolling.contentView)
+        let manualOrigin = scrolling.contentView.bounds.origin
+        // A title update and relayout must not pull a manually scrolled viewport back to selection.
+        state.groups[0].windows[0].title = "Updated title"
+        await settleSwitcherLayout(content)
+        assertEquals(scrolling.contentView.bounds.origin, manualOrigin)
+
+        pointer.x += 10
+        state.hoverApp(at: 18)
+        await settleSwitcherLayout(content)
+        assertEquals(state.selectionCameFromKeyboard, false)
+        assertEquals(scrolling.contentView.bounds.origin, manualOrigin)
+
+        state.cycleApp(offset: 1)
+        await settleSwitcherLayout(content)
+        assertSelectedIconVisible(in: scrolling)
+        XCTAssertNotEqual(scrolling.contentView.bounds.origin, manualOrigin)
+    }
+
+    private func settleSwitcherLayout(_ content: NSView) async {
+        // Let SwiftUI publish selection, place the background views, and run the deferred reveal.
+        for _ in 0 ..< 3 {
+            content.layoutSubtreeIfNeeded()
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        content.layoutSubtreeIfNeeded()
+    }
+
+    private func switcherIconViews(in view: NSView) -> [AppSwitcherIconVisibilityView] {
+        if let icon = view as? AppSwitcherIconVisibilityView { return [icon] }
+        return view.subviews.flatMap { switcherIconViews(in: $0) }
+    }
+
+    private func assertSelectedIconVisible(in scrolling: NSScrollView, file: StaticString = #filePath, line: UInt = #line) {
+        guard let document = scrolling.documentView else {
+            XCTFail("Missing switcher document", file: file, line: line)
+            return
+        }
+        let selected = switcherIconViews(in: document).filter(\.revealSelection)
+        XCTAssertEqual(selected.count, 1, file: file, line: line)
+        guard let icon = selected.first else { return }
+        let rect = icon.convert(icon.bounds, to: document)
+        XCTAssertFalse(rect.isEmpty, file: file, line: line)
+        XCTAssertTrue(document.visibleRect.insetBy(dx: -0.5, dy: -0.5).contains(rect), "Selected icon \(rect) outside \(document.visibleRect)", file: file, line: line)
+    }
+
     func testPanelFrameFitsShortAndOffsetVisibleScreens() {
         for visible in [NSRect(x: -1200, y: 40, width: 1100, height: 535), NSRect(x: 70, y: 25, width: 600, height: 400)] {
             for size in [CGSize(width: 2000, height: 1000), CGSize(width: 400, height: 200)] {
