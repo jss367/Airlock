@@ -47,7 +47,7 @@ func showSettings(_ tab: SettingsTab? = nil, shortcutsView: ShortcutsView? = nil
 
 private final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     @MainActor static let shared: SettingsWindowController = {
-        let window = SettingsWindow(
+        let window = AgentWindow(
             contentRect: NSRect(x: 0, y: 0, width: 900, height: 720),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
@@ -75,20 +75,6 @@ private final class SettingsWindowController: NSWindowController, NSWindowDelega
         NotificationCenter.default.post(name: settingsWindowWillClose, object: nil)
         // Dropping the hosting view tears down the views, which stops the keyboard's refresh timer
         window?.contentView = nil
-    }
-}
-
-/// Airlock is an agent app with no main menu, so nothing else gives the window ⌘W
-final class SettingsWindow: NSWindow {
-    override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        if event.type == .keyDown,
-           event.modifierFlags.intersection(.deviceIndependentFlagsMask).subtracting(.capsLock) == .command,
-           event.charactersIgnoringModifiers?.lowercased() == "w"
-        {
-            performClose(nil)
-            return true
-        }
-        return super.performKeyEquivalent(with: event)
     }
 }
 
