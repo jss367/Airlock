@@ -24,7 +24,7 @@ It lists every workspace that has windows, plus the focused workspace.
 
 [[mission-control]]Deprecated name: `mission-control`. It still works, but the overview is Airlock's own and is unrelated to the macOS Mission Control.
 
-The overview opens right away. Window thumbnails need the Screen Recording permission (`System Settings -> Privacy & Security -> Screen & System Audio Recording`).
+The overview opens right away. Window thumbnails need the Screen Recording permission (`System Settings -> Privacy & Security -> Screen & System Audio Recording`). The *Window previews* row on the *Appearance* tab of Airlock's Settings window shows whether Airlock has it and takes you there.
 Without it the overview shows app icons instead, and never asks for the permission by itself.
 
 While the overview is open:

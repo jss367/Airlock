@@ -81,7 +81,7 @@ Cycle focus between applications or between windows of the same application with
 +
 When a binding that holds `cmd` runs `app-next` or `app-prev`, a switcher opens and stays up until `cmd` is released.
 It lists the most recently used application first, so a quick tap flips between the last two applications, and shows a thumbnail of each window of the selected application.
-Thumbnails need the Screen Recording permission; without it the switcher shows application icons instead.
+Thumbnails need the Screen Recording permission; without it the switcher shows application icons instead. To grant it, open Settings, go to *Appearance*, and click *Allow* next to *Window previews*.
 While the switcher is open, `tab`, `shift-tab` and the left and right arrows move between applications, and `j`, `k` and the down and up arrows move between the selected application's windows.
 `w` closes the selected window, `q` quits the selected application, and `escape` cancels.
 A footer in the switcher lists these keys.

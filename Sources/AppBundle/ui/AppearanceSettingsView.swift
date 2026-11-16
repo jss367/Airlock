@@ -1,7 +1,8 @@
 import AppKit
+import Common
 import SwiftUI
 
-/// The Appearance tab of the Settings window: the menu bar style, the app switcher size, and the focus flash outline.
+/// The Appearance tab of the Settings window: the menu bar style, the app switcher size and window previews, and the focus flash outline.
 struct AppearanceSettingsPane: View {
     @ObservedObject var model: TrayMenuModel
 
@@ -22,6 +23,8 @@ struct AppearanceSettingsPane: View {
                     .labelsHidden()
                     .fixedSize()
                 }
+                Divider()
+                WindowPreviewsRow()
             }
             focusFlashSection
         }
@@ -100,6 +103,32 @@ struct AppearanceSettingsPane: View {
                 if let value = aarrggbbString(NSColor(color)) { hex.wrappedValue = value }
             },
         )
+    }
+}
+
+/// Window previews depend on a macOS permission instead of a config value, so this row shows
+/// whether Airlock has it and leads to where it is granted.
+private struct WindowPreviewsRow: View {
+    @State private var isAllowed = CGPreflightScreenCaptureAccess()
+
+    var body: some View {
+        SettingsRow(title: "Window previews", summary: summary) {
+            if isAllowed {
+                Label("On", systemImage: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+            } else {
+                Button("Allow…") { openScreenRecordingSettings() }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            isAllowed = CGPreflightScreenCaptureAccess()
+        }
+    }
+
+    private var summary: String {
+        isAllowed
+            ? "The ⌘Tab switcher and the workspace overview show what each window looks like."
+            : "The ⌘Tab switcher and the workspace overview can show what each window looks like instead of its app icon. This needs the Screen Recording permission. After you turn it on, macOS offers to quit and reopen \(airlockAppName), which makes the previews appear."
     }
 }
 

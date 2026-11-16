@@ -52,3 +52,15 @@ func captureWindowImages(
         if let image, !Task.isCancelled { onCapture(windowId, image) }
     }
 }
+
+/// Leads to the Screen Recording permission that window previews need. Cmd+Tab and the workspace
+/// overview never ask for it themselves, so this is the one place Airlock does.
+@MainActor
+func openScreenRecordingSettings() {
+    // The first request shows the system prompt and adds Airlock to the Screen Recording list.
+    // macOS shows that prompt only once, so the list is opened as well.
+    if CGRequestScreenCaptureAccess() { return }
+    if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
+        NSWorkspace.shared.open(url)
+    }
+}
