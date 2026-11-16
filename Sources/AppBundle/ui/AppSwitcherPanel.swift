@@ -1,5 +1,6 @@
 import AppKit
 import Common
+import os
 import SwiftUI
 
 // MARK: - Global State
@@ -22,19 +23,106 @@ import SwiftUI
     appSwitcherPanel?.isVisible == true
 }
 
-/// Open the app switcher panel and highlight the next/prev app relative to the currently focused one.
+// MARK: - Cmd Release
+
+private let appSwitcherLogger = Logger(subsystem: airlockAppId, category: "appSwitcher")
+
+/// Whether Cmd is down right now. This reads the key's state, not the events Airlock happened to receive
+@MainActor
+func isCommandKeyDown() -> Bool {
+    NSEvent.modifierFlags.contains(.command)
+}
+
+/// What made the switcher act on its selection
+enum AppSwitcherCommitTrigger: String {
+    /// Cmd was already up when the shortcut ran, so the switch happened without the panel
+    case cmdUpBeforeOpen
+    /// Cmd went up while the panel was being built, before its monitors could see the release
+    case cmdUpDuringOpen
+    /// A monitor saw Cmd go up
+    case releaseEvent
+    /// No monitor reported the release. The poll found Cmd up
+    case releasePoll
+    case click
+
+    /// A release that no event reported. Only the fallbacks keep these from leaving the panel open
+    var isMissedRelease: Bool { self == .cmdUpDuringOpen || self == .releasePoll }
+}
+
+/// Missed releases are logged at a level that reaches the disk, so `log show` can tell how often they happen
+private func logAppSwitcherCommit(_ trigger: AppSwitcherCommitTrigger) {
+    if trigger.isMissedRelease {
+        appSwitcherLogger.notice("Committed after a Cmd release that no event reported: \(trigger.rawValue, privacy: .public)")
+    } else {
+        appSwitcherLogger.info("Committed: \(trigger.rawValue, privacy: .public)")
+    }
+}
+
+/// With Cmd held the user picks from the panel, so list the most recent app first: a quick tap
+/// flips between the last two apps. A Cmd shortcut let go before its command ran is that same quick
+/// tap. Anything else (e.g. CLI-triggered `focus app-next`) switches right away with nothing held,
+/// and only a fixed order lets repeated calls reach every app
+func appSwitcherOrder(isCmdHeld: Bool, hotkeyModifiers: NSEvent.ModifierFlags?) -> AppSwitcherOrder {
+    isCmdHeld || hotkeyModifiers?.contains(.command) == true ? .recency : .tree
+}
+
+/// Finds Cmd up by reading the key's state. The panel's monitors see a release only as an event,
+/// and an event that never reaches them would otherwise leave the panel open
+@MainActor
+final class AppSwitcherReleasePoll {
+    static let interval: TimeInterval = 0.025
+    private let isCommandDown: @MainActor () -> Bool
+    private let onRelease: @MainActor () -> Void
+    private var timer: Timer?
+    private var sawCommandUp = false
+
+    init(isCommandDown: @escaping @MainActor () -> Bool = isCommandKeyDown, onRelease: @escaping @MainActor () -> Void) {
+        self.isCommandDown = isCommandDown
+        self.onRelease = onRelease
+    }
+
+    func start() {
+        stop()
+        let timer = Timer(timeInterval: Self.interval, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.tick() }
+        }
+        // Common modes, so the poll keeps running while the panel tracks a scroll or a drag
+        RunLoop.main.add(timer, forMode: .common)
+        self.timer = timer
+    }
+
+    func stop() {
+        timer?.invalidate()
+        timer = nil
+        sawCommandUp = false
+    }
+
+    /// A release normally arrives as an event well within one interval, so the first tick that
+    /// finds Cmd up leaves it to the monitors. Cmd still up on the next tick means no event is coming
+    func tick() {
+        if isCommandDown() {
+            sawCommandUp = false
+        } else if sawCommandUp {
+            stop()
+            onRelease()
+        } else {
+            sawCommandUp = true
+        }
+    }
+}
+
+/// Switch to the next/prev app relative to the currently focused one. With Cmd held this opens the
+/// panel and waits for the release. With nothing held it switches right away.
+/// Runs inside the command session of the `focus` command that asked for it
 @MainActor
 func showAppSwitcher(direction: AppCycleDirection) {
     if let panel = appSwitcherPanel, panel.isVisible {
         cycleAppSwitcher(direction: direction)
         return
     }
-    // With Cmd held the user picks from the panel, so list the most recent app first: a quick tap
-    // flips between the last two apps. Without Cmd (e.g. CLI-triggered `focus app-next`) the switch
-    // commits right away, and only a fixed order lets repeated calls reach every app
-    let isCmdHeld = NSEvent.modifierFlags.contains(.command)
+    let isCmdHeld = isCommandKeyDown()
     appSwitcherTitleCache = appSwitcherTitleCache.filter { Window.get(byId: $0.key) != nil }
-    let groups = buildAppGroups(order: isCmdHeld ? .recency : .tree)
+    let groups = buildAppGroups(order: appSwitcherOrder(isCmdHeld: isCmdHeld, hotkeyModifiers: runningHotkeyModifiers))
     guard !groups.isEmpty else { return }
 
     let currentPid = focus.windowOrNil?.app.pid
@@ -44,6 +132,15 @@ func showAppSwitcher(direction: AppCycleDirection) {
         startIndex = (idx + offset + groups.count) % groups.count
     } else {
         startIndex = 0
+    }
+
+    // There is no release to wait for, so building the panel would only delay the switch
+    guard isCmdHeld else {
+        logAppSwitcherCommit(.cmdUpBeforeOpen)
+        if let windowId = groups[startIndex].windows.first?.windowId, let window = Window.get(byId: windowId) {
+            _ = window.focusWindow()
+        }
+        return
     }
 
     // Capturing without screen-recording access makes macOS prompt for it. Cmd+Tab must never do
@@ -56,11 +153,10 @@ func showAppSwitcher(direction: AppCycleDirection) {
     appSwitcherPanel = panel
     panel.show()
 
-    // Commit immediately so the panel doesn't stay open indefinitely.
-    if !isCmdHeld {
-        Task { @MainActor in
-            dismissAppSwitcher(commit: true)
-        }
+    // Building the panel takes long enough for a quick tap to let go of Cmd meanwhile, and the
+    // monitors that `show` installs only see releases from now on
+    if !isCommandKeyDown() {
+        commitAppSwitcher(.cmdUpDuringOpen)
         return
     }
 
@@ -79,6 +175,14 @@ func cycleAppSwitcher(direction: AppCycleDirection) {
         case .sameAppNext, .sameAppPrev:
             break // same-app cycling doesn't use the panel
     }
+}
+
+/// Close the app switcher and focus its selection
+@MainActor
+func commitAppSwitcher(_ trigger: AppSwitcherCommitTrigger) {
+    guard appSwitcherPanel != nil else { return }
+    logAppSwitcherCommit(trigger)
+    dismissAppSwitcher(commit: true)
 }
 
 /// Dismiss the app switcher. If `commit` is true, focus the selected window/app.
@@ -309,6 +413,7 @@ private final class AppSwitcherPanel: NSPanelHud {
     let contentState: AppSwitcherState
     private var localMonitor: Any?
     private var globalMonitor: Any?
+    private lazy var releasePoll = AppSwitcherReleasePoll { [weak self] in self?.commit(.releasePoll) }
     private var detailTasks: [Task<Void, Never>] = []
     private let actionQueue = appSwitcherActionQueue
     /// Read once, so a size changed in Settings applies the next time the switcher opens
@@ -334,10 +439,12 @@ private final class AppSwitcherPanel: NSPanelHud {
     func show() {
         makeKeyAndOrderFront(nil)
         installEventMonitors()
+        releasePoll.start()
     }
 
     override func close() {
         removeEventMonitors()
+        releasePoll.stop()
         detailTasks.forEach { $0.cancel() }
         detailTasks = []
         super.close()
@@ -380,6 +487,14 @@ private final class AppSwitcherPanel: NSPanelHud {
         globalMonitor = nil
     }
 
+    /// Key handling answers in a later task, and by then this panel can be closed with another one
+    /// open. A panel may only ever dismiss itself
+    private var isCurrent: Bool { appSwitcherPanel === self }
+
+    private func commit(_ trigger: AppSwitcherCommitTrigger) {
+        if isCurrent { commitAppSwitcher(trigger) }
+    }
+
     private func handleEvent(_ event: NSEvent) -> Bool {
         switch event.type {
             case .flagsChanged:
@@ -394,9 +509,7 @@ private final class AppSwitcherPanel: NSPanelHud {
     private func handleFlagsChanged(_ event: NSEvent) -> Bool {
         // If Cmd key was released, commit selection
         if !event.modifierFlags.contains(.command) {
-            Task { @MainActor in
-                dismissAppSwitcher(commit: true)
-            }
+            Task { @MainActor in self.commit(.releaseEvent) }
             return true
         }
         return false
@@ -413,7 +526,7 @@ private final class AppSwitcherPanel: NSPanelHud {
             case .cycleWindow(let offset): contentState.cycleWindow(offset: offset)
             case .closeWindow: closeSelectedWindow()
             case .quitApp: quitSelectedApp()
-            case .cancel: Task { @MainActor in dismissAppSwitcher(commit: false) }
+            case .cancel: Task { @MainActor in if self.isCurrent { dismissAppSwitcher(commit: false) } }
             case .ignore: break
             case nil: return false
         }
