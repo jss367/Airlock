@@ -46,6 +46,43 @@ Airlock keeps app and window switching within the focused workspace. With the de
 
 Airlock also blocks attempts by apps on other workspaces to steal focus. A blocked window's workspace is marked in the menu bar, and `option-backtick` takes you to it; see <<prevent-focus-stealing>>. Use an explicit workspace command, the quick switcher, or the workspace overview to move between workspaces.
 
+[#app-switching-scope]
+=== App switching scope
+
+The `app-switching-scope` key sets which windows `cmd-tab` and `cmd-backtick` cycle through:
+
+* `workspace` -- the windows of the focused workspace (default)
+* `all` -- the windows of every workspace. Picking a window on another workspace switches to that workspace.
+
+[source,toml]
+----
+app-switching-scope = 'all'
+----
+
+In *Settings → General* this is *App switching scope*, under *Workspace app switching*.
+It has no effect while *Workspace app switching* (`enable-workspace-app-switching`) is off, because macOS handles those keys then.
+
+[#multi-monitor-settings]
+=== Different settings with more than one monitor
+
+Some settings work better depending on how many monitors you have.
+With one monitor you might want strict workspace isolation, and with several you might want to move between workspaces freely.
+Values in the `[multi-monitor]` table replace the top-level ones while more than one monitor is connected.
+When you go back to one monitor, the top-level values apply again. There is nothing to reload.
+
+[source,toml]
+----
+prevent-focus-stealing = 'cross-workspace'
+app-switching-scope = 'workspace'
+
+[multi-monitor]
+    prevent-focus-stealing = 'off'
+    app-switching-scope = 'all'
+----
+
+The table supports `prevent-focus-stealing` and `app-switching-scope`. A key left out of the table keeps its top-level value.
+*Settings → General* has the same choices under *With more than one monitor*, where *Same as above* leaves the key out.
+
 The workspace overview shows every workspace that has windows, with a thumbnail of each window. Open it from the menu bar, or bind xref:commands.adoc#workspace-overview[workspace-overview] to a key; the same key closes it. The arrow keys move across workspaces and into their windows, and `Return` opens the selection. It is Airlock's own view and is separate from the macOS Mission Control (see <<a-note-on-mission-control>>).
 
 The menu bar menu lists the workspaces in use; click one to switch to it. Workspaces with no windows are under *Empty Workspaces*. Below them are the *Quick Switcher*, the *Workspace Overview*, and *Settings…* (`cmd-comma` while the menu is open). Menu items show the shortcut your configuration binds to them, if any.

@@ -19,6 +19,17 @@ final class SettingsTest: XCTestCase {
         assertNotNil(unmetReason(preventFocusStealingRequirement, config))
     }
 
+    func testAppSwitchingScopeNamesTheFirstSettingToTurnOn() {
+        assertNil(unmetReason(.workspaceAppSwitching, config))
+
+        config.enableWorkspaceAppSwitching = false
+        assertEquals(unmetReason(.workspaceAppSwitching, config), "Requires Workspace app switching, which is off.")
+
+        // Turning on Workspace app switching alone wouldn't help, so the reason names Window management
+        config.enableWindowManagement = false
+        assertEquals(unmetReason(.workspaceAppSwitching, config), "Requires Window management, which is off.")
+    }
+
     func testNothingIsDisabledWithDefaults() {
         assertEquals((behaviorFeatures + appFeatures).filter { unmetReason($0.requirement, config) != nil }.map(\.key), [])
         assertNil(unmetReason(preventFocusStealingRequirement, config))

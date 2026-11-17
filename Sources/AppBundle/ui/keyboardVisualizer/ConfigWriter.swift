@@ -149,6 +149,50 @@ func setTomlValueInLines(_ lines: [String], table: String?, key: String, value: 
     return content
 }
 
+/// Removes `key` from `table` (or from the top level), leaving the table's header in place.
+/// A missing config file or a missing key leaves the file as it is.
+@MainActor
+func removeConfigValue(table: String?, key: String) throws {
+    let file = try configFileForEditing(contentIfMissing: newConfigFileLines())
+    let content = try removeTomlValueInLines(file.lines, table: table, key: key)
+    guard content != file.lines else { return }
+    try writeConfigEdit(from: file.lines, to: content, url: file.url, separator: file.separator)
+}
+
+/// Pure line-manipulation logic for `removeConfigValue`, separated from file I/O for testability.
+func removeTomlValueInLines(_ lines: [String], table: String?, key: String) throws -> [String] {
+    let path = (table?.split(separator: ".").map(String.init) ?? []) + [key]
+    let topLevel = 0 ..< tomlSectionEnd(lines, sectionStart: -1)
+    let section: Range<Int>
+    let entryKey: String
+    // A table defined only by dotted keys stops existing when its last key goes
+    var dottedTable: [String]? = nil
+    if let table, let header = lines.firstIndex(where: { tomlTableHeader($0) == table }) {
+        section = header + 1 ..< tomlSectionEnd(lines, sectionStart: header)
+        entryKey = key
+    } else if let table {
+        if tomlEntries(lines, in: topLevel).contains(where: { $0.key == table }) {
+            throw ConfigWriterError.inlineTable(table)
+        }
+        section = topLevel
+        entryKey = "\(table).\(key)"
+        dottedTable = Array(path.dropLast())
+    } else {
+        section = topLevel
+        entryKey = key
+    }
+    guard let entry = tomlEntries(lines, in: section).first(where: { $0.key == entryKey }) else { return lines }
+    var content = lines
+    content.removeSubrange(entry.lines)
+    try verifyTomlEdit(from: lines, to: content, path: path) { entries in
+        entries.remove(path)
+        if let dottedTable, !entries.values.keys.contains(where: { $0.count > dottedTable.count && $0.starts(with: dottedTable) }) {
+            entries.remove(dottedTable)
+        }
+    }
+    return content
+}
+
 private func setTomlValueInLinesUnverified(_ lines: [String], table: String?, key: String, value: String) throws -> [String] {
     let topLevel = 0 ..< tomlSectionEnd(lines, sectionStart: -1)
     guard let table else {
@@ -328,6 +372,11 @@ private struct ParsedTomlEntries: Equatable {
             values[Array(path.prefix(depth))] = .table([:])
         }
         values[path] = value
+    }
+
+    /// Removes the value at `path` and everything under it. The tables above it stay.
+    mutating func remove(_ path: [String]) {
+        values = values.filter { !$0.key.starts(with: path) }
     }
 }
 

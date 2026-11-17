@@ -54,7 +54,7 @@ final class FocusStealingPreventionState {
 @MainActor
 func shouldAllowFocusChange(to newWindow: Window?) -> Bool {
     guard config.enableWindowManagement else { return true }
-    let mode = config.preventFocusStealing
+    let mode = config.activePreventFocusStealing
     guard mode != .off else { return true }
     guard !isUserInitiatedFocusChange else { return true }
     // At startup, macOS's focus is where the user left it before Airlock ran. There is no Airlock

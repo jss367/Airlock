@@ -112,7 +112,7 @@ final class FocusAttentionState {
     }
 
     private var isDeferringFocus: Bool {
-        sessionCoordinator.isEnabled && config.enableWindowManagement && config.preventFocusStealing != .off
+        sessionCoordinator.isEnabled && config.enableWindowManagement && config.activePreventFocusStealing != .off
     }
 
     private func prune() {

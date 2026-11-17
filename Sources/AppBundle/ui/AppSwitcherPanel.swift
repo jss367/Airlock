@@ -227,13 +227,13 @@ enum AppSwitcherOrder {
 
 @MainActor
 private func buildAppGroups(order: AppSwitcherOrder) -> [AppGroup] {
-    let workspace = focus.workspace
+    let windows = appSwitchingWindows(scope: config.activeAppSwitchingScope, focusedWorkspace: focus.workspace)
 
     // Each app's windows are listed most recent first, so committing the switcher
     // lands on the window the user last used rather than the app's first one
-    var windowsByApp = groupedPreservingOrder(windowsByFocusRecency(workspace), by: { $0.app.pid })
+    var windowsByApp = groupedPreservingOrder(windowsByFocusRecency(windows), by: { $0.app.pid })
     if order == .tree {
-        let treeOrder = groupedPreservingOrder(workspace.allLeafWindowsRecursive, by: { $0.app.pid }).map(\.key)
+        let treeOrder = groupedPreservingOrder(windows, by: { $0.app.pid }).map(\.key)
         windowsByApp.sort { a, b in
             (treeOrder.firstIndex(of: a.key) ?? .max) < (treeOrder.firstIndex(of: b.key) ?? .max)
         }
@@ -270,10 +270,20 @@ func groupedPreservingOrder<Item, Key: Hashable>(_ items: [Item], by key: (Item)
     return groups
 }
 
-/// The workspace's windows, most recently focused first. Never-focused windows come last, in tree order
+/// The windows the app switching keys cycle through, in tree order. With `all`, workspaces come in
+/// the order the menu bar lists them
 @MainActor
-func windowsByFocusRecency(_ workspace: Workspace) -> [Window] {
-    workspace.allLeafWindowsRecursive.enumerated()
+func appSwitchingWindows(scope: AppSwitchingScope, focusedWorkspace: Workspace) -> [Window] {
+    switch scope {
+        case .workspace: focusedWorkspace.allLeafWindowsRecursive
+        case .all: workspacesForUi().flatMap(\.allLeafWindowsRecursive)
+    }
+}
+
+/// `windows` sorted most recently focused first. Never-focused windows come last, in their given order
+@MainActor
+func windowsByFocusRecency(_ windows: [Window]) -> [Window] {
+    windows.enumerated()
         .sorted { a, b in
             a.element.focusRecency != b.element.focusRecency
                 ? a.element.focusRecency > b.element.focusRecency

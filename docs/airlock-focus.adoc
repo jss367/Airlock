@@ -77,7 +77,9 @@ Set focus to the window before or after the current window in the depth-first or
 In this mode, `--boundaries` must be `workspace` (the default) and `--boundaries-action` can be set to one of `(stop|fail|wrap-around-the-workspace)`.
 
 (app-next|app-prev|same-app-next|same-app-prev)::
-Cycle focus between applications or between windows of the same application within the current workspace.
+Cycle focus between applications or between windows of the same application.
+By default these stay within the current workspace. With `app-switching-scope = 'all'` they cover every workspace, and focusing a window on another workspace switches to that workspace.
+See xref:guide.adoc#app-switching-scope[App switching scope].
 +
 When a binding that holds `cmd` runs `app-next` or `app-prev`, a switcher opens and stays up until `cmd` is released.
 It lists the most recently used application first, so a quick tap flips between the last two applications, and shows a thumbnail of each window of the selected application.
@@ -87,6 +89,7 @@ While the switcher is open, `tab`, `shift-tab` and the left and right arrows mov
 A footer in the switcher lists these keys.
 Moving the pointer over an application or window selects it, and clicking switches to it.
 Without `cmd` held (for example from the CLI), the command switches right away and steps through applications in workspace tree order.
+With `app-switching-scope = 'all'`, workspaces come in the order the menu bar lists them.
 
 // end::body[]
 

@@ -17,11 +17,22 @@ struct BoolFeature: Identifiable {
 /// so Settings disables its control and shows `unmetReason` instead of leaving a dead switch.
 enum FeatureRequirement {
     case windowManagement
+    case workspaceAppSwitching
     case focusFlash
+
+    /// A setting this one depends on in turn. Its reason is shown first, since turning on
+    /// this setting alone wouldn't help
+    var prerequisite: FeatureRequirement? {
+        switch self {
+            case .workspaceAppSwitching: .windowManagement
+            case .windowManagement, .focusFlash: nil
+        }
+    }
 
     func isMet(_ config: Config) -> Bool {
         switch self {
             case .windowManagement: config.enableWindowManagement
+            case .workspaceAppSwitching: config.enableWorkspaceAppSwitching
             case .focusFlash: config.focusFlash.enabled
         }
     }
@@ -29,6 +40,7 @@ enum FeatureRequirement {
     var unmetReason: String {
         switch self {
             case .windowManagement: "Requires Window management, which is off."
+            case .workspaceAppSwitching: "Requires Workspace app switching, which is off."
             case .focusFlash: "Focus flash is off in General, so these have no effect."
         }
     }
@@ -36,7 +48,8 @@ enum FeatureRequirement {
 
 /// Why a control with this requirement can't be used right now, or nil if it can.
 func unmetReason(_ requirement: FeatureRequirement?, _ config: Config) -> String? {
-    requirement.flatMap { $0.isMet(config) ? nil : $0.unmetReason }
+    guard let requirement else { return nil }
+    return unmetReason(requirement.prerequisite, config) ?? (requirement.isMet(config) ? nil : requirement.unmetReason)
 }
 
 /// `shouldAllowFocusChange` allows every focus change while window management is off.
@@ -112,6 +125,44 @@ func preventFocusStealingBinding() -> Binding<PreventFocusStealingMode> {
     )
 }
 
+@MainActor
+func appSwitchingScopeBinding() -> Binding<AppSwitchingScope> {
+    Binding(
+        get: { config.appSwitchingScope },
+        set: { setSettingsValue(key: "app-switching-scope", value: "'\($0.rawValue)'") },
+    )
+}
+
+/// A `[multi-monitor]` value. Nil means the key is unset, so the top-level value applies.
+@MainActor
+func multiMonitorBinding<Value: RawRepresentable<String>>(
+    key: String,
+    _ keyPath: KeyPath<MultiMonitorSettings, Value?>,
+) -> Binding<Value?> {
+    Binding(
+        get: { config.multiMonitor[keyPath: keyPath] },
+        set: { value in
+            if let value {
+                setSettingsValue(table: multiMonitorTableKey, key: key, value: "'\(value.rawValue)'")
+            } else {
+                removeSettingsValue(table: multiMonitorTableKey, key: key)
+            }
+        },
+    )
+}
+
+@MainActor
+func removeSettingsValue(table: String? = nil, key: String) {
+    Task {
+        do {
+            try removeConfigValue(table: table, key: key)
+            try await reloadSettingsConfigAfterWrite()
+        } catch {
+            reportSettingsWriteFailure(error)
+        }
+    }
+}
+
 /// `value` is already TOML-encoded. Works while Airlock is paused too, see `reloadConfigFromUi`.
 @MainActor
 func setSettingsValue(table: String? = nil, key: String, value: String) {
@@ -166,6 +217,15 @@ extension PreventFocusStealingMode {
             case .off: "Off"
             case .crossWorkspace: "Across workspaces"
             case .always: "Always"
+        }
+    }
+}
+
+extension AppSwitchingScope {
+    var menuTitle: String {
+        switch self {
+            case .workspace: "Current workspace"
+            case .all: "All workspaces"
         }
     }
 }
