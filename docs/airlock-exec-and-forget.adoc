@@ -27,7 +27,8 @@ For example, you can use this command to launch applications:
 option-enter = 'exec-and-forget open -n /System/Applications/Utilities/Terminal.app'
 ----
 
-`<bash-script>` is passed "as is" to bash without any transformations and escaping. `<bash-script>` is treated as suffix of the TOML string, it's not even an argument in classic CLI sense
+Airlock passes the text after `exec-and-forget` directly to Bash, including whitespace and shell quoting.
+If you rename a workspace, Airlock preserves this script. Update any workspace references inside the script yourself.
 
 * The command is available in config
 * The command is *NOT* available in CLI

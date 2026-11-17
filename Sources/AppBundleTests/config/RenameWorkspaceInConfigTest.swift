@@ -41,6 +41,20 @@ final class RenameWorkspaceInConfigTest: XCTestCase {
             """)
     }
 
+    func testRenameLeavesShellScriptsIntact() {
+        let script = "exec-and-forget echo --workspace 1 && workspace 1"
+        let config = """
+            config-version = 2
+            [mode.main.binding]
+                option-1 = ['\(script)', 'workspace 1']
+            """
+        let renamed = renameWorkspaceInConfig(config, from: "1", to: "Web")
+        assertEquals(renamed, config.replacingOccurrences(of: "'workspace 1'", with: "'workspace Web'"))
+        let parsed = parseConfig(renamed, mergeWithDefaults: false)
+        assertEquals(parsed.errors.map(\.description), [])
+        assertTrue(!configStillReferences(parsed.config, workspace: "1"))
+    }
+
     func testRenamesTableKeysButNotTheirValues() {
         let config = """
             [workspace-to-monitor-force-assignment]
