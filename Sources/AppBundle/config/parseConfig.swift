@@ -124,6 +124,7 @@ private let configParser: [String: any ParserProtocol<Config>] = [
     "enable-keyboard-shortcuts": Parser(\.enableKeyboardShortcuts, parseBool),
     "enable-window-management": Parser(\.enableWindowManagement, parseBool),
     "prevent-focus-stealing": Parser(\.preventFocusStealing, parsePreventFocusStealing),
+    "app-switching-scope": Parser(\.appSwitchingScope, parseAppSwitchingScope),
     "accordion-padding": Parser(\.accordionPadding, parseInt),
     persistentWorkspacesKey: Parser(\.persistentWorkspaces, parsePersistentWorkspaces),
 
@@ -131,6 +132,7 @@ private let configParser: [String: any ParserProtocol<Config>] = [
 
     "quick-switcher": Parser(\.quickSwitcher, parseQuickSwitcher),
     "focus-flash": Parser(\.focusFlash, parseFocusFlash),
+    multiMonitorTableKey: Parser(\.multiMonitor, parseMultiMonitor),
 
     keyMappingConfigRootKey: Parser(\.keyMapping, skipParsing(Config().keyMapping)), // Parsed manually
     modeConfigRootKey: Parser(\.modes, skipParsing(Config().modes)), // Parsed manually
@@ -531,10 +533,17 @@ func parseBool(_ raw: TOMLValueConvertible, _ backtrace: TomlBacktrace) -> Parse
     raw.bool.orFailure(expectedActualTypeError(expected: .bool, actual: raw.type, backtrace))
 }
 
-private func parsePreventFocusStealing(_ raw: TOMLValueConvertible, _ backtrace: TomlBacktrace) -> ParsedToml<PreventFocusStealingMode> {
+func parsePreventFocusStealing(_ raw: TOMLValueConvertible, _ backtrace: TomlBacktrace) -> ParsedToml<PreventFocusStealingMode> {
     parseString(raw, backtrace).flatMap {
         PreventFocusStealingMode(rawValue: $0)
             .orFailure(.semantic(backtrace, "Can't parse prevent-focus-stealing '\($0)'. Expected: off|cross-workspace|always"))
+    }
+}
+
+func parseAppSwitchingScope(_ raw: TOMLValueConvertible, _ backtrace: TomlBacktrace) -> ParsedToml<AppSwitchingScope> {
+    parseString(raw, backtrace).flatMap {
+        AppSwitchingScope(rawValue: $0)
+            .orFailure(.semantic(backtrace, "Can't parse app-switching-scope '\($0)'. Expected: workspace|all"))
     }
 }
 

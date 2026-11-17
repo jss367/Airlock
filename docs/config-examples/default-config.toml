@@ -49,6 +49,11 @@ enable-window-management = true
 # Set to false to give those keys back to macOS.
 enable-workspace-app-switching = true
 
+# Which windows the app switching keys cycle through. One of:
+#   'workspace' - the focused workspace only (default)
+#   'all'       - every workspace. Picking a window on another workspace switches there
+app-switching-scope = 'workspace'
+
 # Register every other binding in the [mode.*.binding] tables.
 # Set to false to give those keys back to macOS.
 enable-keyboard-shortcuts = true
@@ -56,6 +61,13 @@ enable-keyboard-shortcuts = true
 # Push focus back when an app activates itself from another workspace.
 # One of: 'cross-workspace' (default), 'always', 'off'
 prevent-focus-stealing = 'cross-workspace'
+
+# Values in [multi-monitor] replace the top-level ones while more than one monitor is
+# connected, and stop applying when you go back to one. Supported keys:
+# prevent-focus-stealing, app-switching-scope
+# [multi-monitor]
+#     prevent-focus-stealing = 'off'
+#     app-switching-scope = 'all'
 
 # You can effectively turn off macOS "Hide application" (cmd-h) feature by toggling this flag
 # Useful if you don't use this macOS feature, but accidentally hit cmd-h or cmd-option-h key
@@ -168,7 +180,7 @@ on-mode-changed = []
     option-slash = 'layout tiles horizontal vertical'
     option-comma = 'layout accordion horizontal vertical'
 
-    # Workspace isolation: cmd-tab/cmd-backtick cycle within the current workspace only
+    # Workspace isolation: cmd-tab/cmd-backtick cycle within the current workspace (see app-switching-scope)
     cmd-tab = 'focus app-next'
     shift-cmd-tab = 'focus app-prev'
     cmd-backtick = 'focus same-app-next'

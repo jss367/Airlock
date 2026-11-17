@@ -479,6 +479,40 @@ final class ConfigWriterTest: XCTestCase {
         assertEquals(config.focusFlash.enabled, false)
     }
 
+    func testRemoveTableValueKeepsTheTableAndTheOtherKeys() throws {
+        let lines = [
+            "[multi-monitor] # docked",
+            "    prevent-focus-stealing = 'off'",
+            "    app-switching-scope = 'all'",
+            "",
+            "[gaps]",
+        ]
+        let result = try removeTomlValueInLines(lines, table: "multi-monitor", key: "prevent-focus-stealing")
+        assertEquals(result, [
+            "[multi-monitor] # docked",
+            "    app-switching-scope = 'all'",
+            "",
+            "[gaps]",
+        ])
+    }
+
+    func testRemoveDottedTopLevelValue() throws {
+        let lines = ["config-version = 2", "multi-monitor.app-switching-scope = 'all'"]
+        let result = try removeTomlValueInLines(lines, table: "multi-monitor", key: "app-switching-scope")
+        assertEquals(result, ["config-version = 2"])
+    }
+
+    func testRemoveMissingValueLeavesTheLinesAlone() throws {
+        let lines = ["config-version = 2", "[multi-monitor]", "    app-switching-scope = 'all'"]
+        assertEquals(try removeTomlValueInLines(lines, table: "multi-monitor", key: "prevent-focus-stealing"), lines)
+        assertEquals(try removeTomlValueInLines(lines, table: nil, key: "prevent-focus-stealing"), lines)
+    }
+
+    func testRemoveFromInlineTableIsRefused() {
+        let lines = ["multi-monitor = { app-switching-scope = 'all' }"]
+        XCTAssertThrowsError(try removeTomlValueInLines(lines, table: "multi-monitor", key: "app-switching-scope"))
+    }
+
     func testSetTableValueAddsKeyToSectionWithoutIt() throws {
         let lines = [
             "[quick-switcher]",

@@ -51,6 +51,7 @@ struct Config: ConvenienceCopyable {
     var enableKeyboardShortcuts: Bool = true
     var enableWindowManagement: Bool = true
     var preventFocusStealing: PreventFocusStealingMode = .crossWorkspace
+    var appSwitchingScope: AppSwitchingScope = .workspace
     var accordionPadding: Int = 30
     var enableNormalizationOppositeOrientationForNestedContainers: Bool = true
     var persistentWorkspaces: OrderedSet<String> = []
@@ -59,6 +60,7 @@ struct Config: ConvenienceCopyable {
     var execConfig: ExecConfig = ExecConfig()
     var quickSwitcher: QuickSwitcherSettings = .default
     var focusFlash: FocusFlashSettings = .default
+    var multiMonitor: MultiMonitorSettings = .default
 
     var onFocusChanged: [any Command] = []
     // var onFocusedWorkspaceChanged: [any Command] = []
@@ -82,4 +84,13 @@ enum PreventFocusStealingMode: String, CaseIterable {
     case crossWorkspace = "cross-workspace"
     /// Prevent all uninitiated focus changes (aggressive)
     case always
+}
+
+/// Which windows the app switching keys (`focus app-next` and `focus same-app-next`, and their
+/// `prev` twins) cycle through
+enum AppSwitchingScope: String, CaseIterable, Sendable {
+    /// The focused workspace only (default)
+    case workspace
+    /// Every workspace. Picking a window on another workspace switches to that workspace
+    case all
 }

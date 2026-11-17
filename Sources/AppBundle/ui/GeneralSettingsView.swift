@@ -1,9 +1,11 @@
+import AppKit
 import Common
 import SwiftUI
 
 /// The General tab of the Settings window: running state and the feature switches.
 struct GeneralSettingsPane: View {
     @ObservedObject var model: TrayMenuModel
+    @State private var monitorCount = connectedMonitorCount
 
     var body: some View {
         SettingsPane {
@@ -26,8 +28,13 @@ struct GeneralSettingsPane: View {
                 ForEach(behaviorFeatures) { feature in
                     Divider()
                     featureRow(feature)
+                    if feature.key == "enable-workspace-app-switching" {
+                        Divider()
+                        appSwitchingScopeRow
+                    }
                 }
             }
+            multiMonitorSection
             SettingsSection(title: "App") {
                 ForEach(Array(appFeatures.enumerated()), id: \.element.id) { index, feature in
                     if index > 0 { Divider() }
@@ -39,6 +46,71 @@ struct GeneralSettingsPane: View {
                 .foregroundStyle(.secondary)
                 .padding(.leading, 4)
         }
+    }
+
+    private var appSwitchingScopeRow: some View {
+        SettingsRow(
+            title: "App switching scope",
+            summary: "Which windows ⌘Tab and ⌘` cycle through. With All workspaces, picking a window on another workspace switches to that workspace.",
+            disabledReason: unmetReason(.workspaceAppSwitching, config),
+        ) {
+            Picker("App switching scope", selection: appSwitchingScopeBinding()) {
+                ForEach(AppSwitchingScope.allCases, id: \.self) { scope in
+                    Text(scope.menuTitle).tag(scope)
+                }
+            }
+            .labelsHidden()
+            .fixedSize()
+        }
+    }
+
+    /// The `[multi-monitor]` table. Each picker can also leave its key unset, which keeps the value above
+    private var multiMonitorSection: some View {
+        SettingsSection(title: "With more than one monitor") {
+            Text("While more than one monitor is connected, these replace the settings above. \(multiMonitorStatus)")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Divider()
+            SettingsRow(
+                title: "Prevent focus stealing",
+                summary: "Replaces Prevent focus stealing above.",
+                disabledReason: unmetReason(preventFocusStealingRequirement, config),
+            ) {
+                Picker("Prevent focus stealing with more than one monitor", selection: multiMonitorBinding(key: "prevent-focus-stealing", \.preventFocusStealing)) {
+                    Text("Same as above").tag(PreventFocusStealingMode?.none)
+                    ForEach(PreventFocusStealingMode.allCases, id: \.self) { mode in
+                        Text(mode.menuTitle).tag(PreventFocusStealingMode?.some(mode))
+                    }
+                }
+                .labelsHidden()
+                .fixedSize()
+            }
+            Divider()
+            SettingsRow(
+                title: "App switching scope",
+                summary: "Replaces App switching scope above.",
+                disabledReason: unmetReason(.workspaceAppSwitching, config),
+            ) {
+                Picker("App switching scope with more than one monitor", selection: multiMonitorBinding(key: "app-switching-scope", \.appSwitchingScope)) {
+                    Text("Same as above").tag(AppSwitchingScope?.none)
+                    ForEach(AppSwitchingScope.allCases, id: \.self) { scope in
+                        Text(scope.menuTitle).tag(AppSwitchingScope?.some(scope))
+                    }
+                }
+                .labelsHidden()
+                .fixedSize()
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didChangeScreenParametersNotification)) { _ in
+            monitorCount = connectedMonitorCount
+        }
+    }
+
+    private var multiMonitorStatus: String {
+        monitorCount > 1
+            ? "\(monitorCount) monitors are connected, so they apply now."
+            : "One monitor is connected, so they don't apply now."
     }
 
     private var runningStatus: some View {

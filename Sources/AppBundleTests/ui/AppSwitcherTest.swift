@@ -29,7 +29,34 @@ final class AppSwitcherTest: XCTestCase {
         assertTrue(other.focusWindow())
 
         // other's container is now the most recent root child, but x2 was focused after x1
-        assertEquals(windowsByFocusRecency(workspace).map(\.windowId), [3, 2, 1, 4])
+        assertEquals(windowsByFocusRecency(workspace.allLeafWindowsRecursive).map(\.windowId), [3, 2, 1, 4])
+    }
+
+    func testAppSwitchingWindowsFollowTheScope() {
+        let a = Workspace.get(byName: "a")
+        let b = Workspace.get(byName: "b")
+        let w1 = TestWindow.new(id: 1, parent: a.rootTilingContainer)
+        TestWindow.new(id: 2, parent: b.rootTilingContainer)
+        assertTrue(w1.focusWindow())
+
+        assertEquals(appSwitchingWindows(scope: .workspace, focusedWorkspace: a).map(\.windowId), [1])
+        assertEquals(appSwitchingWindows(scope: .all, focusedWorkspace: a).map(\.windowId), [1, 2])
+    }
+
+    func testSameAppCyclingCrossesWorkspacesOnlyWithAllScope() async throws {
+        let a = Workspace.get(byName: "a")
+        let b = Workspace.get(byName: "b")
+        let w1 = TestWindow.new(id: 1, parent: a.rootTilingContainer)
+        TestWindow.new(id: 2, parent: b.rootTilingContainer)
+        assertTrue(w1.focusWindow())
+
+        try await parseCommand("focus same-app-next").cmdOrDie.run(.defaultEnv, .emptyStdin)
+        assertEquals(focus.windowOrNil?.windowId, 1)
+
+        config.appSwitchingScope = .all
+        try await parseCommand("focus same-app-next").cmdOrDie.run(.defaultEnv, .emptyStdin)
+        assertEquals(focus.windowOrNil?.windowId, 2)
+        assertEquals(focus.workspace, b)
     }
 
     func testGroupedPreservingOrderKeepsFirstAppearanceOrder() {
