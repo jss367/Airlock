@@ -109,6 +109,7 @@ let commandSeparators: Set<String> = ["&&", "||", ";"]
 
 /// Renames the workspace in one command string, which can hold a whole sequence (`a && b; c`)
 func renameWorkspaceInCommand(_ command: String, from old: String, to new: String) -> String {
+    guard execAndForgetScript(in: command) == nil else { return command }
     var words: [Range<String.Index>] = []
     var index = command.startIndex
     while index < command.endIndex {
