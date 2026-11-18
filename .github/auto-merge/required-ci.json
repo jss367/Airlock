@@ -1,0 +1,4 @@
+{
+  "build.yml": ["build-debug (macos-26)", "build-release (macos-26)"],
+  "merge-checks.yml": ["Merge gate regressions"]
+}

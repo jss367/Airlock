@@ -26,3 +26,10 @@ xcshareddata/
 # Claude Code local files
 .claude/settings.local.json
 .claude/worktrees/
+
+# Isolated local CI validation tools and SwiftPM data.
+**/__pycache__/
+.pytest_cache/
+.swiftpm-cache/
+.swiftpm-config/
+.swiftpm-security/

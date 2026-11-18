@@ -1,4 +1,8 @@
 name: build
+run-name: 'Tests for pull request #${{ github.event.pull_request.number }} against ${{ github.event.pull_request.base.ref }}'
+
+permissions:
+  contents: read
 
 on:
   push:
@@ -6,6 +10,7 @@ on:
       - 'main'
   pull_request:
     branches: [ "main" ]
+    types: [opened, synchronize, reopened, ready_for_review, edited]
   workflow_dispatch:
 
 jobs:

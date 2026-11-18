@@ -1,0 +1,36 @@
+name: Postmerge tests only
+run-name: 'Postmerge tests for ${{ inputs.merged_sha }}'
+on:
+  workflow_dispatch:
+    inputs:
+      merged_sha:
+        description: Exact merge commit returned by GitHub's guarded merge API
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  gate-tests:
+    uses: ./.github/workflows/merge-checks.yml
+    with:
+      checkout_ref: ${{ inputs.merged_sha }}
+  native-tests:
+    name: Native Swift build and tests
+    runs-on: macos-26
+    timeout-minutes: 45
+    steps:
+      - name: Validate exact merge commit
+        env:
+          MERGED_SHA: ${{ inputs.merged_sha }}
+        run: '[[ "$MERGED_SHA" =~ ^[0-9a-f]{40}$ ]]'
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.merged_sha }}
+          persist-credentials: false
+      - run: ./.github/gh-actions-runner-xcode-select.sh
+      - run: brew install swiftly
+      - run: swiftly init --skip-install --assume-yes --verbose && swiftly install
+      - name: Build and test without installation or deployment
+        run: |
+          ./build-debug.sh
+          ./run-tests.sh
