@@ -1,9 +1,11 @@
 @testable import AppBundle
+import AppKit
 import XCTest
 
 @MainActor
 final class NativeRefreshIsolationTest: XCTestCase {
     override func setUp() async throws {
+        _ = NSApplication.shared // A full refresh also updates the secure-input panel.
         setUpWorkspacesForTests()
         sessionCoordinator.setEnabled(true)
         appForTests = TestApp.shared
@@ -44,5 +46,21 @@ final class NativeRefreshIsolationTest: XCTestCase {
         XCTAssertTrue(Window.get(byId: window.windowId) === window)
         XCTAssertTrue(MacApp.allAppsMap.isEmpty)
         XCTAssertTrue(MacWindow.allWindows.isEmpty)
+    }
+
+    func testFullRefreshUsesMockAppHiddenState() async throws {
+        let workspace = focus.workspace
+        let window = TestWindow.new(id: 987_002, parent: workspace.rootTilingContainer)
+        config.automaticallyUnhideMacosHiddenApps = false
+        window.isMacosAppHiddenForTests = true
+
+        try await runRefreshSessionBlocking(.hotkeyBinding)
+        XCTAssertTrue(window.parent === workspace.macOsNativeHiddenAppsWindowsContainer)
+
+        window.isMacosAppHiddenForTests = false
+        try await runRefreshSessionBlocking(.hotkeyBinding)
+        XCTAssertTrue(window.workspace === workspace)
+        XCTAssertFalse(window.parent === workspace.macOsNativeHiddenAppsWindowsContainer)
+        XCTAssertTrue(MacApp.allAppsMap.isEmpty)
     }
 }
