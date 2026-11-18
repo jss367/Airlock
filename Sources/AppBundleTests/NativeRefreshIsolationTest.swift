@@ -59,7 +59,7 @@ final class NativeRefreshIsolationTest: XCTestCase {
 
         window.isMacosAppHiddenForTests = false
         try await runRefreshSessionBlocking(.hotkeyBinding)
-        XCTAssertTrue(window.workspace === workspace)
+        XCTAssertTrue(window.nodeWorkspace === workspace)
         XCTAssertFalse(window.parent === workspace.macOsNativeHiddenAppsWindowsContainer)
         XCTAssertTrue(MacApp.allAppsMap.isEmpty)
     }
