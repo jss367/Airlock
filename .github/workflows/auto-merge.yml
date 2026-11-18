@@ -1,0 +1,46 @@
+name: Auto Merge
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  issue_comment:
+    types: [created, edited]
+  workflow_dispatch:
+permissions:
+  contents: write
+  pull-requests: write
+  issues: read
+  actions: write
+concurrency:
+  group: auto-merge
+  cancel-in-progress: false
+jobs:
+  auto-merge:
+    if: >-
+      github.event_name != 'issue_comment' ||
+      (github.event.issue.pull_request &&
+       github.event.comment.user.login == 'chatgpt-codex-connector[bot]' &&
+       contains(github.event.comment.body, 'codex-pull-request-review-summary'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Find default branch
+        id: default
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          branch=$(gh api "repos/$REPO" --jq '.default_branch // empty')
+          test -n "$branch"
+          git check-ref-format "refs/heads/$branch" >/dev/null
+          printf 'branch=%s\n' "$branch" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.default.outputs.branch }}
+          sparse-checkout: .github/auto-merge
+          persist-credentials: false
+      - name: Evaluate exact-head reviews and repository CI
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: python3 .github/auto-merge/gate.py
