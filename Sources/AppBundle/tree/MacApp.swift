@@ -39,6 +39,9 @@ final class MacApp: AbstractApp {
     @MainActor
     @discardableResult
     static func getOrRegister(_ nsApp: NSRunningApplication) async throws -> MacApp? {
+        // Unit tests use AbstractApp/TestWindow fixtures. A real AX object cannot be
+        // decoded by the mock accessibility layer, even when the host grants AX access.
+        if isUnitTest { return nil }
         // Don't perceive any of the lock screen windows as real windows
         // Otherwise, false positive ax notifications might trigger that lead to gcWindows
         if nsApp.bundleIdentifier == lockScreenAppBundleId { return nil }
@@ -269,7 +272,13 @@ final class MacApp: AbstractApp {
     }
 
     @MainActor
-    static func refreshAllAndGetAliveWindowIds(frontmostAppBundleId: String?) async throws -> [MacApp: [UInt32]] {
+    static func refreshAllAndGetAliveWindowIds(
+        frontmostAppBundleId: String?,
+        runningApplications: () -> [NSRunningApplication] = { NSWorkspace.shared.runningApplications },
+    ) async throws -> [MacApp: [UInt32]] {
+        // A light command schedules a full refresh too. Keep that refresh in the
+        // fixture model instead of discovering the runner's Finder/windows.
+        if isUnitTest { return [:] }
         for (_, app) in MacApp.allAppsMap { // gc dead apps
             try checkCancellation()
             if app.nsApp.isTerminated {
@@ -284,7 +293,7 @@ final class MacApp: AbstractApp {
                 }
             }
             // Register new apps
-            for nsApp in NSWorkspace.shared.runningApplications {
+            for nsApp in runningApplications() {
                 try checkCancellation()
                 if nsApp.activationPolicy == .regular {
                     refreshTheApp(nsApp)
