@@ -29,16 +29,16 @@ private func _normalizeLayoutReason(workspace: Workspace, windows: [Window]) asy
             !config.automaticallyUnhideMacosHiddenApps && window.isMacosAppHidden
         switch window.layoutReason {
             case .standard:
-                guard let parent = window.parent else { continue }
+                guard let prevParentKind = window.parentKindOutsideMacosState else { continue }
                 switch true {
                     case isMacosFullscreen:
-                        window.layoutReason = .macos(prevParentKind: parent.kind)
+                        window.layoutReason = .macos(prevParentKind: prevParentKind)
                         window.bind(to: workspace.macOsNativeFullscreenWindowsContainer, adaptiveWeight: WEIGHT_DOESNT_MATTER, index: INDEX_BIND_LAST)
                     case isMacosMinimized:
-                        window.layoutReason = .macos(prevParentKind: parent.kind)
+                        window.layoutReason = .macos(prevParentKind: prevParentKind)
                         window.bind(to: macosMinimizedWindowsContainer, adaptiveWeight: 1, index: INDEX_BIND_LAST)
                     case isMacosWindowOfHiddenApp:
-                        window.layoutReason = .macos(prevParentKind: parent.kind)
+                        window.layoutReason = .macos(prevParentKind: prevParentKind)
                         window.bind(to: workspace.macOsNativeHiddenAppsWindowsContainer, adaptiveWeight: WEIGHT_DOESNT_MATTER, index: INDEX_BIND_LAST)
                     default: break
                 }
