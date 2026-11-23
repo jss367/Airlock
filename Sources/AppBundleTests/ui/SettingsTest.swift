@@ -14,7 +14,7 @@ final class SettingsTest: XCTestCase {
 
         let disabled = (behaviorFeatures + appFeatures).filter { unmetReason($0.requirement, config) != nil }.map(\.key)
 
-        assertEquals(disabled, ["enable-workspace-app-switching", "focus-workspace-on-mouse-click"])
+        assertEquals(disabled, ["tile-new-windows", "enable-workspace-app-switching", "focus-workspace-on-mouse-click"])
         assertEquals(unmetReason(.windowManagement, config), "Requires Window management, which is off.")
         assertNotNil(unmetReason(preventFocusStealingRequirement, config))
     }

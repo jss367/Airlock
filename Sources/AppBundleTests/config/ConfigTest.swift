@@ -44,6 +44,17 @@ final class ConfigTest: XCTestCase {
         assertEquals(config.focusWorkspaceOnMouseClick, false)
     }
 
+    func testParseTileNewWindows() {
+        assertEquals(Config().tileNewWindows, true)
+        let (config, errors) = parseConfig(
+            """
+            tile-new-windows = false
+            """,
+        )
+        assertEquals(errors, [])
+        assertEquals(config.tileNewWindows, false)
+    }
+
     func testParseFeatureSwitchesForBindings() {
         let (config, errors) = parseConfig(
             """
