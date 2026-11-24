@@ -62,6 +62,12 @@ final class TestWindow: Window, CustomStringConvertible {
 
     override var isHiddenInCorner: Bool { false }
 
+    var isMacosFullscreenForTests = false
+    @MainActor override var isMacosFullscreen: Bool { get async throws { isMacosFullscreenForTests } }
+
+    var isMacosMinimizedForTests = false
+    @MainActor override var isMacosMinimized: Bool { get async throws { isMacosMinimizedForTests } }
+
     var isMacosAppHiddenForTests = false
     @MainActor override var isMacosAppHidden: Bool { isMacosAppHiddenForTests }
 }

@@ -9,6 +9,8 @@ open class Window: TreeNode, Hashable {
     var noOuterGapsInFullscreen: Bool = false
     var floatingFullscreenRestore: FloatingFullscreenRestore?
     var layoutReason: LayoutReason = .standard
+    /// See: ``parentKindOutsideMacosState``
+    var parentKindBeforeMacosNativeCommand: NonLeafTreeNodeKind? = nil
     /// When this window last gained focus, as a `focusRecencyCounter` value. 0 if never focused
     var focusRecency: UInt64 = 0
 
@@ -71,6 +73,26 @@ extension Window {
     @MainActor
     func bindAsFloatingWindow(to workspace: Workspace) -> BindingData? {
         bind(to: workspace, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
+    }
+
+    /// The kind of parent to restore once the window is no longer macOS fullscreen, minimized, or hidden
+    var parentKindOutsideMacosState: NonLeafTreeNodeKind? {
+        if case .macos(let prevParentKind) = layoutReason { return prevParentKind }
+        guard let parent else { return nil }
+        return switch parent.cases {
+            case .macosMinimizedWindowsContainer, .macosFullscreenWindowsContainer, .macosHiddenAppsWindowsContainer:
+                parentKindBeforeMacosNativeCommand ?? parent.kind
+            case .tilingContainer, .workspace, .macosPopupWindowsContainer:
+                parent.kind
+        }
+    }
+
+    /// For macos-native-* commands, which move the window before macOS reports its new state. `layoutReason` must stay
+    /// as is until then, otherwise normalizeLayoutReason() would move the window back right away
+    @MainActor
+    func bindByMacosNativeCommand(to container: NonLeafTreeNodeObject) {
+        parentKindBeforeMacosNativeCommand = parentKindOutsideMacosState
+        bind(to: container, adaptiveWeight: 1, index: INDEX_BIND_LAST)
     }
 
     func asMacWindow() -> MacWindow { self as! MacWindow }

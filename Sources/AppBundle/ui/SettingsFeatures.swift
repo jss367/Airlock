@@ -62,6 +62,11 @@ let preventFocusStealingRequirement: FeatureRequirement = .windowManagement
         key: "enable-window-management", isOn: { config.enableWindowManagement },
     ),
     BoolFeature(
+        title: "Tile new windows",
+        summary: "Places each new window in the workspace's tiling layout, where resizing a window also resizes its neighbors. Turn this off to open new windows floating, at the size and position the app chose.",
+        key: "tile-new-windows", requirement: .windowManagement, isOn: { config.tileNewWindows },
+    ),
+    BoolFeature(
         title: "Workspace app switching",
         summary: "Your app switching keys (⌘Tab and ⌘` by default) cycle only the apps and windows in the current workspace. Turn this off to give those keys back to macOS.",
         key: "enable-workspace-app-switching", requirement: .windowManagement, isOn: { config.enableWorkspaceAppSwitching },

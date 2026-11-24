@@ -123,6 +123,7 @@ private let configParser: [String: any ParserProtocol<Config>] = [
     "enable-workspace-app-switching": Parser(\.enableWorkspaceAppSwitching, parseBool),
     "enable-keyboard-shortcuts": Parser(\.enableKeyboardShortcuts, parseBool),
     "enable-window-management": Parser(\.enableWindowManagement, parseBool),
+    "tile-new-windows": Parser(\.tileNewWindows, parseBool),
     "prevent-focus-stealing": Parser(\.preventFocusStealing, parsePreventFocusStealing),
     "app-switching-scope": Parser(\.appSwitchingScope, parseAppSwitchingScope),
     "accordion-padding": Parser(\.accordionPadding, parseInt),

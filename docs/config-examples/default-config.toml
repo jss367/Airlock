@@ -44,6 +44,10 @@ focus-workspace-on-mouse-click = true
 # Turn off to keep native macOS window behavior and monitor-moving shortcuts.
 enable-window-management = true
 
+# Place new windows in the tiling layout. Set to false to open them floating.
+# Requires enable-window-management.
+tile-new-windows = true
+
 # Register the bindings that run 'focus app-next/prev' and 'focus same-app-next/prev'
 # (cmd-tab and cmd-backtick below). Requires enable-window-management.
 # Set to false to give those keys back to macOS.

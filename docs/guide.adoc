@@ -562,13 +562,11 @@ Examples of automations:
     if.app-id = 'com.jetbrains.intellij'
     run = 'move-node-to-workspace I' # mnemonics I - IDE
 ----
-* Make all windows float by default
+* Make all windows float by default. Set `tile-new-windows = false`, or turn off *Tile new windows* in *Settings → General*. Unlike an `on-window-detected` rule, this opens the window floating without first tiling it. `on-window-detected` rules still run afterward, so `run = 'layout tiling'` can tile particular apps.
 +
 [source,toml]
 ----
-[[on-window-detected]]
-    check-further-callbacks = true
-    run = 'layout floating'
+tile-new-windows = false
 ----
 
 [#on-focus-changed-callbacks]

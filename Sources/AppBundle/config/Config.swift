@@ -50,6 +50,7 @@ struct Config: ConvenienceCopyable {
     var enableWorkspaceAppSwitching: Bool = true
     var enableKeyboardShortcuts: Bool = true
     var enableWindowManagement: Bool = true
+    var tileNewWindows: Bool = true
     var preventFocusStealing: PreventFocusStealingMode = .crossWorkspace
     var appSwitchingScope: AppSwitchingScope = .workspace
     var accordionPadding: Int = 30
