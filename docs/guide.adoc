@@ -147,7 +147,7 @@ If no custom config is found, Airlock will load the default config.
 
 If the key is omitted in the custom config, it falls back to the value in the default config, unless it's stated otherwise for the specific keys. Namely:
 
-* `mode.*.binding`. Your bindings are merged on top of the default ones: a key you bind overrides the default for that key, and everything you don't mention keeps its default. To remove a default binding, set it to `'disabled'`, for example `option-h = 'disabled'`. See <<binding-modes,binding modes>>.
+* `mode.*.binding`. Your bindings are merged on top of the default ones: a key you bind overrides the default for that key, and everything you don't mention keeps its default. To remove a default binding, set it to `'disabled'`, for example `option-h = 'disabled'`. To drop all the default bindings at once, set `inherit-default-bindings = false`: your config then lists every binding Airlock registers, including `cmd-tab` and `cmd-backtick`. See <<binding-modes,binding modes>>.
 * `on-focused-monitor-changed`. It falls back to the empty TOML array.
 * `exec` TOML table. See: <<exec-env-vars>> (It's so boring and verbose, I don't even want to mention it in the `default-config.toml`)
 

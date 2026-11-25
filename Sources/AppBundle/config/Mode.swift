@@ -39,6 +39,15 @@ func parseMode(_ raw: TOMLValueConvertible, _ backtrace: TomlBacktrace, _ errors
     return result
 }
 
+/// The modes of a config that sets `inherit-default-bindings = false`: only what the config lists.
+/// - 'disabled' has no default to remove, so it is dropped like in a mode the defaults don't have.
+/// - 'main' always exists, since it is the mode Airlock starts in. Without bindings it is empty.
+func modesWithoutDefaults(userModes: [String: Mode]) -> [String: Mode] {
+    var result = userModes.mapValues { $0.copy(\.bindings, $0.bindings.filter { !$0.value.isDisabled }) }
+    if result[mainModeId] == nil { result[mainModeId] = .zero }
+    return result
+}
+
 /// Merge user-defined modes on top of default modes.
 /// - User bindings override default bindings for the same key.
 /// - The 'disabled' sentinel removes the default binding. `[]` keeps the key bound to nothing.
