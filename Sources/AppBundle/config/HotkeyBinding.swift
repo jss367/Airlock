@@ -239,6 +239,9 @@ func runThenLeaveOneShotMode<T>(_ mode: String, _ body: @MainActor () async thro
         result = try await body()
     } catch {
         try? await leaveOneShotMode(mode)
+        // The session skips its closing model refresh when the body throws. A command that moved focus
+        // to another monitor and then threw would leave the panel of a mode that stays active behind
+        syncModeHintsPanel()
         throw error
     }
     try await leaveOneShotMode(mode)
