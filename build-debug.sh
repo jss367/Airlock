@@ -17,6 +17,7 @@ APP_BUNDLE=".debug/Airlock-Debug.app"
 rm -rf "$APP_BUNDLE"
 mkdir -p "$APP_BUNDLE/Contents/MacOS"
 cp .debug/AirlockApp "$APP_BUNDLE/Contents/MacOS/AirlockApp"
+cp -R .build/debug/Sparkle.framework "$APP_BUNDLE/Contents/MacOS" # SwiftPM sets the rpath to the executable's directory
 cat > "$APP_BUNDLE/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">

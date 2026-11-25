@@ -19,6 +19,8 @@ import Foundation
         interceptTermination(SIGINT)
         interceptTermination(SIGKILL)
     }
+    // Before the Accessibility wait, so that a release that can't get past it can still be updated
+    UpdateChecker.shared.start()
     // Before the config registers hotkeys, which may switch the native app switcher off
     restoreNativeAppSwitcherKeysOnExit()
     // Before the config registers hotkeys. Until access is granted their commands can't work

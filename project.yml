@@ -28,7 +28,9 @@ targets:
       base:
         SWIFT_VERSION: 6.2 # Swift Language Version
         GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_FILE: resources/Info.plist # Merged into the generated Info.plist
         MARKETING_VERSION: ${XCODEGEN_AIRLOCK_VERSION}
+        CURRENT_PROJECT_VERSION: ${XCODEGEN_AIRLOCK_VERSION} # CFBundleVersion, which Sparkle compares
         # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/LaunchServicesKeys.html#//apple_ref/doc/uid/20001431-108256
         # Specifies whether the app runs as an agent app. If this key is set to YES, Launch Services runs the app as an agent app.
         # Agent apps do not appear in the Dock or in the Force Quit window (cmd-opt-esc)
@@ -41,6 +43,8 @@ targets:
         Release:
           PRODUCT_NAME: Airlock
           PRODUCT_BUNDLE_IDENTIFIER: dev.airlock
+          # Debug leaves the feed empty, so a debug app never replaces itself with a release
+          AIRLOCK_APPCAST_URL: https://github.com/jss367/Airlock/releases/latest/download/appcast.xml
           CODE_SIGN_INJECT_BASE_ENTITLEMENTS: NO
           ENABLE_HARDENED_RUNTIME: YES
           SWIFT_TREAT_WARNINGS_AS_ERRORS: YES

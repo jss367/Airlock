@@ -15,6 +15,13 @@ cat > "$fixture/script/find-code-signing-identity.sh" <<'STUB'
 #!/bin/bash
 echo test-signing-identity
 STUB
+cat > "$fixture/script/bundle-app.sh" <<'STUB'
+#!/bin/bash
+set -euo pipefail
+test "$*" = '--app .xcode-build/Build/Products/Release/Airlock.app --cli /swift-bin/airlock --codesign-identity test-signing-identity'
+echo bundle >> calls
+if test "$FAIL_STAGE" = bundle; then exit 42; fi
+STUB
 cat > "$fixture/generate.sh" <<'STUB'
 #!/bin/bash
 set -euo pipefail
@@ -30,6 +37,7 @@ cat > "$fixture/bin/xcodebuild" <<'STUB'
 set -euo pipefail
 grep -qx generated Sources/Common/gitHashGenerated.swift
 printf '%s\n' "$@" | grep -qx "MARKETING_VERSION=$(cat VERSION)"
+printf '%s\n' "$@" | grep -qx "CURRENT_PROJECT_VERSION=$(cat VERSION)"
 printf '%s\n' "$@" | grep -qx 'CODE_SIGN_IDENTITY=test-signing-identity'
 echo xcodebuild >> calls
 if test "$FAIL_STAGE" = xcodebuild; then exit 42; fi
@@ -37,14 +45,15 @@ STUB
 cat > "$fixture/bin/swift" <<'STUB'
 #!/bin/bash
 set -euo pipefail
+if test "${!#}" = --show-bin-path; then echo /swift-bin; exit; fi
 grep -qx generated Sources/Common/gitHashGenerated.swift
 echo "$1" >> calls
 if test "$FAIL_STAGE" = "$1"; then exit 42; fi
 STUB
-chmod +x "$fixture/script/find-code-signing-identity.sh" "$fixture/generate.sh" "$fixture/bin/"*
+chmod +x "$fixture/script/"* "$fixture/generate.sh" "$fixture/bin/"*
 
 for original in snapshot local-edits; do
-  for failure in none generate xcodebuild test build; do
+  for failure in none generate xcodebuild test build bundle; do
     for source in Sources/Common/versionGenerated.swift Sources/Common/gitHashGenerated.swift Sources/Cli/subcommandDescriptionsGenerated.swift; do
       printf '%s %s\n' "$original" "$source" > "$fixture/$source"
       cp "$fixture/$source" "$fixture/originals/${source##*/}"
@@ -58,7 +67,7 @@ for original in snapshot local-edits; do
     ) || status=$?
     if test "$failure" = none; then
       test "$status" -eq 0
-      expected_calls=$'generate\nxcodebuild\ntest\nbuild'
+      expected_calls=$'generate\nxcodebuild\ntest\nbuild\nbundle'
     else
       test "$status" -eq 42
       case "$failure" in
@@ -66,6 +75,7 @@ for original in snapshot local-edits; do
         xcodebuild) expected_calls=$'generate\nxcodebuild' ;;
         test) expected_calls=$'generate\nxcodebuild\ntest' ;;
         build) expected_calls=$'generate\nxcodebuild\ntest\nbuild' ;;
+        bundle) expected_calls=$'generate\nxcodebuild\ntest\nbuild\nbundle' ;;
       esac
     fi
     test "$(cat "$fixture/calls")" = "$expected_calls"
