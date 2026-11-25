@@ -60,12 +60,44 @@ func currentModeHints() -> ModeHints? {
     return modeHints(mode: mode, bindings: Array(hotkeyBindings(for: mode).values), oneShot: config.modes[mode]?.oneShot == true)
 }
 
-/// Rows are laid out top to bottom, then in the next column. Eight rows per column until that
-/// would need more than `maxColumns`, then the columns grow instead.
-func modeHintsColumns(_ rows: [Shortcut], rowsPerColumn: Int = 8, maxColumns: Int = 4) -> [[Shortcut]] {
-    guard !rows.isEmpty else { return [] }
-    let perColumn = max(rowsPerColumn, Int((Double(rows.count) / Double(maxColumns)).rounded(.up)))
+/// Rows are laid out top to bottom, then in the next column.
+func modeHintsColumns(_ rows: [Shortcut], rowsPerColumn: Int) -> [[Shortcut]] {
+    let perColumn = max(1, rowsPerColumn)
     return stride(from: 0, to: rows.count, by: perColumn).map { Array(rows[$0 ..< min($0 + perColumn, rows.count)]) }
+}
+
+/// The column heights to try for `rowCount` rows, widest layout first: four columns, then three,
+/// two, and one. A column holds at least eight rows, so a short list stays in one column.
+func modeHintsRowsPerColumnOptions(rowCount: Int, minRows: Int = 8, maxColumns: Int = 4) -> [Int] {
+    var result: [Int] = []
+    for columns in (1 ... maxColumns).reversed() {
+        let rows = max(minRows, Int((Double(rowCount) / Double(columns)).rounded(.up)))
+        if !result.contains(rows) { result.append(rows) }
+    }
+    return result
+}
+
+/// How the panel is laid out on a screen: the height of its columns, and how much it is shrunk
+struct ModeHintsLayout: Equatable {
+    let rowsPerColumn: Int
+    /// 1 when the panel fits as it is
+    let scale: CGFloat
+}
+
+/// The panel can't scroll: it ignores the mouse, and its keys belong to the mode. So every row has
+/// to fit on screen. The first of `modeHintsRowsPerColumnOptions` that fits `available` wins, which is
+/// the one with the most columns. When a mode has too many long rows for any of them, the layout
+/// that needs the least shrinking is scaled down to fit. `measure` gives the panel's size for a column height.
+func modeHintsLayout(rowCount: Int, available: CGSize, measure: (Int) -> CGSize) -> ModeHintsLayout {
+    var best: ModeHintsLayout?
+    for rowsPerColumn in modeHintsRowsPerColumnOptions(rowCount: rowCount) {
+        let size = measure(rowsPerColumn)
+        guard size.width > 0, size.height > 0 else { continue }
+        let scale = min(1, available.width / size.width, available.height / size.height)
+        if scale >= 1 { return ModeHintsLayout(rowsPerColumn: rowsPerColumn, scale: 1) }
+        if scale > best?.scale ?? 0 { best = ModeHintsLayout(rowsPerColumn: rowsPerColumn, scale: scale) }
+    }
+    return best ?? ModeHintsLayout(rowsPerColumn: max(1, rowCount), scale: 1)
 }
 
 // MARK: - Panel
@@ -86,7 +118,8 @@ func syncModeHintsPanel() {
     panel.show(hints)
 }
 
-/// Bottom center of the visible frame, clear of the Dock, shrunk to the frame if it is larger.
+/// Bottom center of the visible frame, clear of the Dock. `modeHintsLayout` keeps the content within
+/// the frame. The clamp here is for the rounding of a scaled size.
 func modeHintsPanelFrame(contentSize: CGSize, visibleFrame: NSRect, margin: CGFloat = 48) -> NSRect {
     let size = CGSize(width: min(contentSize.width, visibleFrame.width), height: min(contentSize.height, visibleFrame.height))
     let y = min(visibleFrame.minY + margin, visibleFrame.maxY - size.height)
@@ -110,9 +143,19 @@ private final class ModeHintsPanel: NSPanelHud {
         // A config reload re-activates the current mode. Rebuilding the same panel would flicker
         if isVisible, shown == hints { return }
         shown = hints
-        let hosting = NSHostingView(rootView: ModeHintsView(hints: hints))
         let visibleFrame = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1200, height: 800)
-        let frame = modeHintsPanelFrame(contentSize: hosting.fittingSize, visibleFrame: visibleFrame)
+        var sizes: [Int: CGSize] = [:]
+        let layout = modeHintsLayout(rowCount: hints.rows.count, available: visibleFrame.size) { rowsPerColumn in
+            let size = NSHostingView(rootView: ModeHintsView(hints: hints, rowsPerColumn: rowsPerColumn)).fittingSize
+            sizes[rowsPerColumn] = size
+            return size
+        }
+        let natural = sizes[layout.rowsPerColumn] ?? .zero
+        let scaled = CGSize(width: natural.width * layout.scale, height: natural.height * layout.scale)
+        let hosting = NSHostingView(rootView: ModeHintsView(hints: hints, rowsPerColumn: layout.rowsPerColumn)
+            .scaleEffect(layout.scale, anchor: .topLeading)
+            .frame(width: scaled.width, height: scaled.height, alignment: .topLeading))
+        let frame = modeHintsPanelFrame(contentSize: scaled, visibleFrame: visibleFrame)
         hosting.frame = NSRect(origin: .zero, size: frame.size)
         contentView = hosting
         setFrame(frame, display: true)
@@ -129,6 +172,7 @@ private final class ModeHintsPanel: NSPanelHud {
 
 struct ModeHintsView: View {
     let hints: ModeHints
+    let rowsPerColumn: Int
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -145,7 +189,7 @@ struct ModeHintsView: View {
                 }
             }
             HStack(alignment: .top, spacing: 28) {
-                ForEach(Array(modeHintsColumns(hints.rows).enumerated()), id: \.offset) { _, column in
+                ForEach(Array(modeHintsColumns(hints.rows, rowsPerColumn: rowsPerColumn).enumerated()), id: \.offset) { _, column in
                     // A grid, so the actions of a column line up whatever the width of their keys
                     Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 7) {
                         ForEach(Array(column.enumerated()), id: \.offset) { _, row in
