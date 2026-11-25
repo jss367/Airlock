@@ -215,8 +215,8 @@ func setBindingInLines(_ lines: [String], _ address: BindingAddress, value: Stri
         }
     } else {
         let existingMode = (try? TOMLTable(string: lines.joined(separator: "\n")))?["mode"]?.table?[address.mode]?.table
-        // The mode has bindings, but under no header these functions can find: written with dotted keys, as
-        // an inline table, or under a quoted name with escapes. That isn't a bad name, it is a shape to edit by hand
+        // The mode has bindings, but under no header of their own: written with dotted keys or as an
+        // inline table. That isn't a bad name, it is a shape to edit by hand
         if existingMode?["binding"] != nil {
             throw ConfigWriterError.unsupportedEdit((table + [address.binding]).joined(separator: "."))
         }
@@ -276,13 +276,18 @@ private func tomlEntryKeyName(_ line: String) -> String? {
     return nil
 }
 
-/// The line of the `[mode.<mode>.binding]` header. `tomlTableHeader` strips the quotes of a quoted
-/// name, except around a name with a dot, which it leaves as written: `mode."foo.bar".binding`.
+/// The line of the `[mode.<mode>.binding]` header. A mode name can be quoted and hold dots and escapes,
+/// so each header is read by the TOML parser, like the keys in `tomlEntryKeyName`. Headers are walked
+/// with `tomlSectionEnd`, which skips a line inside a multi-line string that only looks like one.
 private func bindingTableHeaderIndex(_ lines: [String], mode: String) -> Int? {
-    let headers: Set<String> = mode.contains(".")
-        ? ["mode.\"\(mode)\".binding", "mode.'\(mode)'.binding"]
-        : ["mode.\(mode).binding"]
-    return lines.firstIndex { tomlTableHeader($0).map(headers.contains) == true }
+    var index = tomlSectionEnd(lines, sectionStart: -1)
+    while index < lines.count {
+        let header = String(lines[index][..<tomlCommentStart(lines[index])])
+        // An array of tables (`[[...]]`) parses to an array, which is not a binding table
+        if (try? TOMLTable(string: header))?["mode"]?.table?[mode]?.table?["binding"]?.table != nil { return index }
+        index = tomlSectionEnd(lines, sectionStart: index)
+    }
+    return nil
 }
 
 /// The modifiers and the physical key (in qwerty notation, as `bindingKeyMatches` takes it) of `address`

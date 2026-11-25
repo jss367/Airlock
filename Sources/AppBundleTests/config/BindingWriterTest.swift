@@ -164,12 +164,39 @@ final class BindingWriterTest: XCTestCase {
         XCTAssertThrowsError(try setBindingInLines(["[mode.foo.bar.binding]", "    a = 'close'"], BindingAddress(mode: "foo.bar", binding: "a"), value: "'fullscreen'"))
     }
 
-    func testAnExistingModeThatCantBeFoundIsNotCalledABadName() {
-        // The name has an escape, so the header isn't written the way the mode is named
+    func testAModeNameWithEscapesIsFoundAndStaysEditable() throws {
+        // The header spells the tab as an escape, so it isn't written the way the mode is named
+        let address = BindingAddress(mode: "a\tb", binding: "b")
         let lines = ["[mode.\"a\\tb\".binding]", "    a = 'close'"]
-        XCTAssertThrowsError(try setBindingInLines(lines, BindingAddress(mode: "a\tb", binding: "b"), value: "'fullscreen'")) { error in
-            assertEquals(error.localizedDescription, "Can't safely set 'mode.a\tb.binding.b' in this config file. Edit it in the config file instead")
+        assertEquals(try setBindingInLines(lines, address, value: "'fullscreen'"), lines + ["    b = 'fullscreen'"])
+
+        // A mode with only a property gets its table, and the next edit finds that table
+        for mode in ["a\\b", "say \"hi\"", "a\tb"] {
+            let address = BindingAddress(mode: mode, binding: "a")
+            let created = try setBindingInLines(["[mode.\(tomlKey(mode))]", "    one-shot = true"], address, value: "'close'")
+            let edited = try setBindingInLines(created, address, value: "'fullscreen'")
+            assertEquals(edited.count, created.count)
+            assertEquals(bindingCommandTexts(inToml: edited.joined(separator: "\n"), address), ["fullscreen"])
+            assertEquals(try deleteBindingLines(edited, address).count, created.count - 1)
         }
+    }
+
+    func testALineInsideAScriptIsNotAHeader() throws {
+        let lines = [
+            "[mode.main.binding]",
+            "    option-s = '''exec-and-forget cat <<EOF",
+            "[mode.go.binding]",
+            "EOF'''",
+            "[mode.go.binding]",
+            "    a = 'close'",
+        ]
+
+        let result = try setBindingInLines(lines, BindingAddress(mode: "go", binding: "b"), value: "'fullscreen'")
+
+        assertEquals(result, lines + ["    b = 'fullscreen'"])
+    }
+
+    func testAnExistingModeThatCantBeFoundIsNotCalledABadName() {
         XCTAssertThrowsError(try setBindingInLines(["mode.go.binding.a = 'close'"], BindingAddress(mode: "go", binding: "b"), value: "'fullscreen'")) { error in
             assertEquals(error.localizedDescription, "Can't safely set 'mode.go.binding.b' in this config file. Edit it in the config file instead")
         }
