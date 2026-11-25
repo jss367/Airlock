@@ -168,20 +168,33 @@ final class BindingWriterTest: XCTestCase {
         assertEquals(result.count, lines.count)
     }
 
-    func testAKeyAliasWithADotIsFoundUnderItsQuotes() throws {
-        let mapping = keyNotationToKeyCode.merging(["foo.bar": .f]) { $1 }
-        let address = main("option-foo.bar")
-        for key in ["\"option-foo.bar\"", "'option-foo.bar'"] {
-            let lines = ["[mode.main.binding]", "    \(key) = 'close'", "    option-l = 'focus right'"]
+    func testAQuotedKeyIsFoundWhateverItsAliasContains() throws {
+        // alias, and the ways a config can write a binding on it
+        let cases: [(alias: String, written: [String])] = [
+            ("foo.bar", [#""option-foo.bar""#, "'option-foo.bar'"]),
+            (#"a\b"c"#, [#""option-a\\b\"c""#, #"'option-a\b"c'"#]),
+            ("a=b#c", [#""option-a=b#c""#, "'option-a=b#c'"]),
+            ("é", [#""option-\u00E9""#, "'option-é'"]),
+        ]
+        for (alias, written) in cases {
+            let mapping = keyNotationToKeyCode.merging([alias: .f]) { $1 }
+            let address = main("option-\(alias)")
+            for key in written {
+                let lines = ["[mode.main.binding]", "    \(key) = 'close' # note", "    option-l = 'focus right'"]
 
-            assertEquals(try setBindingInLines(lines, address, value: "'fullscreen'", keyMapping: mapping), [
-                "[mode.main.binding]",
-                "    \"option-foo.bar\" = 'fullscreen'",
-                "    option-l = 'focus right'",
-            ])
-            assertEquals(try deleteBindingLines(lines, address, keyMapping: mapping), ["[mode.main.binding]", "    option-l = 'focus right'"])
-            assertEquals(bindingCommandTexts(inToml: lines.joined(separator: "\n"), address, keyMapping: mapping), ["close"])
+                let edited = try setBindingInLines(lines, address, value: "'fullscreen'", keyMapping: mapping)
+                assertEquals(edited.count, 3)
+                assertEquals(bindingCommandTexts(inToml: edited.joined(separator: "\n"), address, keyMapping: mapping), ["fullscreen"])
+                assertTrue(edited[1].hasSuffix("= 'fullscreen' # note"))
+                assertEquals(try deleteBindingLines(lines, address, keyMapping: mapping), ["[mode.main.binding]", "    option-l = 'focus right'"])
+            }
         }
+    }
+
+    func testADottedKeyIsNotABinding() throws {
+        // `a.b = ...` in a binding table declares a subtable. The config parser rejects it, and the writer leaves it alone
+        let lines = ["[mode.main.binding]", "    option-a.b = 'close'"]
+        assertEquals(try deleteBindingLines(lines, main("option-a")), lines)
     }
 
     // MARK: - removeBindingFromLines
