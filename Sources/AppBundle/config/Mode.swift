@@ -4,6 +4,8 @@ import TOMLKit
 
 struct Mode: ConvenienceCopyable, Equatable, Sendable {
     var bindings: [String: HotkeyBinding]
+    /// Return to the main mode after one binding of this mode has run. See `leaveOneShotMode`
+    var oneShot: Bool = false
 
     static let zero = Mode(bindings: [:])
 }
@@ -32,6 +34,8 @@ func parseMode(_ raw: TOMLValueConvertible, _ backtrace: TomlBacktrace, _ errors
         switch key {
             case "binding":
                 result.bindings = parseBindings(value, backtrace, &errors, mapping)
+            case "one-shot":
+                result.oneShot = parseBool(value, backtrace).getOrNil(appendErrorTo: &errors) ?? false
             default:
                 errors += [unknownKeyError(backtrace)]
         }
@@ -52,6 +56,7 @@ func modesWithoutDefaults(userModes: [String: Mode]) -> [String: Mode] {
 /// - User bindings override default bindings for the same key.
 /// - The 'disabled' sentinel removes the default binding. `[]` keeps the key bound to nothing.
 /// - Modes only in defaults are preserved; modes only in user config are added.
+/// - `one-shot` is the user's: the config that lists a mode's bindings decides how the mode ends.
 func mergeModesWithDefaults(userModes: [String: Mode], defaultModes: [String: Mode]) -> [String: Mode] {
     var result = defaultModes
     for (modeName, userMode) in userModes {
@@ -65,11 +70,11 @@ func mergeModesWithDefaults(userModes: [String: Mode], defaultModes: [String: Mo
                     mergedBindings[key] = binding
                 }
             }
-            result[modeName] = Mode(bindings: mergedBindings)
+            result[modeName] = userMode.copy(\.bindings, mergedBindings)
         } else {
             // 'disabled' has nothing to remove here, and keeping it would register a hotkey that
             // swallows the keystroke and runs nothing. `[]` bindings stay: swallowing is their job
-            result[modeName] = Mode(bindings: userMode.bindings.filter { !$0.value.isDisabled })
+            result[modeName] = userMode.copy(\.bindings, userMode.bindings.filter { !$0.value.isDisabled })
         }
     }
     return result

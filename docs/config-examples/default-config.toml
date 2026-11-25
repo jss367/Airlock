@@ -120,6 +120,11 @@ on-mode-changed = []
     pop-distance = 10.0         # how far the outline expands during the pulse, in points
     duration-ms = 400           # total animation length
 
+# Panel that lists a binding mode's keys while the mode is active. 'main' has no panel.
+# Set 'enabled = false' to turn it off.
+[mode-hints]
+    enabled = true
+
 # Possible values: (qwerty|dvorak|colemak)
 [key-mapping]
     preset = 'qwerty'
@@ -251,6 +256,10 @@ on-mode-changed = []
     option-shift-semicolon = 'mode service'
 
 # 'service' binding mode declaration.
+# A mode stays active until a binding runs 'mode main'. To return to 'main' after any
+# one binding of a mode, declare the mode one-shot:
+# [mode.service]
+#     one-shot = true
 [mode.service.binding]
     esc = ['reload-config', 'mode main']
     r = ['flatten-workspace-tree', 'mode main'] # reset layout
