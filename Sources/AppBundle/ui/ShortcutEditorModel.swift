@@ -23,6 +23,10 @@ struct ShortcutEditorTarget: Identifiable {
     let id = UUID()
     let original: BindingAddress?
     let draft: ShortcutDraft
+
+    /// A binding to `[]` runs nothing on purpose: it keeps the keystroke from reaching apps. Such a
+    /// binding can be moved to another key or mode as it is. A new binding has to run something
+    var allowsNoCommands: Bool { original != nil && draft.writtenCommands.isEmpty }
 }
 
 /// What keeps a draft from being saved, by the field to show it under
@@ -37,7 +41,7 @@ struct ShortcutDraftProblems: Equatable {
 
 /// `existingModes` are the modes the config has. Any other mode name is a new mode, which the
 /// config writer can only create under a bare TOML key.
-func shortcutDraftProblems(_ draft: ShortcutDraft, existingModes: Set<String>, keyMapping: [String: Key]) -> ShortcutDraftProblems {
+func shortcutDraftProblems(_ draft: ShortcutDraft, existingModes: Set<String>, keyMapping: [String: Key], allowsNoCommands: Bool = false) -> ShortcutDraftProblems {
     var problems = ShortcutDraftProblems()
     let address = draft.address
     if address.mode.isEmpty {
@@ -56,7 +60,7 @@ func shortcutDraftProblems(_ draft: ShortcutDraft, existingModes: Set<String>, k
             problems.commands[index] = message.split(separator: "\n").first.map(String.init) ?? message
         }
     }
-    if draft.writtenCommands.isEmpty, problems.commands.isEmpty {
+    if draft.writtenCommands.isEmpty, problems.commands.isEmpty, !allowsNoCommands {
         problems.commands[0] = "Type a command, or pick one from the list."
     }
     return problems
@@ -85,7 +89,8 @@ func editableCommandTexts(of binding: HotkeyBinding, mode: String) -> [String] {
     let address = BindingAddress(mode: mode, binding: binding.descriptionWithKeyNotation)
     let keyMapping = config.keyMapping.resolve()
     for url in [configUrl, defaultConfigUrl] {
-        if let text = try? String(contentsOf: url, encoding: .utf8), let commands = bindingCommandTexts(inToml: text, address, keyMapping: keyMapping), !commands.isEmpty {
+        // An empty list counts: `[]` in the user's config must not be read as the default it overrides
+        if let text = try? String(contentsOf: url, encoding: .utf8), let commands = bindingCommandTexts(inToml: text, address, keyMapping: keyMapping) {
             return commands
         }
     }

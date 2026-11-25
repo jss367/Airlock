@@ -30,7 +30,7 @@ struct ShortcutEditorView: View {
 
     private var modes: [String] { [mainModeId] + config.modes.keys.filter { $0 != mainModeId }.sorted() }
     private var problems: ShortcutDraftProblems {
-        shortcutDraftProblems(draft, existingModes: Set(config.modes.keys), keyMapping: config.keyMapping.resolve())
+        shortcutDraftProblems(draft, existingModes: Set(config.modes.keys), keyMapping: config.keyMapping.resolve(), allowsNoCommands: target.allowsNoCommands)
     }
 
     var body: some View {
@@ -166,6 +166,11 @@ struct ShortcutEditorView: View {
                     }
                     if showsProblems || !draft.commands[index].isEmpty, let problem = problems.commands[index] { problemText(problem) }
                 }
+            }
+            if target.allowsNoCommands, draft.writtenCommands.isEmpty {
+                Text("This key runs nothing. It only keeps the keystroke from reaching apps.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
             Button {
                 draft.commands.append("")

@@ -45,6 +45,31 @@ final class ShortcutEditorTest: XCTestCase {
         assertEquals(problems(mainModeId, "a", ["list-apps"]).commands.keys.sorted(), [0])
     }
 
+    func testABindingToNothingCanBeMovedButNotCreated() {
+        let empty = ShortcutDraft(mode: mainModeId, binding: "option-h", commands: [""])
+        let existing = ShortcutEditorTarget(original: BindingAddress(mode: mainModeId, binding: "option-h"), draft: empty)
+        assertTrue(existing.allowsNoCommands)
+        XCTAssertFalse(ShortcutEditorTarget(original: nil, draft: empty).allowsNoCommands)
+        XCTAssertFalse(ShortcutEditorTarget(original: existing.original, draft: ShortcutDraft(mode: mainModeId, binding: "option-h", commands: ["close"])).allowsNoCommands)
+
+        var moved = empty
+        moved.binding = "option-j"
+        assertTrue(shortcutDraftProblems(moved, existingModes: [mainModeId], keyMapping: keyNotationToKeyCode, allowsNoCommands: true).isEmpty)
+        assertEquals(tomlCommandsValue(moved.writtenCommands), "[]")
+        // A bad command is still a problem
+        moved.commands = ["nope"]
+        assertEquals(shortcutDraftProblems(moved, existingModes: [mainModeId], keyMapping: keyNotationToKeyCode, allowsNoCommands: true).commands.keys.sorted(), [0])
+    }
+
+    func testRecordingClaimsBothNativeAppSwitcherKeys() {
+        config.modes = [mainModeId: Mode(bindings: [:])]
+        assertEquals(nativeAppSwitcherKeysToClaim(), [])
+        setRecordingShortcut(true)
+        assertEquals(nativeAppSwitcherKeysToClaim(), [.commandTab, .commandShiftTab])
+        setRecordingShortcut(false)
+        assertEquals(nativeAppSwitcherKeysToClaim(), [])
+    }
+
     func testDraftDropsBlankCommandRows() {
         let draft = ShortcutDraft(mode: " go ", binding: " a ", commands: ["", "close", " "])
         assertEquals(draft.writtenCommands, ["close"])

@@ -114,11 +114,18 @@ func claimedNativeAppSwitcherKeys(_ combos: [KeyCombo]) -> Set<NativeAppSwitcher
 /// Call after every change to the registered hotkeys
 @MainActor
 func syncNativeAppSwitcherKeys() {
-    // Keep the claim while recording. Handing Cmd+Tab back for those seconds would open the native
-    // switcher on a key the user is trying to record
-    if isRecordingShortcut { return }
+    NativeAppSwitcherKeys.shared.sync(claimed: nativeAppSwitcherKeysToClaim())
+}
+
+/// The native app switcher hotkeys Airlock should hold right now: the ones its registered hotkeys sit
+/// on. While a shortcut is being recorded it holds both, whether or not a binding uses them. Otherwise
+/// pressing Cmd+Tab to record it would open the native switcher, which also takes Airlock out of focus
+/// and ends the recording. The next sync after recording gives back the ones no binding claims.
+@MainActor
+func nativeAppSwitcherKeysToClaim() -> Set<NativeAppSwitcherKey> {
+    if isRecordingShortcut { return Set(NativeAppSwitcherKey.allCases) }
     let combos = hotkeys.values.filter { !$0.isPaused }.map(\.keyCombo) + [quickSwitcherKeyCombo].compactMap(\.self)
-    NativeAppSwitcherKeys.shared.sync(claimed: claimedNativeAppSwitcherKeys(combos))
+    return claimedNativeAppSwitcherKeys(combos)
 }
 
 /// Registration and dispatch follow running state even if a command changes mode after Pause.
