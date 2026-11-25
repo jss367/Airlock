@@ -45,6 +45,7 @@ extension HotKey {
                         try await runHotkeyCommandSession(
                             config.modes[activeMode]?.bindings[binding.descriptionWithKeyCode]?.commands ?? [],
                             modifiers: binding.modifiers,
+                            mode: activeMode,
                         )
                     }
                 }
@@ -67,6 +68,8 @@ extension HotKey {
     syncNativeAppSwitcherKeys()
     let oldMode = activeMode
     activeMode = targetMode
+    // Before the callbacks, which can fail or be refused. The panel must still follow the mode
+    syncModeHintsPanel()
     if oldMode != targetMode {
         broadcastEvent(.modeChanged(mode: targetMode))
         if !config.onModeChanged.isEmpty {
@@ -217,9 +220,19 @@ func runsOnlyEnable(_ commands: [any Command]) -> Bool {
 /// this is how it learns what was held to start it
 @TaskLocal var runningHotkeyModifiers: NSEvent.ModifierFlags? = nil
 
-/// The same command-session path used by registered hotkeys, without key registration in tests.
+/// A one-shot mode ends after one of its bindings has run: Airlock returns to the main mode, like a
+/// binding that ends with `'mode main'`. `mode` is the mode the binding belongs to. Nothing happens if
+/// the binding's own commands already left it, so `'mode resize'` inside a one-shot mode goes to resize
 @MainActor
-func runHotkeyCommandSession(_ commands: [any Command], modifiers: NSEvent.ModifierFlags? = nil) async throws {
+func leaveOneShotMode(_ mode: String) async throws {
+    guard activeMode == mode, mode != mainModeId, config.modes[mode]?.oneShot == true else { return }
+    try await activateMode(mainModeId)
+}
+
+/// The same command-session path used by registered hotkeys, without key registration in tests.
+/// `mode` is the mode the binding belongs to, for `leaveOneShotMode`.
+@MainActor
+func runHotkeyCommandSession(_ commands: [any Command], modifiers: NSEvent.ModifierFlags? = nil, mode: String? = nil) async throws {
     try await $runningHotkeyModifiers.withValue(modifiers) {
         // Like `airlock enable` over the socket, an enable-only binding remains admissible while paused.
         guard sessionCoordinator.isEnabled || runsOnlyEnable(commands) else { return }
@@ -230,6 +243,7 @@ func runHotkeyCommandSession(_ commands: [any Command], modifiers: NSEvent.Modif
         let prepared = PreparedCommandSession(commands)
         try await runLightSession(.hotkeyBinding, prepared.admission) {
             _ = try await prepared.run(.defaultEnv, .emptyStdin)
+            if let mode { try await leaveOneShotMode(mode) }
         }
     }
 }

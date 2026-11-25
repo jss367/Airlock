@@ -82,6 +82,11 @@ let preventFocusStealingRequirement: FeatureRequirement = .windowManagement
         key: "inherit-default-bindings", isOn: { config.inheritDefaultBindings },
     ),
     BoolFeature(
+        title: "Mode key hints",
+        summary: "Shows a panel listing a binding mode's keys while that mode is active, so its keys don't have to be memorized. The main mode has no panel.",
+        table: "mode-hints", key: "enabled", isOn: { config.modeHints.enabled },
+    ),
+    BoolFeature(
         title: "Quick switcher",
         summary: "A searchable panel of every window, workspace, and installed app, opened with ⌥Space unless you rebind it. Picking a window on another workspace switches you there, picking an app opens it, and a search with no match can go to the web.",
         table: "quick-switcher", key: "enabled", isOn: { config.quickSwitcher.enabled },

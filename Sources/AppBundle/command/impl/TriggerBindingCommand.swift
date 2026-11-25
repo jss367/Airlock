@@ -26,7 +26,9 @@ struct TriggerBindingCommand: Command {
         do {
             // refreshSession is not needed since commands are already run in refreshSession
             return try await Self.$depth.withValue(Self.depth + 1) {
-                try await binding.commands.runCmdSeq(env, io)
+                let result = try await binding.commands.runCmdSeq(env, io)
+                try await leaveOneShotMode(args.mode)
+                return result
             }
         } catch let error as TriggerBindingRecursionError {
             // Abort every nested binding sequence, including its remaining commands.

@@ -191,6 +191,34 @@ Working with binding modes consists of two parts:
     equal = 'resize smart +50'
 ----
 
+While a mode other than `main` is active, Airlock shows a panel at the bottom of the screen that lists the mode's keys and what each one does, so you don't have to memorize them.
+The panel closes when you return to `main`.
+Turn it off in *Settings → General → Mode key hints*, or in the config:
+
+[source,toml]
+----
+[mode-hints]
+    enabled = false
+----
+
+A mode stays active until a binding runs `mode main`.
+For a mode you enter to press one key, set `one-shot = true`: Airlock returns to `main` after any one of the mode's bindings has run.
+A binding that switches to another mode itself, such as `'mode resize'`, goes to that mode.
+One-shot modes let one key open a second layer of single-key bindings, for example one chord followed by a letter to pick a workspace:
+
+[source,toml]
+----
+[mode.main.binding]
+    ctrl-option-g = 'mode go'
+
+[mode.go]
+    one-shot = true            # Back to 'main' after one key
+[mode.go.binding]
+    a = 'workspace A'
+    b = 'workspace B'
+    esc = 'mode main'          # Leave without doing anything
+----
+
 [#commands]
 === Commands
 
