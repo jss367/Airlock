@@ -94,6 +94,36 @@ final class BindingWriterTest: XCTestCase {
         assertEquals(parseConfig(result.joined(separator: "\n")).errors, [])
     }
 
+    func testSetGivesAModeWithOnlyPropertiesItsBindingTable() throws {
+        let lines = ["[mode.main.binding]", "    option-g = 'mode go'", "", "[mode.go]", "    one-shot = true"]
+
+        let result = try setBindingInLines(lines, BindingAddress(mode: "go", binding: "a"), value: "'workspace A'")
+
+        assertEquals(result, lines + ["", "[mode.go.binding]", "    a = 'workspace A'", ""])
+        let parsed = parseConfig(result.joined(separator: "\n"))
+        assertEquals(parsed.errors, [])
+        assertEquals(parsed.config.modes["go"]?.oneShot, true)
+        assertEquals(parsed.config.modes["go"]?.bindings.count, 1)
+        // The next binding finds the table that was just made
+        assertEquals(try setBindingInLines(result, BindingAddress(mode: "go", binding: "b"), value: "'workspace B'").filter { $0.contains("workspace") }, ["    a = 'workspace A'", "    b = 'workspace B'"])
+    }
+
+    func testSetKeepsTheNameOfAnExistingModeThatNeedsQuotes() throws {
+        for mode in ["my mode", "foo.bar"] {
+            let lines = ["[mode.\(tomlKey(mode))]", "    one-shot = true"]
+            let address = BindingAddress(mode: mode, binding: "a")
+
+            let result = try setBindingInLines(lines, address, value: "'close'")
+
+            assertEquals(result, lines + ["", "[mode.\(tomlKey(mode)).binding]", "    a = 'close'", ""])
+            assertEquals(try setBindingInLines(result, address, value: "'fullscreen'").filter { $0.contains("a =") }, ["    a = 'fullscreen'"])
+        }
+        // An inline table can't be given a subtable
+        XCTAssertThrowsError(try setBindingInLines(["mode.go = { one-shot = true }"], BindingAddress(mode: "go", binding: "a"), value: "'close'")) { error in
+            assertEquals(error.localizedDescription, "Can't safely set 'mode.go.binding.a' in this config file. Edit it in the config file instead")
+        }
+    }
+
     func testSetIntoAnEmptyTable() throws {
         let result = try setBindingInLines(["[mode.main.binding]", "", "[gaps]"], main("option-h"), value: "'focus left'")
 

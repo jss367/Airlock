@@ -214,15 +214,19 @@ func setBindingInLines(_ lines: [String], _ address: BindingAddress, value: Stri
             content.insert(contentsOf: newEntry(lastEntry.map { indent(lines[$0.lines.lowerBound]) } ?? "    ", ""), at: lastEntry?.lines.upperBound ?? header + 1)
         }
     } else {
-        // The mode can exist without a header these functions can find: written with dotted keys, as
+        let existingMode = (try? TOMLTable(string: lines.joined(separator: "\n")))?["mode"]?.table?[address.mode]?.table
+        // The mode has bindings, but under no header these functions can find: written with dotted keys, as
         // an inline table, or under a quoted name with escapes. That isn't a bad name, it is a shape to edit by hand
-        if (try? TOMLTable(string: lines.joined(separator: "\n")))?["mode"]?.table?[address.mode] != nil {
+        if existingMode?["binding"] != nil {
             throw ConfigWriterError.unsupportedEdit((table + [address.binding]).joined(separator: "."))
         }
-        guard tomlKey(address.mode) == address.mode else { throw ConfigWriterError.invalidModeName(address.mode) }
+        // A mode can exist without bindings, declared only for a property: `[mode.go]` with `one-shot = true`.
+        // It gets its binding table like a new mode does, under whatever name it already has.
+        // If it is an inline table, which can't be extended, the verification below refuses the edit
+        guard existingMode != nil || tomlKey(address.mode) == address.mode else { throw ConfigWriterError.invalidModeName(address.mode) }
         while content.last?.trimmingCharacters(in: .whitespaces).isEmpty == true { content.removeLast() }
         if !content.isEmpty { content.append("") }
-        content += ["[\(table.joined(separator: "."))]"] + newEntry("    ", "") + [""]
+        content += ["[mode.\(tomlKey(address.mode)).binding]"] + newEntry("    ", "") + [""]
     }
 
     let path = table + [address.binding]
