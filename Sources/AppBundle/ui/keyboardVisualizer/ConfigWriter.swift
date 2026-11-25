@@ -195,7 +195,7 @@ func setBindingInLines(_ lines: [String], _ address: BindingAddress, value: Stri
     func indent(_ line: String) -> String { String(line.prefix { $0 == " " || $0 == "\t" }) }
 
     var content = lines
-    if let header = lines.firstIndex(where: { tomlTableHeader($0) == table.joined(separator: ".") }) {
+    if let header = bindingTableHeaderIndex(lines, mode: address.mode) {
         let entries = tomlEntries(lines, in: header + 1 ..< tomlSectionEnd(lines, sectionStart: header))
         let matches = entries.filter { bindingKeyMatches($0.key, key: physicalKey, modifiers: modifiers, keyMapping: keyMapping) }
         // From the bottom up, so the earlier ranges stay valid
@@ -214,6 +214,11 @@ func setBindingInLines(_ lines: [String], _ address: BindingAddress, value: Stri
             content.insert(contentsOf: newEntry(lastEntry.map { indent(lines[$0.lines.lowerBound]) } ?? "    ", ""), at: lastEntry?.lines.upperBound ?? header + 1)
         }
     } else {
+        // The mode can exist without a header these functions can find: written with dotted keys, as
+        // an inline table, or under a quoted name with escapes. That isn't a bad name, it is a shape to edit by hand
+        if (try? TOMLTable(string: lines.joined(separator: "\n")))?["mode"]?.table?[address.mode] != nil {
+            throw ConfigWriterError.unsupportedEdit((table + [address.binding]).joined(separator: "."))
+        }
         guard tomlKey(address.mode) == address.mode else { throw ConfigWriterError.invalidModeName(address.mode) }
         while content.last?.trimmingCharacters(in: .whitespaces).isEmpty == true { content.removeLast() }
         if !content.isEmpty { content.append("") }
@@ -235,7 +240,7 @@ func setBindingInLines(_ lines: [String], _ address: BindingAddress, value: Stri
 func deleteBindingLines(_ lines: [String], _ address: BindingAddress, keyMapping: [String: Key] = keyNotationToKeyCode) throws -> [String] {
     let (modifiers, physicalKey) = try parsedBindingAddress(address, keyMapping)
     let table = ["mode", address.mode, "binding"]
-    guard let header = lines.firstIndex(where: { tomlTableHeader($0) == table.joined(separator: ".") }) else { return lines }
+    guard let header = bindingTableHeaderIndex(lines, mode: address.mode) else { return lines }
     let matches = tomlEntries(lines, in: header + 1 ..< tomlSectionEnd(lines, sectionStart: header))
         .filter { bindingKeyMatches($0.key, key: physicalKey, modifiers: modifiers, keyMapping: keyMapping) }
     guard !matches.isEmpty else { return lines }
@@ -245,6 +250,15 @@ func deleteBindingLines(_ lines: [String], _ address: BindingAddress, keyMapping
         entries.removeBindings(in: table, key: physicalKey, modifiers: modifiers, keyMapping: keyMapping)
     }
     return content
+}
+
+/// The line of the `[mode.<mode>.binding]` header. `tomlTableHeader` strips the quotes of a quoted
+/// name, except around a name with a dot, which it leaves as written: `mode."foo.bar".binding`.
+private func bindingTableHeaderIndex(_ lines: [String], mode: String) -> Int? {
+    let headers: Set<String> = mode.contains(".")
+        ? ["mode.\"\(mode)\".binding", "mode.'\(mode)'.binding"]
+        : ["mode.\(mode).binding"]
+    return lines.firstIndex { tomlTableHeader($0).map(headers.contains) == true }
 }
 
 /// The modifiers and the physical key (in qwerty notation, as `bindingKeyMatches` takes it) of `address`

@@ -181,6 +181,8 @@ struct KeybindingsListView: View {
         let sections = modeSections()
         VStack(alignment: .leading, spacing: 0) {
             if sections.isEmpty {
+                // Still says why a new shortcut wouldn't work yet
+                if !config.enableKeyboardShortcuts { shortcutsOffNotice.padding(.top, 12) }
                 emptyState
             } else {
                 HStack(spacing: 12) {
@@ -289,6 +291,13 @@ struct KeybindingsListView: View {
                 .foregroundStyle(.secondary)
             Text("No keybindings configured.")
                 .foregroundStyle(.secondary)
+            // The list's own Add buttons sit in rows that an empty list doesn't have
+            Button {
+                addShortcut(mode: mainModeId)
+            } label: {
+                Label("Add Shortcut", systemImage: "plus")
+            }
+            .padding(.top, 4)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(40)
