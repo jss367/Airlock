@@ -19,9 +19,16 @@ The app switcher size can be changed in Settings → Appearance. App icons wrap 
 
 Airlock is in early development. Configuration and behavior may change.
 
-Download the app and command-line tool from [GitHub Releases](https://github.com/jss367/Airlock/releases/latest). The release ZIP supports Apple Silicon and Intel Macs running macOS 26 or later. Extract it, move `Airlock.app` to `/Applications`, and copy `bin/airlock` to a directory on your `PATH`, such as `~/.local/bin`. Releases are ad-hoc signed and are not notarized by Apple; macOS may require you to explicitly allow the app before opening it. On first launch, a welcome window asks for Accessibility access; Airlock starts as soon as you turn it on in **System Settings → Privacy & Security → Accessibility**, with no relaunch.
+Download the app and command-line tool from [GitHub Releases](https://github.com/jss367/Airlock/releases/latest). The release ZIP supports Apple Silicon and Intel Macs running macOS 26 or later. Extract it, move `Airlock.app` to `/Applications`, and link the command-line tool inside the app to a directory on your `PATH`:
 
-Use **Check for Updates…** in the menu bar menu, or the button in the **About Airlock** window, to check for a newer stable release. When an update is available, **View Release** opens its download page; download and install it manually. Checks run only when you choose the menu item.
+```sh
+mkdir -p ~/.local/bin
+ln -sf /Applications/Airlock.app/Contents/Helpers/airlock ~/.local/bin/airlock
+```
+
+The link keeps the command-line tool at the same version as the app when the app updates. On first launch, a welcome window asks for Accessibility access; Airlock starts as soon as you turn it on in **System Settings → Privacy & Security → Accessibility**, with no relaunch.
+
+Use **Check for Updates…** in the menu bar menu, or the button in the **About Airlock** window, to check for a newer stable release. When an update is available, **Install Update** downloads it, replaces the app, and relaunches it. Accessibility permission carries over. Checks run only when you ask for one.
 
 To build from source, install Xcode with Swift 6.2 or later. From a checkout of this repository:
 
@@ -35,7 +42,7 @@ This builds the app and command-line tool and runs the tests. To install and lau
 ./deploy.sh
 ```
 
-`deploy.sh` stops any running Airlock instance, rebuilds and tests, replaces `/Applications/Airlock.app`, installs the command-line tool to `~/.local/bin/airlock`, and launches the app. Add `~/.local/bin` to your `PATH` to use `airlock` from a terminal. Grant Airlock access in **System Settings → Privacy & Security → Accessibility** when prompted.
+`deploy.sh` stops any running Airlock instance, rebuilds and tests, replaces `/Applications/Airlock.app`, links `~/.local/bin/airlock` to the command-line tool inside the app, and launches the app. Add `~/.local/bin` to your `PATH` to use `airlock` from a terminal. Grant Airlock access in **System Settings → Privacy & Security → Accessibility** when prompted.
 
 See [development instructions](dev-docs/development.md) for toolchain setup and other build options.
 

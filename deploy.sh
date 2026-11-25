@@ -29,7 +29,7 @@ echo "Stamping build version and Git commit..."
 
 echo "Building with stable code-signing identity $codesign_identity..."
 xcodebuild -project Airlock.xcodeproj -scheme Airlock -configuration Release build \
-  MARKETING_VERSION="$(cat VERSION)" \
+  MARKETING_VERSION="$(cat VERSION)" CURRENT_PROJECT_VERSION="$(cat VERSION)" \
   CODE_SIGN_IDENTITY="$codesign_identity" CODE_SIGNING_REQUIRED=YES \
   -derivedDataPath .xcode-build \
   -quiet
@@ -40,6 +40,11 @@ swift test --quiet
 echo "Building CLI..."
 swift build --product airlock -c release --quiet
 
+echo "Signing..."
+./script/bundle-app.sh --app .xcode-build/Build/Products/Release/Airlock.app \
+  --cli "$(swift build --product airlock -c release --show-bin-path)/airlock" \
+  --codesign-identity "$codesign_identity"
+
 restore_generated_sources
 trap - EXIT
 
@@ -49,13 +54,13 @@ pkill -f Airlock || true
 
 echo "Deploying to /Applications..."
 rm -rf /Applications/Airlock.app
-cp -r .xcode-build/Build/Products/Release/Airlock.app /Applications/Airlock.app
+ditto .xcode-build/Build/Products/Release/Airlock.app /Applications/Airlock.app
 codesign --verify --deep --strict /Applications/Airlock.app
 
 echo "Installing CLI..."
-CLI_BIN=$(swift build --product airlock -c release --show-bin-path)/airlock
 mkdir -p ~/.local/bin
-cp "$CLI_BIN" ~/.local/bin/airlock
+# A link, so that an in-app update also updates the command-line tool
+ln -sf /Applications/Airlock.app/Contents/Helpers/airlock ~/.local/bin/airlock
 
 echo "Launching..."
 open /Applications/Airlock.app
