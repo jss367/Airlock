@@ -54,6 +54,43 @@ final class OneShotModeTest: XCTestCase {
         assertEquals(activeMode, mainModeId)
     }
 
+    func testAThrowingCommandStillEndsTheOneShotMode() async throws {
+        try await activateMode("window")
+        do {
+            try await runHotkeyCommandSession([ThrowingFixtureCommand()], mode: "window")
+            XCTFail("The command's error must still be reported")
+        } catch is ThrowingFixtureCommand.Failure {}
+        assertEquals(activeMode, mainModeId)
+
+        // An ordinary mode is left alone
+        try await activateMode("resize")
+        do {
+            try await runHotkeyCommandSession([ThrowingFixtureCommand()], mode: "resize")
+            XCTFail("The command's error must still be reported")
+        } catch is ThrowingFixtureCommand.Failure {}
+        assertEquals(activeMode, "resize")
+    }
+
+    func testAThrowingCommandAfterAModeSwitchKeepsTheTarget() async throws {
+        try await activateMode("window")
+        do {
+            try await runHotkeyCommandSession([parseCommand("mode resize").cmdOrDie, ThrowingFixtureCommand()], mode: "window")
+            XCTFail("The command's error must still be reported")
+        } catch is ThrowingFixtureCommand.Failure {}
+        assertEquals(activeMode, "resize")
+    }
+
+    func testAThrowingTriggeredBindingStillEndsTheOneShotMode() async throws {
+        let binding = HotkeyBinding(.option, .x, [ThrowingFixtureCommand()], descriptionWithKeyNotation: "option-x")
+        config.modes["window"]?.bindings = [binding.descriptionWithKeyCode: binding]
+        activeMode = "window"
+        do {
+            try await runHotkeyCommandSession([parseCommand("trigger-binding option-x --mode window").cmdOrDie])
+            XCTFail("The command's error must still be reported")
+        } catch is ThrowingFixtureCommand.Failure {}
+        assertEquals(activeMode, mainModeId)
+    }
+
     func testTriggerBindingEndsTheOneShotModeItsBindingBelongsTo() async throws {
         let binding = HotkeyBinding(.option, .x, [parseCommand("balance-sizes").cmdOrDie], descriptionWithKeyNotation: "option-x")
         config.modes["window"]?.bindings = [binding.descriptionWithKeyCode: binding]
@@ -80,4 +117,11 @@ final class OneShotModeTest: XCTestCase {
         XCTAssertFalse(sessionCoordinator.isEnabled)
         XCTAssertNil(activeMode)
     }
+}
+
+private struct ThrowingFixtureCommand: Command {
+    struct Failure: Error {}
+    let args = FlattenWorkspaceTreeCmdArgs(rawArgs: [])
+    let shouldResetClosedWindowsCache = false
+    func run(_ env: CmdEnv, _ io: CmdIo) throws -> Bool { throw Failure() }
 }

@@ -229,6 +229,22 @@ func leaveOneShotMode(_ mode: String) async throws {
     try await activateMode(mainModeId)
 }
 
+/// Runs the commands of a binding of `mode`, then ends the mode if it is one-shot. The mode ends when
+/// the commands throw too: the key was pressed, and staying would hand the user's next key to a mode
+/// they believe they have left. The commands' error is the one reported.
+@MainActor
+func runThenLeaveOneShotMode<T>(_ mode: String, _ body: @MainActor () async throws -> T) async throws -> T {
+    let result: T
+    do {
+        result = try await body()
+    } catch {
+        try? await leaveOneShotMode(mode)
+        throw error
+    }
+    try await leaveOneShotMode(mode)
+    return result
+}
+
 /// The same command-session path used by registered hotkeys, without key registration in tests.
 /// `mode` is the mode the binding belongs to, for `leaveOneShotMode`.
 @MainActor
@@ -242,8 +258,11 @@ func runHotkeyCommandSession(_ commands: [any Command], modifiers: NSEvent.Modif
         }
         let prepared = PreparedCommandSession(commands)
         try await runLightSession(.hotkeyBinding, prepared.admission) {
-            _ = try await prepared.run(.defaultEnv, .emptyStdin)
-            if let mode { try await leaveOneShotMode(mode) }
+            guard let mode else {
+                _ = try await prepared.run(.defaultEnv, .emptyStdin)
+                return
+            }
+            _ = try await runThenLeaveOneShotMode(mode) { try await prepared.run(.defaultEnv, .emptyStdin) }
         }
     }
 }
