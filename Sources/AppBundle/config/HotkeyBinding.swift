@@ -234,6 +234,8 @@ func leaveOneShotMode(_ mode: String) async throws {
 /// they believe they have left. The commands' error is the one reported.
 @MainActor
 func runThenLeaveOneShotMode<T>(_ mode: String, _ body: @MainActor () async throws -> T) async throws -> T {
+    // A mode that stays active keeps its hints panel, which follows the focus to another monitor
+    defer { syncModeHintsPanel() }
     let result: T
     do {
         result = try await body()

@@ -106,6 +106,7 @@ func modeHintsLayout(rowCount: Int, available: CGSize, measure: (Int) -> CGSize)
 
 /// Shows, updates, or closes the panel to match the active mode. Call after every change to the
 /// active mode or to the config. `activateMode` does both: a config reload ends with it.
+/// Also call after a binding of the mode has run, since it can move focus to another monitor.
 @MainActor
 func syncModeHintsPanel() {
     if isUnitTest { return }
@@ -126,8 +127,20 @@ func modeHintsPanelFrame(contentSize: CGSize, visibleFrame: NSRect, margin: CGFl
     return NSRect(x: visibleFrame.midX - size.width / 2, y: y, width: size.width, height: size.height)
 }
 
+/// The visible frame of the screen that shows Airlock's focused workspace, which is where the mode's
+/// key was pressed. Not `NSScreen.main`: that follows the key window, and this panel never takes key,
+/// so with several monitors it can name a screen the user isn't looking at.
+@MainActor
+private func focusedScreenVisibleFrame() -> NSRect {
+    let screens = NSScreen.screens
+    let index = focus.workspace.workspaceMonitor.monitorAppKitNsScreenScreensId - 1
+    let screen = screens.indices.contains(index) ? screens[index] : NSScreen.main
+    return screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1200, height: 800)
+}
+
 private final class ModeHintsPanel: NSPanelHud {
     private var shown: ModeHints?
+    private var shownOn: NSRect?
 
     override init() {
         super.init()
@@ -140,10 +153,12 @@ private final class ModeHintsPanel: NSPanelHud {
     }
 
     func show(_ hints: ModeHints) {
-        // A config reload re-activates the current mode. Rebuilding the same panel would flicker
-        if isVisible, shown == hints { return }
+        let visibleFrame = focusedScreenVisibleFrame()
+        // A config reload re-activates the current mode, and every binding of the mode syncs the panel.
+        // Rebuilding the same panel in the same place would flicker
+        if isVisible, shown == hints, shownOn == visibleFrame { return }
         shown = hints
-        let visibleFrame = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1200, height: 800)
+        shownOn = visibleFrame
         var sizes: [Int: CGSize] = [:]
         let layout = modeHintsLayout(rowCount: hints.rows.count, available: visibleFrame.size) { rowsPerColumn in
             let size = NSHostingView(rootView: ModeHintsView(hints: hints, rowsPerColumn: rowsPerColumn)).fittingSize
@@ -164,6 +179,7 @@ private final class ModeHintsPanel: NSPanelHud {
 
     override func close() {
         shown = nil
+        shownOn = nil
         super.close()
     }
 }
