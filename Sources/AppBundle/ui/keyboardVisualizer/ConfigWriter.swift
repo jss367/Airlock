@@ -197,7 +197,7 @@ func setBindingInLines(_ lines: [String], _ address: BindingAddress, value: Stri
     var content = lines
     if let header = bindingTableHeaderIndex(lines, mode: address.mode) {
         let entries = tomlEntries(lines, in: header + 1 ..< tomlSectionEnd(lines, sectionStart: header))
-        let matches = entries.filter { bindingKeyMatches($0.key, key: physicalKey, modifiers: modifiers, keyMapping: keyMapping) }
+        let matches = entries.filter { bindingKeyMatches(bindingEntryName($0.key), key: physicalKey, modifiers: modifiers, keyMapping: keyMapping) }
         // From the bottom up, so the earlier ranges stay valid
         for (offset, match) in matches.enumerated().reversed() {
             if offset == 0 {
@@ -242,7 +242,7 @@ func deleteBindingLines(_ lines: [String], _ address: BindingAddress, keyMapping
     let table = ["mode", address.mode, "binding"]
     guard let header = bindingTableHeaderIndex(lines, mode: address.mode) else { return lines }
     let matches = tomlEntries(lines, in: header + 1 ..< tomlSectionEnd(lines, sectionStart: header))
-        .filter { bindingKeyMatches($0.key, key: physicalKey, modifiers: modifiers, keyMapping: keyMapping) }
+        .filter { bindingKeyMatches(bindingEntryName($0.key), key: physicalKey, modifiers: modifiers, keyMapping: keyMapping) }
     guard !matches.isEmpty else { return lines }
     var content = lines
     for match in matches.reversed() { content.removeSubrange(match.lines) }
@@ -250,6 +250,14 @@ func deleteBindingLines(_ lines: [String], _ address: BindingAddress, keyMapping
         entries.removeBindings(in: table, key: physicalKey, modifiers: modifiers, keyMapping: keyMapping)
     }
     return content
+}
+
+/// The key of a binding table's entry as the name it binds. `tomlEntries` strips the quotes of a quoted
+/// key, except around a key with a dot, which it leaves as written. A `[key-mapping]` alias can have a
+/// dot, and its bindings are then written as `"option-foo.bar"`.
+private func bindingEntryName(_ key: String) -> String {
+    guard key.count >= 2, let quote = key.first, quote == "\"" || quote == "'", key.last == quote else { return key }
+    return String(key.dropFirst().dropLast())
 }
 
 /// The line of the `[mode.<mode>.binding]` header. `tomlTableHeader` strips the quotes of a quoted

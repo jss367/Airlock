@@ -168,6 +168,22 @@ final class BindingWriterTest: XCTestCase {
         assertEquals(result.count, lines.count)
     }
 
+    func testAKeyAliasWithADotIsFoundUnderItsQuotes() throws {
+        let mapping = keyNotationToKeyCode.merging(["foo.bar": .f]) { $1 }
+        let address = main("option-foo.bar")
+        for key in ["\"option-foo.bar\"", "'option-foo.bar'"] {
+            let lines = ["[mode.main.binding]", "    \(key) = 'close'", "    option-l = 'focus right'"]
+
+            assertEquals(try setBindingInLines(lines, address, value: "'fullscreen'", keyMapping: mapping), [
+                "[mode.main.binding]",
+                "    \"option-foo.bar\" = 'fullscreen'",
+                "    option-l = 'focus right'",
+            ])
+            assertEquals(try deleteBindingLines(lines, address, keyMapping: mapping), ["[mode.main.binding]", "    option-l = 'focus right'"])
+            assertEquals(bindingCommandTexts(inToml: lines.joined(separator: "\n"), address, keyMapping: mapping), ["close"])
+        }
+    }
+
     // MARK: - removeBindingFromLines
 
     func testRemoveDeletesABindingTheDefaultsDontHave() throws {
