@@ -165,7 +165,7 @@ extension ParsedCmd where T == any Command {
 }
 
 extension Command {
-    fileprivate var isMacOsNativeCommand: Bool { // Problem ID-B6E178F2
+    var isMacOsNativeCommand: Bool { // Problem ID-B6E178F2
         self is MacosNativeMinimizeCommand || self is MacosNativeFullscreenCommand
     }
 }
@@ -178,6 +178,16 @@ func parseAfterLoginCommand(_ raw: TOMLValueConvertible, _ backtrace: TomlBacktr
     return .failure(.semantic(backtrace, msg))
 }
 
+/// One command as a binding or a callback may run it: it must parse and be allowed in the config
+func parseConfigCommand(_ raw: String) -> Parsed<any Command> { parseCommand(raw).toEither() }
+
+/// The rules for a list of commands as a whole, on top of each command being valid on its own
+func checkCommandSequence(_ commands: [any Command]) -> Parsed<[any Command]> {
+    commands.dropLast().contains(where: { $0.isMacOsNativeCommand })
+        ? .failure("macos-native-* commands are only allowed to be the last commands in the list")
+        : .success(commands)
+}
+
 func parseCommandOrCommands(_ raw: TOMLValueConvertible) -> Parsed<[any Command]> {
     if let rawString = raw.string {
         return parseCommand(rawString).toEither().map { [$0] }
@@ -186,9 +196,7 @@ func parseCommandOrCommands(_ raw: TOMLValueConvertible) -> Parsed<[any Command]
             let rawString: String = rawArray[index].string ?? expectedActualTypeError(expected: .string, actual: rawArray[index].type)
             return parseCommand(rawString).toEither()
         }
-        return commands.filter("macos-native-* commands are only allowed to be the last commands in the list") {
-            !$0.dropLast().contains(where: { $0.isMacOsNativeCommand })
-        }
+        return commands.flatMap(checkCommandSequence)
     } else {
         return .failure(expectedActualTypeError(expected: [.string, .array], actual: raw.type))
     }

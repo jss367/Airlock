@@ -27,10 +27,50 @@ extension HotKey {
     }
 }
 
+/// True while Settings records a shortcut. Airlock's hotkeys are unregistered meanwhile: a registered
+/// hotkey never reaches the window as a key event, so a key that is already bound couldn't be recorded
+/// and would run its binding instead.
+@MainActor private(set) var isRecordingShortcut = false
+
+@MainActor func setRecordingShortcut(_ recording: Bool) {
+    guard isRecordingShortcut != recording else { return }
+    isRecordingShortcut = recording
+    registerHotkeys(for: activeMode)
+    registerQuickSwitcherHotkey()
+}
+
 @MainActor var activeMode: String? = mainModeId
 @MainActor func activateMode(_ targetMode: String?, beforeEffects: @MainActor @escaping () async throws -> Void = {}, beforeStateChange: @MainActor () -> Bool = { true }, onCallbacksAdmitted: @MainActor () -> Void = {}) async throws {
     guard beforeStateChange() else { return }
-    let targetBindings = hotkeyBindings(for: targetMode)
+    registerHotkeys(for: targetMode)
+    let oldMode = activeMode
+    activeMode = targetMode
+    // Before the callbacks, which can fail or be refused. The panel must still follow the mode
+    syncModeHintsPanel()
+    if oldMode != targetMode {
+        broadcastEvent(.modeChanged(mode: targetMode))
+        if !config.onModeChanged.isEmpty {
+            guard let token: RunSessionGuard = .forCallback else { return }
+            try await adoptResumeWindowBeforeModeCallbacks()
+            try await runLightSession(.onModeChanged, token, beforeEffects: {
+                try await validateResumeWindowBeforeModeEffects()
+                try await beforeEffects()
+            }) {
+                onCallbacksAdmitted()
+                _ = try await config.onModeChanged.runCmdSeq(.defaultEnv, .emptyStdin)
+            }
+        }
+    }
+}
+
+/// The bindings whose hotkeys should be registered in `targetMode`: none while a shortcut is being recorded
+@MainActor func bindingsToRegister(for targetMode: String?) -> [String: HotkeyBinding] {
+    isRecordingShortcut ? [:] : hotkeyBindings(for: targetMode)
+}
+
+/// Registers the hotkeys of `targetMode` and unregisters every other one
+@MainActor private func registerHotkeys(for targetMode: String?) {
+    let targetBindings = bindingsToRegister(for: targetMode)
     for binding in targetBindings.values where !hotkeys.keys.contains(binding.descriptionWithKeyCode) {
         hotkeys[binding.descriptionWithKeyCode] = HotKey(key: binding.keyCode, modifiers: binding.modifiers, keyDownHandler: {
             Task {
@@ -66,24 +106,6 @@ extension HotKey {
         }
     }
     syncNativeAppSwitcherKeys()
-    let oldMode = activeMode
-    activeMode = targetMode
-    // Before the callbacks, which can fail or be refused. The panel must still follow the mode
-    syncModeHintsPanel()
-    if oldMode != targetMode {
-        broadcastEvent(.modeChanged(mode: targetMode))
-        if !config.onModeChanged.isEmpty {
-            guard let token: RunSessionGuard = .forCallback else { return }
-            try await adoptResumeWindowBeforeModeCallbacks()
-            try await runLightSession(.onModeChanged, token, beforeEffects: {
-                try await validateResumeWindowBeforeModeEffects()
-                try await beforeEffects()
-            }) {
-                onCallbacksAdmitted()
-                _ = try await config.onModeChanged.runCmdSeq(.defaultEnv, .emptyStdin)
-            }
-        }
-    }
 }
 
 /// The native app switcher hotkeys that Airlock's registered hotkeys sit on. See `NativeAppSwitcherKeys`
@@ -95,8 +117,18 @@ func claimedNativeAppSwitcherKeys(_ combos: [KeyCombo]) -> Set<NativeAppSwitcher
 /// Call after every change to the registered hotkeys
 @MainActor
 func syncNativeAppSwitcherKeys() {
+    NativeAppSwitcherKeys.shared.sync(claimed: nativeAppSwitcherKeysToClaim())
+}
+
+/// The native app switcher hotkeys Airlock should hold right now: the ones its registered hotkeys sit
+/// on. While a shortcut is being recorded it holds both, whether or not a binding uses them. Otherwise
+/// pressing Cmd+Tab to record it would open the native switcher, which also takes Airlock out of focus
+/// and ends the recording. The next sync after recording gives back the ones no binding claims.
+@MainActor
+func nativeAppSwitcherKeysToClaim() -> Set<NativeAppSwitcherKey> {
+    if isRecordingShortcut { return Set(NativeAppSwitcherKey.allCases) }
     let combos = hotkeys.values.filter { !$0.isPaused }.map(\.keyCombo) + [quickSwitcherKeyCombo].compactMap(\.self)
-    NativeAppSwitcherKeys.shared.sync(claimed: claimedNativeAppSwitcherKeys(combos))
+    return claimedNativeAppSwitcherKeys(combos)
 }
 
 /// Registration and dispatch follow running state even if a command changes mode after Pause.

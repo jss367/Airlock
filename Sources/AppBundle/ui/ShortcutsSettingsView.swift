@@ -31,7 +31,7 @@ struct ShortcutsSettingsPane: View {
 
     private var hint: String {
         switch navigation.shortcutsView {
-            case .list: "Every key binding in your config, by mode."
+            case .list: "Every key binding in your config, by mode. Point at one to change or remove it."
             case .keyboard: "What each key does with a modifier held. Click a key to assign an app to it."
         }
     }

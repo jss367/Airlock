@@ -11,6 +11,10 @@ struct Shortcut: Equatable {
     /// can match by key names ("shift", "cmd", "backspace") even though we render symbols.
     /// A collapsed row carries the text of every binding it stands for.
     let searchText: String
+    /// The binding the row shows, for editing. Nil for a row that isn't one binding
+    var binding: HotkeyBinding? = nil
+    /// The bindings a collapsed row stands for, as rows of their own
+    var members: [Shortcut] = []
 
     func matches(_ query: String) -> Bool {
         searchText.contains(query) || tokens.contains { $0.label.lowercased().contains(query) }
@@ -25,6 +29,7 @@ struct KeyToken: Identifiable, Equatable {
 
 private struct ModeSection: Identifiable {
     let id: Int
+    let mode: String
     let title: String
     let accent: Color
     let shortcuts: [Shortcut]
@@ -45,15 +50,20 @@ func keybindingShortcuts(_ bindings: [HotkeyBinding]) -> [Shortcut] {
         if let pattern = workspacePattern(of: binding), let group = groups[pattern], group.count > 1 {
             if collapsed.insert(pattern).inserted { result.append(collapsedShortcut(pattern, group)) }
         } else {
-            let action = actionDescription(binding)
-            result.append(Shortcut(
-                tokens: keyTokens(fromNotation: binding.descriptionWithKeyNotation),
-                action: action,
-                searchText: "\(binding.descriptionWithKeyNotation) \(action)".lowercased(),
-            ))
+            result.append(singleShortcut(binding))
         }
     }
     return result
+}
+
+private func singleShortcut(_ binding: HotkeyBinding) -> Shortcut {
+    let action = actionDescription(binding)
+    return Shortcut(
+        tokens: keyTokens(fromNotation: binding.descriptionWithKeyNotation),
+        action: action,
+        searchText: "\(binding.descriptionWithKeyNotation) \(action)".lowercased(),
+        binding: binding,
+    )
 }
 
 func keyTokens(fromNotation raw: String) -> [KeyToken] {
@@ -109,6 +119,7 @@ private func collapsedShortcut(_ pattern: WorkspacePattern, _ group: [HotkeyBind
         tokens: keyTokens(modifiers: pattern.modifiers, keyLabels: keyRangeLabels(keys)),
         action: pattern.action,
         searchText: searchText.joined(separator: " ").lowercased(),
+        members: group.map(singleShortcut),
     )
 }
 
@@ -154,23 +165,79 @@ private func keyLabel(_ raw: String) -> String {
 
 // MARK: - View
 
-/// The searchable list on the Shortcuts tab. Read-only: bindings are edited in the config file
-/// or on the keyboard view.
+/// The searchable list on the Shortcuts tab. A row's buttons change or remove its binding, and the
+/// Add buttons make a new one, all through the editor sheet (ShortcutEditorView.swift).
 struct KeybindingsListView: View {
     /// Republished on every config reload, so the list follows the config while it is open
     @ObservedObject var model: TrayMenuModel
     @State private var searchText: String = ""
+    @State private var editorTarget: ShortcutEditorTarget?
+    @State private var removal: PendingRemoval?
+    @State private var hoveredRow: String?
+    /// The collapsed rows shown with their bindings listed, by row id
+    @State private var expandedRows: Set<String> = []
 
     var body: some View {
         let sections = modeSections()
         VStack(alignment: .leading, spacing: 0) {
             if sections.isEmpty {
+                // Still says why a new shortcut wouldn't work yet
+                if !config.enableKeyboardShortcuts { shortcutsOffNotice.padding(.top, 12) }
                 emptyState
             } else {
-                searchField
+                HStack(spacing: 12) {
+                    searchField
+                    Button {
+                        addShortcut(mode: mainModeId)
+                    } label: {
+                        Label("Add Shortcut", systemImage: "plus")
+                    }
+                    .padding(.trailing, 20)
+                }
+                .padding(.bottom, 12)
                 if !config.enableKeyboardShortcuts { shortcutsOffNotice }
                 Divider()
                 content(sections)
+            }
+        }
+        .sheet(item: $editorTarget) { target in
+            ShortcutEditorView(target: target) { editorTarget = nil }
+        }
+        .alert(
+            "Remove this shortcut?",
+            isPresented: Binding(get: { removal != nil }, set: { if !$0 { removal = nil } }),
+            presenting: removal,
+        ) { removal in
+            Button("Remove", role: .destructive) { remove(removal.address) }
+            Button("Cancel", role: .cancel) {}
+        } message: { removal in
+            Text(removal.message)
+        }
+    }
+
+    // MARK: - Editing
+
+    private func addShortcut(mode: String) {
+        editorTarget = ShortcutEditorTarget(original: nil, draft: ShortcutDraft(mode: mode, binding: "", commands: [""]))
+    }
+
+    private func edit(_ binding: HotkeyBinding, mode: String) {
+        let commands = editableCommandTexts(of: binding, mode: mode)
+        editorTarget = ShortcutEditorTarget(
+            original: BindingAddress(mode: mode, binding: binding.descriptionWithKeyNotation),
+            draft: ShortcutDraft(mode: mode, binding: binding.descriptionWithKeyNotation, commands: commands.isEmpty ? [""] : commands),
+        )
+    }
+
+    private func remove(_ address: BindingAddress) {
+        Task {
+            do {
+                try removeBinding(address)
+                try await reloadSettingsConfigAfterWrite()
+            } catch is CancellationError {
+                // A newer operation superseded the reload
+            } catch {
+                reportSettingsWriteFailure(error)
             }
         }
     }
@@ -181,7 +248,7 @@ struct KeybindingsListView: View {
         return sections.compactMap { section in
             let matches = section.shortcuts.filter { $0.matches(query) }
             guard !matches.isEmpty else { return nil }
-            return ModeSection(id: section.id, title: section.title, accent: section.accent, shortcuts: matches)
+            return ModeSection(id: section.id, mode: section.mode, title: section.title, accent: section.accent, shortcuts: matches)
         }
     }
 
@@ -208,8 +275,7 @@ struct KeybindingsListView: View {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .stroke(Color.primary.opacity(0.1), lineWidth: 1),
         )
-        .padding(.horizontal, 20)
-        .padding(.bottom, 12)
+        .padding(.leading, 20)
     }
 
     private var shortcutsOffNotice: some View {
@@ -225,6 +291,13 @@ struct KeybindingsListView: View {
                 .foregroundStyle(.secondary)
             Text("No keybindings configured.")
                 .foregroundStyle(.secondary)
+            // The list's own Add buttons sit in rows that an empty list doesn't have
+            Button {
+                addShortcut(mode: mainModeId)
+            } label: {
+                Label("Add Shortcut", systemImage: "plus")
+            }
+            .padding(.top, 4)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(40)
@@ -265,11 +338,26 @@ struct KeybindingsListView: View {
                     .padding(.horizontal, 6)
                     .padding(.vertical, 1)
                     .background(section.accent.opacity(0.15), in: Capsule())
+                Button {
+                    addShortcut(mode: section.mode)
+                } label: {
+                    Image(systemName: "plus.circle")
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .help("Add a shortcut to \(section.mode == mainModeId ? "the global shortcuts" : "the \(section.title) mode")")
             }
 
             VStack(spacing: 0) {
                 ForEach(Array(section.shortcuts.enumerated()), id: \.offset) { rowIndex, shortcut in
-                    shortcutRow(shortcut, accent: section.accent, isEven: rowIndex % 2 == 0)
+                    let rowId = "\(section.mode) \(rowIndex)"
+                    shortcutRow(shortcut, id: rowId, mode: section.mode, accent: section.accent, isEven: rowIndex % 2 == 0)
+                    if expandedRows.contains(rowId) {
+                        ForEach(Array(shortcut.members.enumerated()), id: \.offset) { memberIndex, member in
+                            shortcutRow(member, id: "\(rowId) \(memberIndex)", mode: section.mode, accent: section.accent, isEven: rowIndex % 2 == 0)
+                                .padding(.leading, 20)
+                        }
+                    }
                 }
             }
             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
@@ -280,7 +368,7 @@ struct KeybindingsListView: View {
         }
     }
 
-    private func shortcutRow(_ shortcut: Shortcut, accent: Color, isEven: Bool) -> some View {
+    private func shortcutRow(_ shortcut: Shortcut, id: String, mode: String, accent: Color, isEven: Bool) -> some View {
         HStack(alignment: .center, spacing: 6) {
             ForEach(shortcut.tokens) { token in
                 keycap(token, accent: accent)
@@ -290,10 +378,50 @@ struct KeybindingsListView: View {
                 .font(.system(.callout, design: .rounded))
                 .foregroundStyle(.primary)
                 .multilineTextAlignment(.trailing)
+            rowButtons(shortcut, id: id, mode: mode)
+                // Always laid out, so hovering a row doesn't move its text
+                .opacity(hoveredRow == id || expandedRows.contains(id) ? 1 : 0)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .background(isEven ? Color.clear : accent.opacity(0.05))
+        .contentShape(Rectangle())
+        .onHover { hoveredRow = $0 ? id : (hoveredRow == id ? nil : hoveredRow) }
+        .onTapGesture(count: 2) {
+            if let binding = shortcut.binding { edit(binding, mode: mode) }
+        }
+    }
+
+    /// Edit and Remove for a row that is one binding, a disclosure button for a collapsed row.
+    /// The Quick Switcher row has neither: its key is `[quick-switcher] binding`.
+    @ViewBuilder
+    private func rowButtons(_ shortcut: Shortcut, id: String, mode: String) -> some View {
+        HStack(spacing: 8) {
+            if let binding = shortcut.binding {
+                Button {
+                    edit(binding, mode: mode)
+                } label: {
+                    Image(systemName: "pencil")
+                }
+                .help("Change this shortcut")
+                Button {
+                    removal = PendingRemoval(mode: mode, binding: binding, shortcut: shortcut)
+                } label: {
+                    Image(systemName: "trash")
+                }
+                .help("Remove this shortcut")
+            } else if !shortcut.members.isEmpty {
+                Button {
+                    expandedRows.formSymmetricDifference([id])
+                } label: {
+                    Image(systemName: expandedRows.contains(id) ? "chevron.down" : "chevron.right")
+                }
+                .help(expandedRows.contains(id) ? "Hide the shortcuts in this group" : "Show each shortcut in this group, to change or remove one")
+            }
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(.secondary)
+        .frame(width: 44, alignment: .trailing)
     }
 
     private func keycap(_ token: KeyToken, accent: Color) -> some View {
@@ -330,9 +458,21 @@ struct KeybindingsListView: View {
             guard !shortcuts.isEmpty else { continue }
             let title = modeName == mainModeId ? "Global" : modeName
             let accent = modeName == mainModeId ? Color.accentColor : palette[result.count % palette.count]
-            result.append(ModeSection(id: result.count, title: title, accent: accent, shortcuts: shortcuts))
+            result.append(ModeSection(id: result.count, mode: modeName, title: title, accent: accent, shortcuts: shortcuts))
         }
         return result
+    }
+}
+
+/// The shortcut the Remove alert is asking about
+private struct PendingRemoval {
+    let address: BindingAddress
+    let message: String
+
+    init(mode: String, binding: HotkeyBinding, shortcut: Shortcut) {
+        address = BindingAddress(mode: mode, binding: binding.descriptionWithKeyNotation)
+        let keys = shortcut.tokens.map(\.label).joined(separator: " ")
+        message = "\(keys) will no longer run “\(shortcut.action)”\(mode == mainModeId ? "" : " in the \(mode) mode")."
     }
 }
 

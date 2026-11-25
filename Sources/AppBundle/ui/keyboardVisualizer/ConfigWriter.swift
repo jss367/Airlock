@@ -11,6 +11,8 @@ enum ConfigWriterError: LocalizedError {
     case inlineTable(String)
     case invalidConfig(String)
     case unsupportedEdit(String)
+    case invalidBinding(String)
+    case invalidModeName(String)
     case rejectedConfig(String)
     case configHasErrors(String)
 
@@ -28,6 +30,10 @@ enum ConfigWriterError: LocalizedError {
                 return "The config file has a syntax error. Fix it before changing settings here: \(msg)"
             case .unsupportedEdit(let path):
                 return "Can't safely set '\(path)' in this config file. Edit it in the config file instead"
+            case .invalidBinding(let binding):
+                return "'\(binding)' isn't a key Airlock can bind. Write it like 'ctrl-option-k'"
+            case .invalidModeName(let mode):
+                return "'\(mode)' can't be used as a mode name here. Use letters, digits, '-' and '_'"
             case .rejectedConfig(let msg):
                 return "Airlock couldn't load the config with this change, so it wasn't saved:\n\n\(msg)"
             case .configHasErrors(let msg):
@@ -82,10 +88,7 @@ func addBindingToLines(
 
     let bindingTable = ["mode", "main", "binding"]
     try verifyTomlEdit(from: lines, to: content, path: bindingTable + [bindingKey]) { entries in
-        entries.values = entries.values.filter { path, _ in
-            !(path.count > bindingTable.count && path.starts(with: bindingTable) &&
-                bindingKeyMatches(path[bindingTable.count], key: key, modifiers: modifierPrefix, keyMapping: keyMapping))
-        }
+        entries.removeBindings(in: bindingTable, key: key, modifiers: modifierPrefix, keyMapping: keyMapping)
         entries.set(bindingTable + [bindingKey], .string(summonAppCommand(appName: appName)))
     }
     return content
@@ -119,9 +122,225 @@ func summonAppTomlValue(appName: String) -> String {
 }
 
 /// `summon-app <appName>`, quoted for `splitArgs()`. Requires `canRepresentAppName(appName)`.
-private func summonAppCommand(appName: String) -> String {
+func summonAppCommand(appName: String) -> String {
     let argQuote = appName.contains("\"") ? "'" : "\""
     return "summon-app \(argQuote)\(appName)\(argQuote)"
+}
+
+// MARK: - Bindings of any mode
+
+/// A binding by where the config declares it: its mode and its key in config notation (`ctrl-option-k`)
+struct BindingAddress: Equatable {
+    let mode: String
+    let binding: String
+}
+
+/// Makes `address` run `commands` and writes the config file. With `old`, the binding at `old` is
+/// removed first, which is how the editor moves a binding to another key or mode.
+/// With no config file yet, it starts from a copy of the default config, like `setConfigValue`.
+@MainActor
+func setBinding(_ address: BindingAddress, commands: [String], replacing old: BindingAddress? = nil) throws {
+    let file = try configFileForEditing(contentIfMissing: newConfigFileLines())
+    let keyMapping = config.keyMapping.resolve()
+    var content = file.lines
+    if let old, !isSameBinding(old, address, keyMapping: keyMapping) {
+        content = try removeBindingFromLines(content, old, keyMapping: keyMapping)
+    }
+    content = try setBindingInLines(content, address, value: tomlCommandsValue(commands), keyMapping: keyMapping)
+    try writeConfigEdit(from: file.lines, to: content, url: file.url, separator: file.separator)
+}
+
+/// Removes the binding at `address` and writes the config file.
+@MainActor
+func removeBinding(_ address: BindingAddress) throws {
+    let file = try configFileForEditing(contentIfMissing: newConfigFileLines())
+    let content = try removeBindingFromLines(file.lines, address, keyMapping: config.keyMapping.resolve())
+    guard content != file.lines else { return }
+    try writeConfigEdit(from: file.lines, to: content, url: file.url, separator: file.separator)
+}
+
+/// Deleting a binding's line isn't always enough: the key can still be bound by the default config
+/// or by the `[workspaces]` shorthand, and only `'disabled'` removes those. So the config is parsed
+/// again after the deletion, and the key gets a `'disabled'` line if it is still bound.
+@MainActor
+func removeBindingFromLines(_ lines: [String], _ address: BindingAddress, keyMapping: [String: Key] = keyNotationToKeyCode) throws -> [String] {
+    let content = try deleteBindingLines(lines, address, keyMapping: keyMapping)
+    guard case .success(let (modifiers, key)) = parseBinding(address.binding, .emptyRoot, keyMapping) else {
+        throw ConfigWriterError.invalidBinding(address.binding)
+    }
+    let combo = HotkeyBinding(modifiers, key, [], descriptionWithKeyNotation: address.binding).descriptionWithKeyCode
+    let stillBound = parseConfig(content.joined(separator: "\n")).config.modes[address.mode]?.bindings[combo] != nil
+    return stillBound ? try setBindingInLines(content, address, value: "'disabled'", keyMapping: keyMapping) : content
+}
+
+private func isSameBinding(_ lhs: BindingAddress, _ rhs: BindingAddress, keyMapping: [String: Key]) -> Bool {
+    guard lhs.mode == rhs.mode,
+          case .success(let (lhsModifiers, lhsKey)) = parseBinding(lhs.binding, .emptyRoot, keyMapping),
+          case .success(let (rhsModifiers, rhsKey)) = parseBinding(rhs.binding, .emptyRoot, keyMapping)
+    else { return lhs == rhs }
+    return lhsModifiers == rhsModifiers && lhsKey == rhsKey
+}
+
+/// Pure line-manipulation logic for `setBinding`. `value` is already TOML-encoded, see `tomlCommandsValue`.
+/// - A line that already binds the key is replaced where it stands, keeping its indentation and its
+///   trailing comment. The key is matched by what it parses to, so `shift-cmd-k` replaces `cmd-shift-k`.
+/// - Otherwise the binding goes after the mode's last binding, or into a new `[mode.<mode>.binding]` table.
+func setBindingInLines(_ lines: [String], _ address: BindingAddress, value: String, keyMapping: [String: Key] = keyNotationToKeyCode) throws -> [String] {
+    let (modifiers, physicalKey) = try parsedBindingAddress(address, keyMapping)
+    let table = ["mode", address.mode, "binding"]
+    let newEntry = { (indent: String, comment: String) in
+        // A multi-line value takes several lines. Each must be its own element for the line scanners
+        "\(indent)\(tomlKey(address.binding)) = \(value)\(comment.isEmpty ? "" : " \(comment)")".components(separatedBy: "\n")
+    }
+    func indent(_ line: String) -> String { String(line.prefix { $0 == " " || $0 == "\t" }) }
+
+    var content = lines
+    if let header = bindingTableHeaderIndex(lines, mode: address.mode) {
+        let entries = tomlEntries(lines, in: header + 1 ..< tomlSectionEnd(lines, sectionStart: header))
+        let matches = entries.filter { bindingEntryMatches(lines[$0.lines.lowerBound], key: physicalKey, modifiers: modifiers, keyMapping: keyMapping) }
+        // From the bottom up, so the earlier ranges stay valid
+        for (offset, match) in matches.enumerated().reversed() {
+            if offset == 0 {
+                let line = lines[match.lines.lowerBound]
+                // A trailing comment can only be kept when both the old and the new value fit on one line
+                let comment = match.lines.count == 1 && !value.contains("\n") ? String(line[tomlCommentStart(line)...]) : ""
+                content.replaceSubrange(match.lines, with: newEntry(indent(line), comment))
+            } else {
+                content.removeSubrange(match.lines)
+            }
+        }
+        if matches.isEmpty {
+            let lastEntry = entries.last
+            content.insert(contentsOf: newEntry(lastEntry.map { indent(lines[$0.lines.lowerBound]) } ?? "    ", ""), at: lastEntry?.lines.upperBound ?? header + 1)
+        }
+    } else {
+        let existingMode = (try? TOMLTable(string: lines.joined(separator: "\n")))?["mode"]?.table?[address.mode]?.table
+        // The mode has bindings, but under no header of their own: written with dotted keys or as an
+        // inline table. That isn't a bad name, it is a shape to edit by hand
+        if existingMode?["binding"] != nil {
+            throw ConfigWriterError.unsupportedEdit((table + [address.binding]).joined(separator: "."))
+        }
+        // A mode can exist without bindings, declared only for a property: `[mode.go]` with `one-shot = true`.
+        // It gets its binding table like a new mode does, under whatever name it already has.
+        // If it is an inline table, which can't be extended, the verification below refuses the edit
+        guard existingMode != nil || tomlKey(address.mode) == address.mode else { throw ConfigWriterError.invalidModeName(address.mode) }
+        while content.last?.trimmingCharacters(in: .whitespaces).isEmpty == true { content.removeLast() }
+        if !content.isEmpty { content.append("") }
+        content += ["[mode.\(tomlKey(address.mode)).binding]"] + newEntry("    ", "") + [""]
+    }
+
+    let path = table + [address.binding]
+    guard let parsedValue = (try? TOMLTable(string: "value = \(value)"))?["value"].map(TomlData.init) else {
+        throw ConfigWriterError.unsupportedEdit(path.joined(separator: "."))
+    }
+    try verifyTomlEdit(from: lines, to: content, path: path) { entries in
+        entries.removeBindings(in: table, key: physicalKey, modifiers: modifiers, keyMapping: keyMapping)
+        entries.set(path, parsedValue)
+    }
+    return content
+}
+
+/// Removes every line of `[mode.<mode>.binding]` that binds the key. The table's header stays.
+func deleteBindingLines(_ lines: [String], _ address: BindingAddress, keyMapping: [String: Key] = keyNotationToKeyCode) throws -> [String] {
+    let (modifiers, physicalKey) = try parsedBindingAddress(address, keyMapping)
+    let table = ["mode", address.mode, "binding"]
+    guard let header = bindingTableHeaderIndex(lines, mode: address.mode) else { return lines }
+    let matches = tomlEntries(lines, in: header + 1 ..< tomlSectionEnd(lines, sectionStart: header))
+        .filter { bindingEntryMatches(lines[$0.lines.lowerBound], key: physicalKey, modifiers: modifiers, keyMapping: keyMapping) }
+    guard !matches.isEmpty else { return lines }
+    var content = lines
+    for match in matches.reversed() { content.removeSubrange(match.lines) }
+    try verifyTomlEdit(from: lines, to: content, path: table + [address.binding]) { entries in
+        entries.removeBindings(in: table, key: physicalKey, modifiers: modifiers, keyMapping: keyMapping)
+    }
+    return content
+}
+
+/// Whether the entry that starts on `line` binds `key` with exactly `modifiers`.
+private func bindingEntryMatches(_ line: String, key: String, modifiers: NSEvent.ModifierFlags, keyMapping: [String: Key]) -> Bool {
+    tomlEntryKeyName(line).map { bindingKeyMatches($0, key: key, modifiers: modifiers, keyMapping: keyMapping) } == true
+}
+
+/// The key of the `key = value` entry that starts on `line`, as the TOML parser reads it. A `[key-mapping]`
+/// alias can hold any character, so a binding's key can be quoted and can contain dots, escapes, and `=`.
+/// Reading that by hand goes wrong one character class at a time, so the parser does it: the key ends at
+/// the first `=` that leaves a valid key before it. Nil for a dotted key, which names a table, not a binding.
+private func tomlEntryKeyName(_ line: String) -> String? {
+    let code = line[..<tomlCommentStart(line)]
+    for index in code.indices where code[index] == "=" {
+        guard let table = try? TOMLTable(string: "\(code[..<index]) = 0") else { continue }
+        let entries = Array(table)
+        guard entries.count == 1, entries[0].1.int != nil else { return nil }
+        return entries[0].0
+    }
+    return nil
+}
+
+/// The line of the `[mode.<mode>.binding]` header. A mode name can be quoted and hold dots and escapes,
+/// so each header is read by the TOML parser, like the keys in `tomlEntryKeyName`. Headers are walked
+/// with `tomlSectionEnd`, which skips a line inside a multi-line string that only looks like one.
+private func bindingTableHeaderIndex(_ lines: [String], mode: String) -> Int? {
+    var index = tomlSectionEnd(lines, sectionStart: -1)
+    while index < lines.count {
+        let header = String(lines[index][..<tomlCommentStart(lines[index])])
+        // An array of tables (`[[...]]`) parses to an array, which is not a binding table
+        if (try? TOMLTable(string: header))?["mode"]?.table?[mode]?.table?["binding"]?.table != nil { return index }
+        index = tomlSectionEnd(lines, sectionStart: index)
+    }
+    return nil
+}
+
+/// The modifiers and the physical key (in qwerty notation, as `bindingKeyMatches` takes it) of `address`
+private func parsedBindingAddress(_ address: BindingAddress, _ keyMapping: [String: Key]) throws -> (NSEvent.ModifierFlags, String) {
+    guard case .success(let (modifiers, key)) = parseBinding(address.binding, .emptyRoot, keyMapping) else {
+        throw ConfigWriterError.invalidBinding(address.binding)
+    }
+    return (modifiers, key.toString())
+}
+
+/// The TOML value of a binding that runs `commands`: a string for one command, an array for several.
+func tomlCommandsValue(_ commands: [String]) -> String {
+    commands.count == 1 ? tomlStringValue(commands[0]) : "[" + commands.map(tomlStringValue).joined(separator: ", ") + "]"
+}
+
+/// `text` as a TOML string that parses back to exactly `text`, in the most readable form that can hold it:
+/// 1. A literal string (`'...'`), with no escaping at all.
+/// 2. A multi-line literal string (`'''...'''`) for a script with line breaks, the way they are written by hand.
+/// 3. A basic string (`"..."`) with escapes, which can hold anything.
+func tomlStringValue(_ text: String) -> String {
+    let scalars = text.unicodeScalars
+    let hasControl = scalars.contains { ($0.value < 0x20 && $0 != "\t" && $0 != "\n") || $0.value == 0x7F }
+    if !hasControl && !text.contains("'") && !text.contains("\n") { return "'\(text)'" }
+    // TOML drops a line break right after the opening quotes, and quotes next to the closing ones are ambiguous
+    if !hasControl && text.contains("\n") && !text.contains("'''") && !text.hasPrefix("\n") && !text.hasSuffix("'") {
+        return "'''\(text)'''"
+    }
+    var escaped = ""
+    for scalar in scalars {
+        switch scalar {
+            case "\\": escaped += "\\\\"
+            case "\"": escaped += "\\\""
+            case "\n": escaped += "\\n"
+            case "\t": escaped += "\\t"
+            case "\r": escaped += "\\r"
+            case _ where scalar.value < 0x20 || scalar.value == 0x7F: escaped += String(format: "\\u%04X", scalar.value)
+            default: escaped.unicodeScalars.append(scalar)
+        }
+    }
+    return "\"\(escaped)\""
+}
+
+/// The commands a config's TOML binds to the key, as written: one string per command. Nil when the
+/// TOML doesn't bind the key in `mode`, or binds it to something other than commands (`'disabled'` included).
+func bindingCommandTexts(inToml text: String, _ address: BindingAddress, keyMapping: [String: Key] = keyNotationToKeyCode) -> [String]? {
+    guard let (modifiers, physicalKey) = try? parsedBindingAddress(address, keyMapping),
+          let bindings = (try? TOMLTable(string: text))?["mode"]?.table?[address.mode]?.table?["binding"]?.table,
+          let value = bindings.first(where: { bindingKeyMatches($0.0, key: physicalKey, modifiers: modifiers, keyMapping: keyMapping) })?.1
+    else { return nil }
+    if let command = value.string { return command == "disabled" ? nil : [command] }
+    guard let array = value.array else { return nil }
+    let commands = array.compactMap(\.string)
+    return commands.count == array.count ? commands : nil
 }
 
 // MARK: - Config values
@@ -377,6 +596,13 @@ private struct ParsedTomlEntries: Equatable {
     /// Removes the value at `path` and everything under it. The tables above it stay.
     mutating func remove(_ path: [String]) {
         values = values.filter { !$0.key.starts(with: path) }
+    }
+
+    /// Removes every entry of the binding table `table` that binds `key` with exactly `modifiers`
+    mutating func removeBindings(in table: [String], key: String, modifiers: NSEvent.ModifierFlags, keyMapping: [String: Key]) {
+        values = values.filter { path, _ in
+            !(path.count > table.count && path.starts(with: table) && bindingKeyMatches(path[table.count], key: key, modifiers: modifiers, keyMapping: keyMapping))
+        }
     }
 }
 
