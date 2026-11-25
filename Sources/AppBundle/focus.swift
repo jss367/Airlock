@@ -194,6 +194,8 @@ extension Workspace {
         monitorId_oneBased: focus.workspace.workspaceMonitor.monitorId_oneBased ?? 0,
         trigger: trigger,
     ))
+    // The hints of a mode that stays active follow the focus, however it moved: a binding or a click
+    syncModeHintsPanel()
     if !config.enableWindowManagement || config.onFocusedMonitorChanged.isEmpty { return }
     guard let token: RunSessionGuard = .forCallback else { return }
     Task {

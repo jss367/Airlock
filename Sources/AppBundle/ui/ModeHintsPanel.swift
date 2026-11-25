@@ -106,7 +106,7 @@ func modeHintsLayout(rowCount: Int, available: CGSize, measure: (Int) -> CGSize)
 
 /// Shows, updates, or closes the panel to match the active mode. Call after every change to the
 /// active mode or to the config. `activateMode` does both: a config reload ends with it.
-/// Also call after a binding of the mode has run, since it can move focus to another monitor.
+/// Also call when the focused monitor changes: the panel sits on the monitor of the focused workspace.
 @MainActor
 func syncModeHintsPanel() {
     if isUnitTest { return }
@@ -154,8 +154,7 @@ private final class ModeHintsPanel: NSPanelHud {
 
     func show(_ hints: ModeHints) {
         let visibleFrame = focusedScreenVisibleFrame()
-        // A config reload re-activates the current mode, and every binding of the mode syncs the panel.
-        // Rebuilding the same panel in the same place would flicker
+        // A config reload re-activates the current mode. Rebuilding the same panel in the same place would flicker
         if isVisible, shown == hints, shownOn == visibleFrame { return }
         shown = hints
         shownOn = visibleFrame
