@@ -122,6 +122,7 @@ private let configParser: [String: any ParserProtocol<Config>] = [
     "focus-workspace-on-mouse-click": Parser(\.focusWorkspaceOnMouseClick, parseBool),
     "enable-workspace-app-switching": Parser(\.enableWorkspaceAppSwitching, parseBool),
     "enable-keyboard-shortcuts": Parser(\.enableKeyboardShortcuts, parseBool),
+    "inherit-default-bindings": Parser(\.inheritDefaultBindings, parseBool),
     "enable-window-management": Parser(\.enableWindowManagement, parseBool),
     "tile-new-windows": Parser(\.tileNewWindows, parseBool),
     "prevent-focus-stealing": Parser(\.preventFocusStealing, parsePreventFocusStealing),
@@ -223,18 +224,16 @@ func parseCommandOrCommands(_ raw: TOMLValueConvertible) -> Parsed<[any Command]
     }
 
     // Parse modeConfigRootKey after keyMappingConfigRootKey
-    if let userModes = rawTable[modeConfigRootKey].flatMap({ parseModes($0, .rootKey(modeConfigRootKey), &errors, config.keyMapping.resolve()) }) {
-        if mergeWithDefaults {
-            // Re-parse default config modes using the user's key mapping so that
-            // descriptionWithKeyCode values match when merging (important for non-qwerty layouts)
-            let resolvedDefaultModes = resolveDefaultModes(with: config.keyMapping.resolve())
-            config.modes = mergeModesWithDefaults(userModes: userModes, defaultModes: resolvedDefaultModes)
-        } else {
-            config.modes = userModes
-        }
-    } else if mergeWithDefaults {
+    let userModes = rawTable[modeConfigRootKey].flatMap { parseModes($0, .rootKey(modeConfigRootKey), &errors, config.keyMapping.resolve()) }
+    if !mergeWithDefaults {
+        if let userModes { config.modes = userModes }
+    } else if config.inheritDefaultBindings {
+        // Re-parse default config modes using the user's key mapping so that
+        // descriptionWithKeyCode values match when merging (important for non-qwerty layouts)
         let resolvedDefaultModes = resolveDefaultModes(with: config.keyMapping.resolve())
-        config.modes = resolvedDefaultModes
+        config.modes = userModes.map { mergeModesWithDefaults(userModes: $0, defaultModes: resolvedDefaultModes) } ?? resolvedDefaultModes
+    } else {
+        config.modes = modesWithoutDefaults(userModes: userModes ?? [:])
     }
 
     // Validate that 'main' mode exists after merging

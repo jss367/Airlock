@@ -77,6 +77,11 @@ let preventFocusStealingRequirement: FeatureRequirement = .windowManagement
         key: "enable-keyboard-shortcuts", isOn: { config.enableKeyboardShortcuts },
     ),
     BoolFeature(
+        title: "Built-in shortcuts",
+        summary: "Adds Airlock's built-in key bindings underneath the ones in your config. Turn this off to use only the bindings your config lists, so an update that changes the built-in ones can't change your keys.",
+        key: "inherit-default-bindings", isOn: { config.inheritDefaultBindings },
+    ),
+    BoolFeature(
         title: "Quick switcher",
         summary: "A searchable panel of every window, workspace, and installed app, opened with ⌥Space unless you rebind it. Picking a window on another workspace switches you there, picking an app opens it, and a search with no match can go to the web.",
         table: "quick-switcher", key: "enabled", isOn: { config.quickSwitcher.enabled },

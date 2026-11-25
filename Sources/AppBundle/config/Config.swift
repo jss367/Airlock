@@ -49,6 +49,7 @@ struct Config: ConvenienceCopyable {
     var focusWorkspaceOnMouseClick: Bool = true
     var enableWorkspaceAppSwitching: Bool = true
     var enableKeyboardShortcuts: Bool = true
+    var inheritDefaultBindings: Bool = true
     var enableWindowManagement: Bool = true
     var tileNewWindows: Bool = true
     var preventFocusStealing: PreventFocusStealingMode = .crossWorkspace

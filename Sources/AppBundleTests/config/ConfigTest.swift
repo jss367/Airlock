@@ -610,6 +610,67 @@ final class ConfigTest: XCTestCase {
         assertEquals(config.modes[mainModeId]?.bindings, defaultConfig.modes[mainModeId]?.bindings)
     }
 
+    func testInheritDefaultBindingsOffKeepsOnlyTheConfigBindings() {
+        let (config, errors) = parseConfig(
+            """
+            inherit-default-bindings = false
+
+            [mode.main.binding]
+                option-h = 'focus right'
+                option-j = 'disabled'
+
+            [mode.resize.binding]
+                minus = 'resize smart -50'
+            """,
+        )
+        assertEquals(errors, [])
+        let binding = HotkeyBinding(.option, .h, [FocusCommand.new(direction: .right)])
+        // 'disabled' has no default to remove, so it must not register a key that swallows the keystroke
+        assertEquals(config.modes[mainModeId]?.bindings, [binding.descriptionWithKeyCode: binding])
+        // The default config's 'service' mode isn't inherited either
+        assertEquals(config.modes.keys.sorted(), [mainModeId, "resize"])
+    }
+
+    func testInheritDefaultBindingsOffWithoutModesLeavesAnEmptyMainMode() {
+        let (config, errors) = parseConfig("inherit-default-bindings = false")
+        assertEquals(errors, [])
+        assertEquals(config.modes, [mainModeId: .zero])
+    }
+
+    func testInheritDefaultBindingsOffAddsMainToOtherModes() {
+        let (config, errors) = parseConfig(
+            """
+            inherit-default-bindings = false
+
+            [mode.resize.binding]
+                minus = 'resize smart -50'
+            """,
+        )
+        assertEquals(errors, [])
+        assertEquals(config.modes[mainModeId], .zero)
+        assertEquals(config.modes["resize"]?.bindings.count, 1)
+    }
+
+    func testInheritDefaultBindingsOffKeepsWorkspacesShorthandBindings() {
+        let (config, errors) = parseConfig(
+            """
+            inherit-default-bindings = false
+
+            [workspaces.names]
+                A = 'a'
+            """,
+        )
+        assertEquals(errors, [])
+        assertEquals(config.modes[mainModeId]?.bindings.values.map(\.descriptionWithKeyNotation).sorted(), ["option-a", "option-shift-a"])
+    }
+
+    func testInheritDefaultBindingsOnIsTheDefault() {
+        let (config, errors) = parseConfig("inherit-default-bindings = true")
+        assertEquals(errors, [])
+        assertEquals(config.modes, defaultConfig.modes)
+        assertTrue(Config().inheritDefaultBindings)
+    }
+
     func testDefaultOnlyModeIsPreserved() {
         // Default config has 'service' mode. User only defines 'main'.
         let (config, errors) = parseConfig(

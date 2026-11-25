@@ -62,6 +62,12 @@ app-switching-scope = 'workspace'
 # Set to false to give those keys back to macOS.
 enable-keyboard-shortcuts = true
 
+# Merge your [mode.*.binding] tables on top of the bindings in this file.
+# A key you bind replaces the default for that key, and 'disabled' removes a default.
+# Set to false to use only the bindings your config lists. An update that changes the
+# default bindings then can't change your keys, and no 'disabled' lines are needed.
+inherit-default-bindings = true
+
 # Push focus back when an app activates itself from another workspace.
 # One of: 'cross-workspace' (default), 'always', 'off'
 prevent-focus-stealing = 'cross-workspace'
