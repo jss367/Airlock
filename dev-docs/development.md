@@ -81,7 +81,7 @@ the full description, domain, and error code.
 
 ## Documentation and generated files
 
-- `./build-docs.sh`: renders the AsciiDoc sources into `.site/` HTML and `.man/` manpages. Requires Ruby 3 or later and Bundler; dependencies are in [`Gemfile`](../Gemfile).
+- `./build-docs.sh`: renders the AsciiDoc sources into `.site/` HTML and `.man/` manpages. Requires Ruby 3 or 4 and Bundler; dependencies are in [`Gemfile`](../Gemfile).
 - `./build-shell-completion.sh`: generates shell completions in `.shell-completion/`. Requires Rust/Cargo, a modern Bash, and Fish.
 - `./generate.sh`: regenerates the Xcode project, command help, version information, and shell parser. Use the flags in the script to limit regeneration when appropriate.
 - `./format.sh`: formats Swift source.
@@ -92,7 +92,7 @@ Generated command help comes from `docs/airlock-*.adoc`. Update those sources ra
 
 [GitHub Actions](https://github.com/jss367/Airlock/actions/workflows/build.yml) runs debug and release builds. The full `./run-tests.sh` also checks formatting, generated files, command-line smoke tests, and a clean Git working tree. Commit your changes before running it; it is stricter than `./build.sh`.
 
-`./build-release.sh` creates two signed archives in `.release/`. It automatically selects a stable signing identity and requires the documentation and completion dependencies above; `xcbeautify` is optional. Ad-hoc signing is rejected unless `--allow-adhoc-signing` is passed explicitly for a non-distributed CI build. With `--notarize`, Apple also notarizes the app.
+`./build-release.sh` creates two signed archives in `.release/`. It automatically selects a stable signing identity and requires the documentation and completion dependencies above and Java (with a Homebrew JDK, set `JAVA_HOME=/opt/homebrew/opt/openjdk`); `xcbeautify` is optional. Ad-hoc signing is rejected unless `--allow-adhoc-signing` is passed explicitly for a non-distributed CI build. With `--notarize`, Apple also notarizes the app.
 
 - `Airlock-v<version>.zip` is for people: the app, manpages, shell completions, and licenses.
 - `Airlock-app-v<version>.zip` is for in-app updates and holds only the app.
