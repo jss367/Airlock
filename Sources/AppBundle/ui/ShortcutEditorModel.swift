@@ -54,11 +54,18 @@ func shortcutDraftProblems(_ draft: ShortcutDraft, existingModes: Set<String>, k
     } else if case .failure = parseBinding(address.binding, .emptyRoot, keyMapping) {
         problems.binding = "'\(address.binding)' isn't a key Airlock can bind. Write it like ctrl-option-k."
     }
+    var parsed: [(index: Int, command: any Command)] = []
     for (index, command) in draft.commands.enumerated() where !command.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-        if case .failure(let message) = parseConfigCommand(command) {
+        switch parseConfigCommand(command) {
+            case .success(let command): parsed.append((index, command))
             // The parser answers a bad command with its whole usage text. The first line says what is wrong
-            problems.commands[index] = message.split(separator: "\n").first.map(String.init) ?? message
+            case .failure(let message): problems.commands[index] = message.split(separator: "\n").first.map(String.init) ?? message
         }
+    }
+    // Each command can be valid and the list still not be, which the config parser would only say on Save
+    if problems.commands.isEmpty, case .failure(let message) = checkCommandSequence(parsed.map(\.command)) {
+        let misplaced = parsed.dropLast().first { $0.command.isMacOsNativeCommand } ?? parsed.first
+        if let misplaced { problems.commands[misplaced.index] = "\(message). Move this command to the end." }
     }
     if draft.writtenCommands.isEmpty, problems.commands.isEmpty, !allowsNoCommands {
         problems.commands[0] = "Type a command, or pick one from the list."
@@ -86,13 +93,22 @@ func shortcutDraftReplaces(_ draft: ShortcutDraft, original: BindingAddress?) ->
 /// command prints back normalized, which would rewrite a hand-formatted script on the first save.
 @MainActor
 func editableCommandTexts(of binding: HotkeyBinding, mode: String) -> [String] {
+    let texts = [configUrl, defaultConfigUrl].compactMap { try? String(contentsOf: $0, encoding: .utf8) }
+    return editableCommandTexts(of: binding, mode: mode, configTexts: texts, keyMapping: config.keyMapping.resolve())
+}
+
+/// `configTexts` are the TOML of the user's config and of the default config, in that order.
+/// A file's text is used only when it says what the binding really runs. It doesn't always: the
+/// `[workspaces]` shorthand binds keys that no binding table lists, and such a key can also be in the
+/// default config with another command. Then the commands are printed from the binding itself.
+func editableCommandTexts(of binding: HotkeyBinding, mode: String, configTexts: [String], keyMapping: [String: Key]) -> [String] {
     let address = BindingAddress(mode: mode, binding: binding.descriptionWithKeyNotation)
-    let keyMapping = config.keyMapping.resolve()
-    for url in [configUrl, defaultConfigUrl] {
-        // An empty list counts: `[]` in the user's config must not be read as the default it overrides
-        if let text = try? String(contentsOf: url, encoding: .utf8), let commands = bindingCommandTexts(inToml: text, address, keyMapping: keyMapping) {
-            return commands
+    for text in configTexts {
+        guard let texts = bindingCommandTexts(inToml: text, address, keyMapping: keyMapping), texts.count == binding.commands.count else { continue }
+        let runsTheSame = zip(texts, binding.commands).allSatisfy { text, command in
+            if case .success(let parsed) = parseConfigCommand(text) { parsed.equals(command) } else { false }
         }
+        if runsTheSame { return texts }
     }
     return binding.commands.map { $0.args.description }
 }

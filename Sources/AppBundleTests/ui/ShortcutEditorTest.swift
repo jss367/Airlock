@@ -70,6 +70,41 @@ final class ShortcutEditorTest: XCTestCase {
         assertEquals(nativeAppSwitcherKeysToClaim(), [])
     }
 
+    func testACommandThatMustBeLastIsFlaggedOnItsRow() {
+        assertTrue(problems(mainModeId, "a", ["close", "", "macos-native-minimize", " "]).isEmpty)
+        assertEquals(
+            problems(mainModeId, "a", ["close", "macos-native-minimize", "", "mode main"]),
+            ShortcutDraftProblems(commands: [1: "macos-native-* commands are only allowed to be the last commands in the list. Move this command to the end."]),
+        )
+        // The same rule the config parser applies to the saved array
+        assertEquals(parseConfig("mode.main.binding.a = ['macos-native-minimize', 'close']").errors.descriptions, [
+            "mode.main.binding.a: macos-native-* commands are only allowed to be the last commands in the list",
+        ])
+    }
+
+    func testEditorStartsFromTheFileTextOnlyWhenItIsWhatTheBindingRuns() {
+        let script = "exec-and-forget echo 'a'\necho b\n"
+        func texts(_ binding: HotkeyBinding, user: String, defaults: String = "[mode.main.binding]\n option-1 = 'workspace 1'") -> [String] {
+            editableCommandTexts(of: binding, mode: mainModeId, configTexts: [user, defaults], keyMapping: keyNotationToKeyCode)
+        }
+        func binding(_ notation: String, _ commands: [String]) -> HotkeyBinding {
+            guard case .success(let (modifiers, key)) = parseBinding(notation, .emptyRoot, keyNotationToKeyCode) else { fatalError(notation) }
+            return HotkeyBinding(modifiers, key, commands.map { parseCommand($0).cmdOrDie }, descriptionWithKeyNotation: notation)
+        }
+
+        // The file's own formatting, not the normalized print of the parsed command
+        assertEquals(texts(binding("option-s", [script]), user: "[mode.main.binding]\n option-s = '''\(script)'''"), [script])
+        assertEquals(texts(binding("option-h", ["focus   left"]), user: "[mode.main.binding]\n option-h = 'focus   left'"), ["focus   left"])
+        // Inherited from the defaults
+        assertEquals(texts(binding("option-1", ["workspace 1"]), user: ""), ["workspace 1"])
+        // Bound by [workspaces], while the defaults bind the same key to something else
+        assertEquals(texts(binding("option-1", ["workspace Dev"]), user: "[workspaces.names]\n Dev = '1'"), ["workspace Dev"])
+        // `[]` in the user's config isn't the default it overrides
+        assertEquals(texts(binding("option-1", []), user: "[mode.main.binding]\n option-1 = []"), [])
+        // A stale file that no longer matches the loaded config
+        assertEquals(texts(binding("option-h", ["focus left"]), user: "[mode.main.binding]\n option-h = 'focus right'"), ["focus left"])
+    }
+
     func testDraftDropsBlankCommandRows() {
         let draft = ShortcutDraft(mode: " go ", binding: " a ", commands: ["", "close", " "])
         assertEquals(draft.writtenCommands, ["close"])
