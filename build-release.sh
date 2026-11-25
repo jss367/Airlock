@@ -205,7 +205,8 @@ fi
 ############
 
 # Sparkle installs from an archive that holds only the app. ditto keeps the symlinks inside Sparkle.framework.
-ditto -c -k --keepParent .release/Airlock.app ".release/Airlock-app-v$build_version.zip"
+# Without --norsrc it also adds ._ files, and unzip leaves them in the bundle, which breaks the signature.
+ditto -c -k --norsrc --keepParent .release/Airlock.app ".release/Airlock-app-v$build_version.zip"
 
 mkdir -p ".release/Airlock-v$build_version/manpage" && cp .man/*.1 ".release/Airlock-v$build_version/manpage"
 cp -r ./legal ".release/Airlock-v$build_version/legal"
