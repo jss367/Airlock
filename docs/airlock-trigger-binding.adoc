@@ -22,6 +22,8 @@ airlock trigger-binding [-h|--help] <binding> --mode <mode-id>
 You can use airlock-config command to inspect available bindings: +
 `airlock config --get mode.main.binding --keys`
 
+Like pressing the key, triggering a binding of an active xref:guide.adoc#binding-modes[one-shot mode] returns to the `main` mode afterwards.
+
 // =========================================================== Options
 include::util/conditional-options-header.adoc[]
 

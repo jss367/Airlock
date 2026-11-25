@@ -45,6 +45,8 @@ extension HotKey {
     registerHotkeys(for: targetMode)
     let oldMode = activeMode
     activeMode = targetMode
+    // Before the callbacks, which can fail or be refused. The panel must still follow the mode
+    syncModeHintsPanel()
     if oldMode != targetMode {
         broadcastEvent(.modeChanged(mode: targetMode))
         if !config.onModeChanged.isEmpty {
@@ -83,6 +85,7 @@ extension HotKey {
                         try await runHotkeyCommandSession(
                             config.modes[activeMode]?.bindings[binding.descriptionWithKeyCode]?.commands ?? [],
                             modifiers: binding.modifiers,
+                            mode: activeMode,
                         )
                     }
                 }
@@ -249,9 +252,38 @@ func runsOnlyEnable(_ commands: [any Command]) -> Bool {
 /// this is how it learns what was held to start it
 @TaskLocal var runningHotkeyModifiers: NSEvent.ModifierFlags? = nil
 
-/// The same command-session path used by registered hotkeys, without key registration in tests.
+/// A one-shot mode ends after one of its bindings has run: Airlock returns to the main mode, like a
+/// binding that ends with `'mode main'`. `mode` is the mode the binding belongs to. Nothing happens if
+/// the binding's own commands already left it, so `'mode resize'` inside a one-shot mode goes to resize
 @MainActor
-func runHotkeyCommandSession(_ commands: [any Command], modifiers: NSEvent.ModifierFlags? = nil) async throws {
+func leaveOneShotMode(_ mode: String) async throws {
+    guard activeMode == mode, mode != mainModeId, config.modes[mode]?.oneShot == true else { return }
+    try await activateMode(mainModeId)
+}
+
+/// Runs the commands of a binding of `mode`, then ends the mode if it is one-shot. The mode ends when
+/// the commands throw too: the key was pressed, and staying would hand the user's next key to a mode
+/// they believe they have left. The commands' error is the one reported.
+@MainActor
+func runThenLeaveOneShotMode<T>(_ mode: String, _ body: @MainActor () async throws -> T) async throws -> T {
+    let result: T
+    do {
+        result = try await body()
+    } catch {
+        try? await leaveOneShotMode(mode)
+        // The session skips its closing model refresh when the body throws. A command that moved focus
+        // to another monitor and then threw would leave the panel of a mode that stays active behind
+        syncModeHintsPanel()
+        throw error
+    }
+    try await leaveOneShotMode(mode)
+    return result
+}
+
+/// The same command-session path used by registered hotkeys, without key registration in tests.
+/// `mode` is the mode the binding belongs to, for `leaveOneShotMode`.
+@MainActor
+func runHotkeyCommandSession(_ commands: [any Command], modifiers: NSEvent.ModifierFlags? = nil, mode: String? = nil) async throws {
     try await $runningHotkeyModifiers.withValue(modifiers) {
         // Like `airlock enable` over the socket, an enable-only binding remains admissible while paused.
         guard sessionCoordinator.isEnabled || runsOnlyEnable(commands) else { return }
@@ -261,7 +293,11 @@ func runHotkeyCommandSession(_ commands: [any Command], modifiers: NSEvent.Modif
         }
         let prepared = PreparedCommandSession(commands)
         try await runLightSession(.hotkeyBinding, prepared.admission) {
-            _ = try await prepared.run(.defaultEnv, .emptyStdin)
+            guard let mode else {
+                _ = try await prepared.run(.defaultEnv, .emptyStdin)
+                return
+            }
+            _ = try await runThenLeaveOneShotMode(mode) { try await prepared.run(.defaultEnv, .emptyStdin) }
         }
     }
 }

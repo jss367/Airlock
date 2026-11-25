@@ -671,6 +671,68 @@ final class ConfigTest: XCTestCase {
         assertTrue(Config().inheritDefaultBindings)
     }
 
+    func testParseOneShotMode() {
+        let (config, errors) = parseConfig(
+            """
+            [mode.window]
+                one-shot = true
+            [mode.window.binding]
+                c = 'close'
+            [mode.resize.binding]
+                minus = 'resize smart -50'
+            [mode.service]
+                one-shot = true
+            """,
+        )
+        assertEquals(errors, [])
+        assertEquals(config.modes["window"]?.oneShot, true)
+        assertEquals(config.modes["window"]?.bindings.count, 1)
+        assertEquals(config.modes["resize"]?.oneShot, false)
+        assertEquals(config.modes[mainModeId]?.oneShot, false)
+        // A mode the defaults have too keeps its default bindings and takes the config's one-shot
+        assertEquals(config.modes["service"]?.oneShot, true)
+        assertEquals(config.modes["service"]?.bindings, defaultConfig.modes["service"]?.bindings)
+    }
+
+    func testOneShotSurvivesWithoutDefaultBindings() {
+        let (config, errors) = parseConfig(
+            """
+            inherit-default-bindings = false
+            [mode.window]
+                one-shot = true
+            [mode.window.binding]
+                c = 'close'
+                esc = 'disabled'
+            """,
+        )
+        assertEquals(errors, [])
+        assertEquals(config.modes["window"]?.oneShot, true)
+        assertEquals(config.modes["window"]?.bindings.count, 1)
+    }
+
+    func testOneShotErrors() {
+        let (_, errors) = parseConfig(
+            """
+            [mode.main]
+                one-shot = true
+            [mode.window]
+                one-shot = 'yes'
+            """,
+        )
+        assertEquals(errors.descriptions.sorted(), [
+            "mode.main.one-shot: The 'main' mode can't be one-shot. A one-shot mode returns to 'main' after one binding",
+            "mode.window.one-shot: Expected type is 'bool'. But actual type is 'string'",
+        ])
+    }
+
+    func testParseModeHints() {
+        assertTrue(parseConfig("").config.modeHints.enabled)
+        let (config, errors) = parseConfig("mode-hints.enabled = false")
+        assertEquals(errors, [])
+        assertEquals(config.modeHints.enabled, false)
+        assertEquals(parseConfig("mode-hints.delay = 1").errors.descriptions, ["mode-hints.delay: Unknown key"])
+    }
+
     func testDefaultOnlyModeIsPreserved() {
         // Default config has 'service' mode. User only defines 'main'.
         let (config, errors) = parseConfig(

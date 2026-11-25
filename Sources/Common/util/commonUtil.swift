@@ -66,7 +66,7 @@ public func dieT<T>(
 /// takes one AX read and one AX write per window, normally a few milliseconds each. The bound matters when an app
 /// stops answering AX requests, each of which can then block for seconds: Airlock must still crash, so that it can be
 /// restarted, instead of hanging with windows parked in corners.
-let terminationHandlerTimeout: DispatchTimeInterval = .seconds(5)
+public let terminationHandlerTimeout: DispatchTimeInterval = .seconds(5)
 
 /// Runs `handler` before dying. Returns whether it finished before `timeout`, and never blocks longer than that.
 func runTerminationHandlerBeforeDying(_ handler: any TerminationHandler, timeout: DispatchTimeInterval) -> Bool {

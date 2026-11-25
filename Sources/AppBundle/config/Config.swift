@@ -62,6 +62,7 @@ struct Config: ConvenienceCopyable {
     var execConfig: ExecConfig = ExecConfig()
     var quickSwitcher: QuickSwitcherSettings = .default
     var focusFlash: FocusFlashSettings = .default
+    var modeHints: ModeHintsSettings = .default
     var multiMonitor: MultiMonitorSettings = .default
 
     var onFocusChanged: [any Command] = []

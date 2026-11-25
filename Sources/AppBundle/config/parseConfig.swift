@@ -134,6 +134,7 @@ private let configParser: [String: any ParserProtocol<Config>] = [
 
     "quick-switcher": Parser(\.quickSwitcher, parseQuickSwitcher),
     "focus-flash": Parser(\.focusFlash, parseFocusFlash),
+    "mode-hints": Parser(\.modeHints, parseModeHints),
     multiMonitorTableKey: Parser(\.multiMonitor, parseMultiMonitor),
 
     keyMappingConfigRootKey: Parser(\.keyMapping, skipParsing(Config().keyMapping)), // Parsed manually
@@ -247,6 +248,10 @@ func parseCommandOrCommands(_ raw: TOMLValueConvertible) -> Parsed<[any Command]
     // Validate that 'main' mode exists after merging
     if !config.modes.keys.contains(mainModeId) {
         errors += [.semantic(.rootKey(modeConfigRootKey), "Please specify '\(mainModeId)' mode")]
+    }
+    if config.modes[mainModeId]?.oneShot == true {
+        let backtrace: TomlBacktrace = .rootKey(modeConfigRootKey) + .key(mainModeId) + .key("one-shot")
+        errors += [.semantic(backtrace, "The '\(mainModeId)' mode can't be one-shot. A one-shot mode returns to '\(mainModeId)' after one binding")]
     }
 
     // The quick-switcher hotkey is registered globally, so it must not collide with any mode binding.

@@ -49,7 +49,7 @@ If you don't have a Developer ID certificate and only need local builds, create 
 ./deploy.sh
 ```
 
-This builds and tests, stops the running Airlock app only after those succeed, replaces `/Applications/Airlock.app`, copies the command-line tool to `~/.local/bin/airlock`, and launches the app. Add `~/.local/bin` to your `PATH`. Grant Accessibility access to Airlock when prompted. `deploy.sh` requires one of the stable signing identities described above; `build.sh` continues to use local ad-hoc signing because it does not install its build.
+This builds and tests, stops the running Airlock app only after those succeed, replaces `/Applications/Airlock.app`, links `~/.local/bin/airlock` to the command-line tool inside the app, and launches the app. Add `~/.local/bin` to your `PATH`. Grant Accessibility access to Airlock when prompted. `deploy.sh` requires one of the stable signing identities described above; `build.sh` continues to use local ad-hoc signing because it does not install its build.
 
 ## Debugging
 
@@ -81,7 +81,7 @@ the full description, domain, and error code.
 
 ## Documentation and generated files
 
-- `./build-docs.sh`: renders the AsciiDoc sources into `.site/` HTML and `.man/` manpages. Requires Ruby 3 or later and Bundler; dependencies are in [`Gemfile`](../Gemfile).
+- `./build-docs.sh`: renders the AsciiDoc sources into `.site/` HTML and `.man/` manpages. Requires Ruby 3 or 4 and Bundler; dependencies are in [`Gemfile`](../Gemfile).
 - `./build-shell-completion.sh`: generates shell completions in `.shell-completion/`. Requires Rust/Cargo, a modern Bash, and Fish.
 - `./generate.sh`: regenerates the Xcode project, command help, version information, and shell parser. Use the flags in the script to limit regeneration when appropriate.
 - `./format.sh`: formats Swift source.
@@ -92,28 +92,44 @@ Generated command help comes from `docs/airlock-*.adoc`. Update those sources ra
 
 [GitHub Actions](https://github.com/jss367/Airlock/actions/workflows/build.yml) runs debug and release builds. The full `./run-tests.sh` also checks formatting, generated files, command-line smoke tests, and a clean Git working tree. Commit your changes before running it; it is stricter than `./build.sh`.
 
-`./build-release.sh` creates a signed release archive in `.release/`, including the app, command-line tool, manpages, and shell completions. It automatically selects a stable signing identity and requires the documentation and completion dependencies above; `xcbeautify` is optional. Ad-hoc signing is rejected unless `--allow-adhoc-signing` is passed explicitly for a non-distributed CI build.
+`./build-release.sh` creates two signed archives in `.release/`. It automatically selects a stable signing identity and requires the documentation and completion dependencies above and Java (with a Homebrew JDK, set `JAVA_HOME=/opt/homebrew/opt/openjdk`); `xcbeautify` is optional. Ad-hoc signing is rejected unless `--allow-adhoc-signing` is passed explicitly for a non-distributed CI build. With `--notarize`, Apple also notarizes the app.
+
+- `Airlock-v<version>.zip` is for people: the app, manpages, shell completions, and licenses.
+- `Airlock-app-v<version>.zip` is for in-app updates and holds only the app.
+
+`script/bundle-app.sh` copies the command-line tool to `Airlock.app/Contents/Helpers/airlock` and signs the app, including the Sparkle helpers that Xcode doesn't sign. `deploy.sh` uses it too.
 
 Run release packaging from a clean checkout: it regenerates files and restores tracked files with `git checkout .`. Packaging an archive does not publish a GitHub release. Published archives are available on [GitHub Releases](https://github.com/jss367/Airlock/releases). Airlock has no maintained public Homebrew tap.
 
-To publish a release:
+### Set up a Mac for publishing
 
-1. Fetch the latest `origin/main`. Update `VERSION`, run `./generate.sh`, and commit the version and generated files through a pull request to `main`.
-2. From the clean release commit on `main`, run `./run-tests.sh` and `./build-release.sh --require-developer-id`. The archive contains universal Apple Silicon/Intel binaries with the release version and Git commit embedded. Developer ID signing gives Airlock a stable identity but does not notarize the archive; mention the lack of notarization in the release notes.
-3. Create a checksum and publish the archive with the GitHub CLI:
+Publishing needs a Developer ID Application certificate for Airlock's release team, the GitHub CLI, and two secrets in the login keychain. Set them up once per Mac.
+
+1. Save notarization credentials. Create an app-specific password at <https://account.apple.com>, then run the command below and enter the password when asked. To use a profile with another name, set `AIRLOCK_NOTARY_PROFILE`.
 
    ```sh
-   release_version="$(cat VERSION)"
-   (cd .release && shasum -a 256 "Airlock-v$release_version.zip" > SHA256SUMS)
-   git tag -a "v$release_version" -m "Airlock $release_version"
-   git push origin "v$release_version"
-   gh release create "v$release_version" \
-       ".release/Airlock-v$release_version.zip" .release/SHA256SUMS \
-       --repo jss367/Airlock --verify-tag --latest \
-       --title "Airlock $release_version" --notes-file /path/to/release-notes.md
+   xcrun notarytool store-credentials airlock-notary --team-id 3CJQ95F6MT --apple-id <your Apple ID>
    ```
 
-4. Install the packaged `Airlock.app` and `bin/airlock` together. After launching the app, verify that `airlock --version` reports the release version and the same commit for both client and server. Local `deploy.sh` builds stamp the version and Git commit from the current checkout, adding `-dirty` to the commit when it contains uncommitted changes. Use the packaged files to install an exact published release.
+2. Import the Sparkle private key if this isn't the Mac that created it. Export it on the other Mac with `generate_keys -x <file>`, import it with `generate_keys -f <file>`, and delete the file. Both need `--account dev.airlock`. The Sparkle tools are in `.xcode-build/SourcePackages/artifacts/sparkle/Sparkle/bin` after a build.
+
+Keep a backup of the Sparkle key. `SUPublicEDKey` in `resources/Info.plist` is its public half, and installed copies of Airlock reject updates signed with another key. If the key is lost, a release that has a new `SUPublicEDKey` and the same Developer ID certificate is the way to replace it.
+
+### Publish a release
+
+1. Fetch the latest `origin/main`. Update `VERSION`, run `./generate.sh`, and commit the version and generated files through a pull request to `main`.
+2. From the clean release commit on `main`, run `./run-tests.sh`.
+3. Write the release notes to a Markdown file outside the checkout. The update window shows them too. Then run:
+
+   ```sh
+   ./publish-release.sh --notes-file /path/to/release-notes.md
+   ```
+
+   The script builds, notarizes, signs the update, pushes the tag, and creates the GitHub release. The first run asks for access to the Sparkle key; choose **Always Allow**.
+
+4. Install the release with **Check for Updates…** in the previous version. Afterwards, verify that `airlock --version` reports the release version and the same commit for both client and server.
+
+Create releases only with this script. Installed copies of Airlock read `appcast.xml` from the latest GitHub release, so update checks fail if that release doesn't have one. Local `deploy.sh` builds stamp the version and Git commit from the current checkout, adding `-dirty` to the commit when it contains uncommitted changes.
 
 ## Useful tools
 

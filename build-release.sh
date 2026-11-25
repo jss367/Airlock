@@ -6,12 +6,14 @@ build_version="$(cat VERSION)"
 codesign_identity=""
 allow_adhoc_signing=0
 require_developer_id=0
+notarize=0
 while test $# -gt 0; do
     case $1 in
         --build-version) build_version="$2"; shift 2;;
         --codesign-identity) codesign_identity="$2"; shift 2;;
         --allow-adhoc-signing) allow_adhoc_signing=1; shift;;
         --require-developer-id) require_developer_id=1; shift;;
+        --notarize) notarize=1; require_developer_id=1; shift;;
         *) echo "Unknown option $1" > /dev/stderr; exit 1 ;;
     esac
 done
@@ -22,6 +24,12 @@ fi
 if test "$codesign_identity" = "-" && test "$allow_adhoc_signing" != 1; then
     echo "Refusing to package an ad-hoc-signed release. Use a stable signing identity." > /dev/stderr
     echo "Pass --allow-adhoc-signing only for a non-distributed CI build." > /dev/stderr
+    exit 1
+fi
+
+notary_profile="${AIRLOCK_NOTARY_PROFILE:-airlock-notary}"
+if test "$notarize" = 1 && ! xcrun notarytool history --keychain-profile "$notary_profile" > /dev/null; then
+    echo "Can't notarize with the keychain profile '$notary_profile'. See dev-docs/development.md for how to create it." > /dev/stderr
     exit 1
 fi
 
@@ -58,14 +66,17 @@ xcodebuild-pretty .release/xcodebuild.log clean build \
 
 git checkout .
 
-cp -r ".xcode-build/Build/Products/$xcode_configuration/Airlock.app" .release
-cp -r .build/apple/Products/Release/airlock .release
+ditto ".xcode-build/Build/Products/$xcode_configuration/Airlock.app" .release/Airlock.app
 
-################
-### SIGN CLI ###
-################
+############
+### SIGN ###
+############
 
-codesign --options runtime -s "$codesign_identity" .release/airlock
+bundle_app_args=(--app .release/Airlock.app --cli .build/apple/Products/Release/airlock --codesign-identity "$codesign_identity")
+if test "$require_developer_id" = 1; then
+    bundle_app_args+=(--timestamp)
+fi
+./script/bundle-app.sh "${bundle_app_args[@]}"
 
 ################
 ### VALIDATE ###
@@ -84,14 +95,34 @@ expected_layout=$(cat <<EOF
 .release/Airlock.app/Contents/Resources/Assets.car
 .release/Airlock.app/Contents/Info.plist
 .release/Airlock.app/Contents/PkgInfo
+.release/Airlock.app/Contents/Helpers
+.release/Airlock.app/Contents/Helpers/airlock
+.release/Airlock.app/Contents/Frameworks
+.release/Airlock.app/Contents/Frameworks/Sparkle.framework
 EOF
 )
+expected_layout="$(sort <<< "$expected_layout")"
+actual_layout="$(find .release/Airlock.app -name Sparkle.framework -prune -print -o -print | sort)"
 
-if test "$expected_layout" != "$(find .release/Airlock.app)"; then
+if test "$expected_layout" != "$actual_layout"; then
     echo "!!! Expect/Actual layout don't match !!!"
-    find .release/Airlock.app
+    diff <(echo "$expected_layout") <(echo "$actual_layout") || true
     exit 1
 fi
+
+check-info-plist() {
+    actual="$(plutil -extract "$1" raw .release/Airlock.app/Contents/Info.plist)"
+    if test "$actual" != "$2"; then
+        echo "$1 is '$actual' in Info.plist. Expected: '$2'"
+        exit 1
+    fi
+}
+
+# Sparkle needs all of these to find, verify, and compare releases
+check-info-plist CFBundleVersion "$build_version"
+check-info-plist CFBundleShortVersionString "$build_version"
+check-info-plist SUFeedURL "https://github.com/jss367/Airlock/releases/latest/download/appcast.xml"
+check-info-plist SUPublicEDKey "$(plutil -extract SUPublicEDKey raw resources/Info.plist)"
 
 check-universal-binary() {
     if ! file "$1" | grep --fixed-string -q "Mach-O universal binary with 2 architectures: [x86_64:Mach-O 64-bit executable x86_64] [arm64"; then
@@ -109,16 +140,16 @@ check-contains-hash() {
 }
 
 check-universal-binary .release/Airlock.app/Contents/MacOS/Airlock
-check-universal-binary .release/airlock
+check-universal-binary .release/Airlock.app/Contents/Helpers/airlock
 
 check-contains-hash .release/Airlock.app/Contents/MacOS/Airlock
-check-contains-hash .release/airlock
+check-contains-hash .release/Airlock.app/Contents/Helpers/airlock
 
-codesign -v .release/Airlock.app
-codesign -v .release/airlock
+codesign --verify --deep --strict .release/Airlock.app
+codesign -v .release/Airlock.app/Contents/Helpers/airlock
 
 app_codesign_info="$(codesign -dvv .release/Airlock.app 2>&1)"
-cli_codesign_info="$(codesign -dvv .release/airlock 2>&1)"
+cli_codesign_info="$(codesign -dvv .release/Airlock.app/Contents/Helpers/airlock 2>&1)"
 
 if test "$allow_adhoc_signing" != 1; then
     if grep '^Signature=adhoc$' > /dev/null <<< "$app_codesign_info"; then
@@ -151,18 +182,39 @@ if test "$require_developer_id" = 1; then
     fi
 fi
 
+################
+### NOTARIZE ###
+################
+
+if test "$notarize" = 1; then
+    ditto -c -k --keepParent .release/Airlock.app .release/notarize.zip
+    # Check the status in the output. The exit code can be 0 even when Apple rejects the archive
+    xcrun notarytool submit .release/notarize.zip --keychain-profile "$notary_profile" --wait | tee .release/notarize.log || true
+    if ! grep '^ *status: Accepted$' .release/notarize.log > /dev/null; then
+        submission="$(awk '$1 == "id:" { print $2; exit }' .release/notarize.log)"
+        xcrun notarytool log "$submission" --keychain-profile "$notary_profile" > /dev/stderr || true
+        echo "Apple rejected the notarization" > /dev/stderr
+        exit 1
+    fi
+    xcrun stapler staple .release/Airlock.app
+    rm .release/notarize.zip
+fi
+
 ############
 ### PACK ###
 ############
+
+# Sparkle installs from an archive that holds only the app. ditto keeps the symlinks inside Sparkle.framework.
+# Without --norsrc it also adds ._ files, and unzip leaves them in the bundle, which breaks the signature.
+ditto -c -k --norsrc --keepParent .release/Airlock.app ".release/Airlock-app-v$build_version.zip"
 
 mkdir -p ".release/Airlock-v$build_version/manpage" && cp .man/*.1 ".release/Airlock-v$build_version/manpage"
 cp -r ./legal ".release/Airlock-v$build_version/legal"
 cp LICENSE.txt ".release/Airlock-v$build_version/LICENSE.txt"
 cp -r .shell-completion ".release/Airlock-v$build_version/shell-completion"
 cd .release
-    mkdir -p "Airlock-v$build_version/bin" && cp -r airlock "Airlock-v$build_version/bin"
-    cp -r Airlock.app "Airlock-v$build_version"
-    zip -r "Airlock-v$build_version.zip" "Airlock-v$build_version"
+    ditto Airlock.app "Airlock-v$build_version/Airlock.app"
+    zip --symlinks -r "Airlock-v$build_version.zip" "Airlock-v$build_version"
 cd -
 
 #################
