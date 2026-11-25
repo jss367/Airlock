@@ -73,6 +73,9 @@ private final class SettingsWindowController: NSWindowController, NSWindowDelega
 
     func windowWillClose(_ notification: Notification) {
         NotificationCenter.default.post(name: settingsWindowWillClose, object: nil)
+        // The shortcut recorder stops itself on this notification. Airlock's hotkeys are off while it
+        // records, so make sure of it here: nothing else would turn them back on once the views are gone
+        setRecordingShortcut(false)
         // Dropping the hosting view tears down the views, which stops the keyboard's refresh timer
         window?.contentView = nil
     }

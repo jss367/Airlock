@@ -177,6 +177,9 @@ func parseAfterLoginCommand(_ raw: TOMLValueConvertible, _ backtrace: TomlBacktr
     return .failure(.semantic(backtrace, msg))
 }
 
+/// One command as a binding or a callback may run it: it must parse and be allowed in the config
+func parseConfigCommand(_ raw: String) -> Parsed<any Command> { parseCommand(raw).toEither() }
+
 func parseCommandOrCommands(_ raw: TOMLValueConvertible) -> Parsed<[any Command]> {
     if let rawString = raw.string {
         return parseCommand(rawString).toEither().map { [$0] }

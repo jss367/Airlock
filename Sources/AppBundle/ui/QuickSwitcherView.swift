@@ -19,7 +19,7 @@ func registerQuickSwitcherHotkey() {
     defer { syncNativeAppSwitcherKeys() }
 
     // Paused Airlock owns no hotkeys. EnableCommand calls this again on resume
-    guard config.quickSwitcher.enabled && sessionCoordinator.isEnabled else { return }
+    guard config.quickSwitcher.enabled && sessionCoordinator.isEnabled && !isRecordingShortcut else { return }
 
     let parsed = parseBinding(config.quickSwitcher.binding, .emptyRoot, config.keyMapping.resolve())
     guard case .success(let (modifiers, key)) = parsed else { return }
