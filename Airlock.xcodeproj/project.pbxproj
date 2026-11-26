@@ -235,7 +235,7 @@
 				CODE_SIGN_ENTITLEMENTS = resources/Airlock.entitlements;
 				CODE_SIGN_IDENTITY = "airlock-codesign-certificate";
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = "0.14.0";
+				CURRENT_PROJECT_VERSION = "0.15.0";
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = resources/Info.plist;
 				INFOPLIST_KEY_LSUIElement = YES;
@@ -244,7 +244,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = "0.14.0";
+				MARKETING_VERSION = "0.15.0";
 				PRODUCT_BUNDLE_IDENTIFIER = dev.airlock.debug;
 				PRODUCT_NAME = "Airlock-Debug";
 				SDKROOT = macosx;
@@ -316,7 +316,7 @@
 				CODE_SIGN_IDENTITY = "airlock-codesign-certificate";
 				CODE_SIGN_INJECT_BASE_ENTITLEMENTS = NO;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = "0.14.0";
+				CURRENT_PROJECT_VERSION = "0.15.0";
 				ENABLE_HARDENED_RUNTIME = YES;
 				GCC_TREAT_WARNINGS_AS_ERRORS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -327,7 +327,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = "0.14.0";
+				MARKETING_VERSION = "0.15.0";
 				PRODUCT_BUNDLE_IDENTIFIER = dev.airlock;
 				PRODUCT_NAME = Airlock;
 				SDKROOT = macosx;
